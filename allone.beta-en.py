@@ -55,11 +55,12 @@ def install_and_check():
 
 def check_for_updates():
     """
-    Checks for a new version of the script on Google Drive and self-updates if one is found.
+    Checks for a new version of the script on GitHub and self-updates if one is found.
     """
     print("Checking for updates...")
     
-    script_url = "https://drive.google.com/uc?export=download&id=1T00kGXIW-tBHa9n00xRsFcKOOhC7ZuZA"
+    # URL has been updated to the new GitHub raw link.
+    script_url = "https://raw.githubusercontent.com/hakanakaslanx-code/allone/refs/heads/main/allone.beta-en.py"
     current_script_name = os.path.basename(sys.argv[0])
 
     try:
@@ -510,7 +511,7 @@ def get_social_links_and_email(website_url):
         
         emails = re.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', res.text, re.IGNORECASE)
         if not emails:
-             emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', res.text)
+            emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', res.text)
         
         email = emails[0] if emails else ""
         if email: print(f"  -> 📧 Email found: {email}")
@@ -639,7 +640,7 @@ def main():
         print("5. Scrape Google Maps Data")
         print("6. BULK Process Carpet Sizes from File")
         print("-----------------------------------")
-        print("s. Set Folders   h. Help   q. Quit")
+        print("s. Set Folders    h. Help    q. Quit")
         choice = input("Your choice: ").strip().lower()
 
         settings = load_settings()
