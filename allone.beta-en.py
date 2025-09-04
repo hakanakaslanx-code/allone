@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # ATTENTION: When you update the code, you must increment this version number (e.g., "1.2").
-__version__ = "1.4"
+__version__ = "1.7"
 
 """
 This script combines multiple utility programs into a single interface:
@@ -12,6 +12,7 @@ This script combines multiple utility programs into a single interface:
 5. Image Resizer/Compressor: Batch resizes and compresses images in a folder.
 6. BULK Excel/CSV Rug Sizer: Reads a column of dimensions and adds Width_in / Height_in / Area_sqft.
 7. Unit Converter: Converts between cm, m, feet, and inches.
+8. QR Code Generator: Creates a QR code image from text or a URL.
 """
 
 import sys
@@ -24,13 +25,15 @@ import requests # Required for the updater function
 
 def install_and_check():
     """Checks for required libraries and installs them if they are missing."""
+    # GÜNCELLENDİ: 'qrcode' kütüphanesi eklendi
     required_packages = [
         'tqdm', 'openpyxl', 'Pillow', 'pillow-heif',
-        'pandas', 'requests', 'xlrd'
+        'pandas', 'requests', 'xlrd', 'qrcode'
     ]
     
     try:
-        import tqdm, openpyxl, PIL, pillow_heif, pandas, requests, xlrd
+        # GÜNCELLENDİ: qrcode import denemesi eklendi
+        import tqdm, openpyxl, PIL, pillow_heif, pandas, requests, xlrd, qrcode
     except ImportError:
         print("Some required libraries are missing. Starting installation...")
         for package in required_packages:
@@ -123,6 +126,7 @@ from tqdm import tqdm
 from PIL import Image
 import pillow_heif
 import pandas as pd
+import qrcode # YENİ: Kütüphane eklendi
 
 logging.basicConfig(
     filename="tool_operations.log",
@@ -334,7 +338,6 @@ def bulk_sizes_from_sheet():
         df.to_csv(out_csv, index=False)
         print(f"✅ Successfully saved to: {out_csv}")
 
-
 def format_numbers_from_file():
     file_path = input("Enter the path to the Excel/CSV/TXT file to be processed: ").strip()
     numbers = load_numbers_from_file(file_path)
@@ -378,7 +381,29 @@ def convert_heic_to_jpg_in_directory():
         logging.error(f"General conversion error: {e}")
         print(f"\nError: The conversion process could not be completed. Reason: {e}")
 
-def process_files(source_folder, target_folder, target_numbers, action):
+def process_files_main(settings):
+    source_folder = settings.get("source_folder")
+    target_folder = settings.get("target_folder")
+    if not source_folder or not target_folder:
+        print("Please set the source and target folders first (Main Menu -> Option 's').")
+        return
+
+    file_path = input("Enter the path to the file with numbers (Excel/CSV/TXT): ").strip()
+    target_numbers = load_numbers_from_file(file_path)
+    if not target_numbers:
+        print("No numbers to process or the file could not be read.")
+        return
+
+    action_choice = input("Select action: Copy (c) / Move (m): ").strip().lower()
+    if action_choice not in ['c', 'm']:
+        print("Invalid choice. Please enter 'c' or 'm'.")
+        return
+    
+    action = "copy" if action_choice == 'c' else "move"
+    
+    source_folder = clean_file_path(source_folder)
+    target_folder = clean_file_path(target_folder)
+    
     processed_files, missing_numbers = [], set(target_numbers)
     valid_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff'}
     
@@ -408,39 +433,15 @@ def process_files(source_folder, target_folder, target_numbers, action):
                     print(f"\nError: Could not process '{file_to_process}'. Reason: {e}")
         else:
             logging.warning(f"No matching file found for number: {num}")
-
-    return processed_files, list(missing_numbers)
-
-def process_files_main(settings):
-    source_folder = settings.get("source_folder")
-    target_folder = settings.get("target_folder")
-    if not source_folder or not target_folder:
-        print("Please set the source and target folders first (Main Menu -> Option 's').")
-        return
-
-    file_path = input("Enter the path to the file with numbers (Excel/CSV/TXT): ").strip()
-    target_numbers = load_numbers_from_file(file_path)
-    if not target_numbers:
-        print("No numbers to process or the file could not be read.")
-        return
-
-    action_choice = input("Select action: Copy (c) / Move (m): ").strip().lower()
-    if action_choice not in ['c', 'm']:
-        print("Invalid choice. Please enter 'c' or 'm'.")
-        return
-    
-    action = "copy" if action_choice == 'c' else "move"
-    
-    processed, missing = process_files(source_folder, target_folder, target_numbers, action)
     
     print("\n--- Operation Summary ---")
-    print(f"Number of files processed: {len(processed)}")
-    if processed:
-        print("Some processed files:", ", ".join(list(set(processed))[:10]) + ('...' if len(set(processed)) > 10 else ''))
+    print(f"Number of files processed: {len(processed_files)}")
+    if processed_files:
+        print("Some processed files:", ", ".join(list(set(processed_files))[:10]) + ('...' if len(set(processed_files)) > 10 else ''))
         
-    print(f"Number of identifiers not found: {len(missing)}")
-    if missing:
-        print("Unfound identifiers:", ", ".join(missing))
+    print(f"Number of identifiers not found: {len(missing_numbers)}")
+    if missing_numbers:
+        print("Unfound identifiers:", ", ".join(list(missing_numbers)))
 
 def resize_and_compress_images():
     print("\n=== Bulk Image Resizer and Compressor ===")
@@ -501,43 +502,40 @@ def resize_and_compress_images():
     
     print(f"\n✅ Processing complete. Resized images are in the '{target_dir}' folder.")
 
-# --- Unit Converter Helpers ---
-INCH_TO_CM = 2.54
-FOOT_TO_CM = 30.48
-METER_TO_CM = 100
-
-def convert_to_cm(value_str, unit):
-    """Converts a given value from its unit to centimeters."""
-    try:
-        if unit == 'ft':
-            decimal_feet = parse_feet_inches(value_str)
-            return decimal_feet * FOOT_TO_CM if decimal_feet is not None else None
-        
-        value = float(value_str)
-        if unit == 'cm': return value
-        if unit == 'm': return value * METER_TO_CM
-        if unit == 'in': return value * INCH_TO_CM
-        return None
-    except (ValueError, TypeError):
-        return None
-
-def convert_from_cm(cm_value, unit):
-    """Converts a value from centimeters to the target unit."""
-    if unit == 'cm': return f"{cm_value:.2f} cm"
-    if unit == 'm': return f"{cm_value / METER_TO_CM:.2f} m"
-    if unit == 'in': return f"{cm_value / INCH_TO_CM:.2f} in"
-    if unit == 'ft':
-        total_inches = cm_value / INCH_TO_CM
-        feet = int(total_inches // 12)
-        inches = total_inches % 12
-        return f"{feet}' {inches:.2f}\""
-    return "Invalid target unit"
-
 def unit_converter():
     print("\n=== Unit Converter ===")
     print("Convert between 'cm', 'm', 'ft', 'in'.")
     print("Examples: '182 cm to ft', '5\\'11\" to cm', '2.5 m to in'")
     
+    INCH_TO_CM = 2.54
+    FOOT_TO_CM = 30.48
+    METER_TO_CM = 100
+
+    def convert_to_cm(value_str, unit):
+        try:
+            if unit == 'ft':
+                decimal_feet = parse_feet_inches(value_str)
+                return decimal_feet * FOOT_TO_CM if decimal_feet is not None else None
+            
+            value = float(value_str)
+            if unit == 'cm': return value
+            if unit == 'm': return value * METER_TO_CM
+            if unit == 'in': return value * INCH_TO_CM
+            return None
+        except (ValueError, TypeError):
+            return None
+
+    def convert_from_cm(cm_value, unit):
+        if unit == 'cm': return f"{cm_value:.2f} cm"
+        if unit == 'm': return f"{cm_value / METER_TO_CM:.2f} m"
+        if unit == 'in': return f"{cm_value / INCH_TO_CM:.2f} in"
+        if unit == 'ft':
+            total_inches = cm_value / INCH_TO_CM
+            feet = int(total_inches // 12)
+            inches = total_inches % 12
+            return f"{feet}' {inches:.2f}\""
+        return "Invalid target unit"
+
     while True:
         user_input = input("Enter conversion (or 'q' to quit): ").strip().lower()
         if user_input == 'q':
@@ -562,7 +560,46 @@ def unit_converter():
         original_input_formatted = f"{value_str} {from_unit}"
         print(f"--> {original_input_formatted}  =  {result}")
 
+# YENİ: QR Kod Üretici Fonksiyonu
+def generate_qr_code():
+    """Generates a QR code image from user-provided text."""
+    print("\n=== QR Code Generator ===")
+    
+    data_to_encode = input("Enter the text or URL for the QR code: ").strip()
+    if not data_to_encode:
+        print("No data provided. Operation cancelled.")
+        return
+
+    default_filename = "qrcode.png"
+    output_filename = input(f"Enter the filename for the QR code image (default: {default_filename}): ").strip()
+    if not output_filename:
+        output_filename = default_filename
+    
+    # Dosya adının .png ile bittiğinden emin ol
+    if not output_filename.lower().endswith('.png'):
+        output_filename += '.png'
+        
+    try:
+        print("Generating QR code...")
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(data_to_encode)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+        img.save(output_filename)
+        
+        print(f"✅ QR Code successfully saved as '{output_filename}' in the current directory.")
+    except Exception as e:
+        print(f"An error occurred while generating the QR code: {e}")
+        logging.error(f"QR Code generation failed: {e}")
+
 # --- Central Menu Configuration ---
+# GÜNCELLENDİ: 8. seçenek eklendi
 MENU_OPTIONS = {
     # File & Image Tools
     '1': {'description': 'Copy/Move Files by List', 'function': process_files_main, 'category': 'File & Image Tools', 'requires_settings': True},
@@ -574,6 +611,7 @@ MENU_OPTIONS = {
     '5': {'description': 'Rug Size Calculator (Single)', 'function': rug_size_calculator, 'category': 'Data & Calculation Tools', 'requires_settings': False},
     '6': {'description': 'BULK Process Rug Sizes from File', 'function': bulk_sizes_from_sheet, 'category': 'Data & Calculation Tools', 'requires_settings': False},
     '7': {'description': 'Unit Converter (cm, m, ft, in)', 'function': unit_converter, 'category': 'Data & Calculation Tools', 'requires_settings': False},
+    '8': {'description': 'QR Code Generator', 'function': generate_qr_code, 'category': 'Data & Calculation Tools', 'requires_settings': False},
     
     # Settings & Other
     's': {'description': 'Set Folders for File Operations', 'function': ask_for_folder_settings, 'category': 'Settings & Other', 'requires_settings': True},
@@ -610,13 +648,11 @@ def main():
             if cat not in categories:
                 categories[cat] = []
             
-            # Help and Quit don't need a number, but others do.
             if key in ('h', 'q', 's'):
                  categories[cat].append(f"  {key}. {option['description']}")
             else:
                  categories[cat].append(f"{key}. {option['description']}")
 
-        # Ensure consistent order
         cat_order = ['File & Image Tools', 'Data & Calculation Tools', 'Settings & Other']
         for category in cat_order:
             if category in categories:
@@ -636,10 +672,11 @@ def main():
             selected_option = MENU_OPTIONS[choice]
             function_to_call = selected_option['function']
             
-            if selected_option['requires_settings']:
-                settings = function_to_call(settings)
-            else:
-                function_to_call()
+            if function_to_call:
+                if selected_option['requires_settings']:
+                    settings = function_to_call(settings)
+                else:
+                    function_to_call()
         else:
             print("Invalid choice. Please enter one of the keys from the menu.")
         
