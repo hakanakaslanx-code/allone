@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # ATTENTION: When you update the code, you must increment this version number (e.g., "1.2").
-__version__ = "1.8"
+__version__ = "1.9"
 
 """
 This script combines multiple utility programs into a single interface:
@@ -12,39 +12,29 @@ This script combines multiple utility programs into a single interface:
 5. Image Resizer/Compressor: Batch resizes and compresses images in a folder.
 6. BULK Excel/CSV Rug Sizer: Reads a column of dimensions and adds Width_in / Height_in / Area_sqft.
 7. Unit Converter: Converts between cm, m, feet, and inches.
-8. QR Code Generator: Creates a QR code image from text or a URL.
-9. Barcode Generator: Creates a barcode image in various formats.
+8. QR Code Generator: Creates a QR code image (PNG or for Dymo Label).
+9. Barcode Generator: Creates a barcode image (PNG or for Dymo Label).
 """
 
 import sys
 import subprocess
 import os
 import re
-import requests # Required for the updater function
+import requests
 import json
 import logging
 import shutil
 
 # --- Automatic Setup and Self-Update Mechanism ---
-
 def install_and_check():
     """Checks for required libraries and installs them if they are missing."""
-    # GÜNCELLENDİ: 'python-barcode' kütüphanesi eklendi
     required_packages = [
         'tqdm', 'openpyxl', 'Pillow', 'pillow-heif',
         'pandas', 'requests', 'xlrd', 'qrcode', 'python-barcode'
     ]
-    
-    try:
-        subprocess.check_call([sys.executable, "-m", "pip", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print("ERROR: pip is not available. Please ensure you have pip installed and in your system's PATH.")
-        sys.exit(1)
-
     print("Checking for required libraries...")
     for package in required_packages:
         try:
-            # python-barcode kütüphanesi 'barcode' olarak import edilir.
             import_name = package.replace('-', '_')
             __import__(import_name)
         except ImportError:
@@ -52,20 +42,16 @@ def install_and_check():
                 print(f"'{package}' not found. Installing...")
                 subprocess.check_call([sys.executable, "-m", "pip", "install", package])
             except subprocess.CalledProcessError:
-                print(f"ERROR: Failed to install '{package}'. Please install it manually: pip install {package}")
-                sys.exit(1)
-
+                print(f"ERROR: Failed to install '{package}'. Please install manually."); sys.exit(1)
     print("\n✅ Setup checks complete.")
 
 def check_for_updates():
-    """
-    Checks for a new version of the script on GitHub and self-updates if one is found.
-    """
+    """Checks for a new version of the script on GitHub and self-updates if one is found."""
     print("Checking for updates...")
     script_url = "https://raw.githubusercontent.com/hakanakaslanx-code/allone/refs/heads/main/allone.beta-en.py" # Örnek URL, kendi reponuzla değiştirin
     current_script_name = os.path.basename(sys.argv[0])
     try:
-        response = requests.get(script_url)
+        response = requests.get(script_url, timeout=10)
         response.raise_for_status()
         remote_script_content = response.text
         match = re.search(r"__version__\s*=\s*[\"'](.+?)[\"']", remote_script_content)
@@ -81,6 +67,7 @@ def check_for_updates():
                 updater_script_path = "updater.bat"
                 updater_content = f"""
 @echo off
+echo Updating script... please wait.
 timeout /t 2 /nobreak > NUL
 del "{current_script_name}"
 rename "{new_script_path}" "{current_script_name}"
@@ -88,10 +75,11 @@ echo ✅ Update complete. Relaunching...
 start "" "{sys.executable}" "{current_script_name}"
 del "{updater_script_path}"
                 """
-            else:
+            else: # for macOS and Linux
                 updater_script_path = "updater.sh"
                 updater_content = f"""
 #!/bin/bash
+echo "Updating script... please wait."
 sleep 2
 rm "{current_script_name}"
 mv "{new_script_path}" "{current_script_name}"
@@ -114,6 +102,7 @@ SETTINGS_FILE = "settings.json"
 
 # --- Helper Functions ---
 def clean_file_path(file_path: str) -> str: return file_path.strip().strip('"').strip("'")
+
 def load_settings() -> dict:
     if os.path.exists(SETTINGS_FILE):
         try:
@@ -122,6 +111,7 @@ def load_settings() -> dict:
             print(f"Warning: '{SETTINGS_FILE}' is corrupt. New settings will be created.")
             return {}
     return {}
+
 def save_settings(settings: dict):
     with open(SETTINGS_FILE, "w", encoding='utf-8') as f: json.dump(settings, f, indent=4)
 
@@ -150,40 +140,37 @@ def load_numbers_from_file(file_path: str) -> list:
     try:
         p = clean_file_path(file_path)
         if not os.path.exists(p): return []
-        if p.lower().endswith(".csv"): df = pd.read_csv(p, header=None, usecols=[0], dtype=str, on_bad_lines='skip')
-        elif p.lower().endswith((".xlsx", ".xls")): df = pd.read_excel(p, header=None, usecols=[0], dtype=str, engine=None)
-        else: df = pd.read_csv(p, header=None, usecols=[0], dtype=str, sep='\t', on_bad_lines='skip')
+        if p.lower().endswith((".xlsx",".xls")): df = pd.read_excel(p, header=None, usecols=[0], dtype=str)
+        else: df = pd.read_csv(p, header=None, usecols=[0], dtype=str, on_bad_lines='skip', sep=r'\s+|\t|,', engine='python')
         return df[0].dropna().str.strip().tolist()
     except Exception as e: print(f"Error reading file '{p}': {e}"); return []
 
 def parse_feet_inches(value_str: str):
     if not isinstance(value_str, str) or not value_str.strip(): return None
     try:
-        s = value_str.strip().lower().replace("”", '"').replace("″", '"').replace("′", "'").replace("’", "'").replace("inches", '"').replace("inch", '"').replace("in", '"')
+        s = value_str.strip().lower().replace("”",'"').replace("″",'"').replace("′","'").replace("’","'").replace("inches",'"').replace("inch",'"').replace("in",'"')
         s = re.sub(r"\s+", "", s)
         m = re.fullmatch(r"(\d+(?:\.\d+)?)\'(\d+(?:\.\d+)?)?\"?", s)
         if m: return float(m.group(1)) + (float(m.group(2)) if m.group(2) else 0.0) / 12.0
         m = re.fullmatch(r'(\d+(?:\.\d+)?)"', s)
         if m: return float(m.group(1)) / 12.0
-        if "'" not in s and "." in s:
-            p = s.split(".", 1); return float(p[0] or 0) + float(p[1] or 0) / 12.0
+        if "'" not in s and "." in s: p=s.split(".",1); return float(p[0] or 0) + float(p[1] or 0) / 12.0
         if re.fullmatch(r'\d+(?:\.\d+)?', s): return float(s)
-    except (ValueError, TypeError): return None
+    except: return None
 
 def size_to_inches_wh(s: str):
     m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", str(s))
     if not m: return (None, None)
     w = parse_feet_inches(m.group(1)); h = parse_feet_inches(m.group(2))
-    if w is None or h is None: return (None, None)
-    return (round(w * 12, 2), round(h * 12, 2))
+    return (round(w*12, 2), round(h*12, 2)) if w is not None and h is not None else (None, None)
 
 def calculate_sqft(s: str):
     try:
         m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", str(s))
         if not m: return None
-        w = parse_feet_inches(m.group(1)); h = parse_feet_inches(m.group(2))
+        w, h = parse_feet_inches(m.group(1)), parse_feet_inches(m.group(2))
         return round(w * h, 2) if w is not None and h is not None else None
-    except Exception: return None
+    except: return None
 
 # --- Main Modules ---
 def rug_size_calculator():
@@ -326,43 +313,107 @@ def unit_converter():
         elif tu == 'ft': total_in = cm / 2.54; res = f"{int(total_in // 12)}' {total_in % 12:.2f}\""
         print(f"--> {v} {fu}  =  {res}")
 
+def create_label_image(code_image, label_info, bottom_text=""):
+    from PIL import Image, ImageDraw, ImageFont
+    DPI = 300
+    label_width_px = int(label_info['w_in'] * DPI)
+    label_height_px = int(label_info['h_in'] * DPI)
+    label_bg = Image.new('RGB', (label_width_px, label_height_px), 'white')
+    padding = int(0.1 * DPI)
+    text_area_height = int(0.25 * DPI) if bottom_text else 0
+    max_code_w = label_width_px - (2 * padding)
+    max_code_h = label_height_px - (2 * padding) - text_area_height
+    code_image.thumbnail((max_code_w, max_code_h), Image.Resampling.LANCZOS)
+    paste_x = (label_width_px - code_image.width) // 2
+    paste_y = (label_height_px - text_area_height - code_image.height) // 2
+    label_bg.paste(code_image, (paste_x, paste_y))
+    if bottom_text:
+        draw = ImageDraw.Draw(label_bg)
+        font, font_size = None, int(0.15 * DPI)
+        for font_name in ["arial.ttf", "calibri.ttf", "Helvetica.ttf", "Verdana.ttf"]:
+            try: font = ImageFont.truetype(font_name, size=font_size); break
+            except IOError: continue
+        if not font: font = ImageFont.load_default()
+        text_bbox = draw.textbbox((0, 0), bottom_text, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_x = (label_width_px - text_width) // 2
+        text_y = paste_y + code_image.height + int(padding * 0.2)
+        draw.text((text_x, text_y), bottom_text, font=font, fill='black')
+    return label_bg
+
+def choose_dymo_label():
+    labels = {
+        '1': {'name': 'Address (30252)', 'w_in': 3.5, 'h_in': 1.125},
+        '2': {'name': 'Shipping (30256)', 'w_in': 4.0, 'h_in': 2.3125},
+        '3': {'name': 'Small Multipurpose (30336)', 'w_in': 2.125, 'h_in': 1.0},
+        '4': {'name': 'File Folder (30258)', 'w_in': 3.5, 'h_in': 0.5625},
+    }
+    print("\nChoose a Dymo label size:")
+    for key, info in labels.items(): print(f"  {key}. {info['name']} ({info['w_in']} x {info['h_in']} in)")
+    choice = input("Your choice: ").strip()
+    return labels.get(choice)
+
 def generate_qr_code():
     import qrcode
     print("\n=== QR Code Generator ===")
     data = input("Enter text/URL for QR code: ").strip()
     if not data: print("No data provided."); return
-    fname = input("Enter filename (default: qrcode.png): ").strip() or "qrcode.png"
-    if not fname.lower().endswith('.png'): fname += '.png'
-    try:
-        qrcode.make(data).save(fname)
-        print(f"✅ QR Code saved as '{fname}'.")
-    except Exception as e: print(f"An error occurred: {e}")
+    output_type = input("Choose output type: [1] Standard PNG, [2] Dymo Label Image: ").strip()
+    if output_type == '2':
+        label_info = choose_dymo_label()
+        if not label_info: print("Invalid label choice."); return
+        bottom_text = input("Enter optional text for label: ").strip()
+        fname = input("Enter filename (default: dymo_qr_label.png): ").strip() or "dymo_qr_label.png"
+        try:
+            qr_img = qrcode.make(data)
+            label_image = create_label_image(qr_img, label_info, bottom_text)
+            label_image.save(fname)
+            print(f"✅ Dymo label saved as '{fname}'.")
+        except Exception as e: print(f"An error occurred: {e}")
+    else:
+        fname = input("Enter filename (default: qrcode.png): ").strip() or "qrcode.png"
+        if not fname.lower().endswith('.png'): fname += '.png'
+        try:
+            qrcode.make(data).save(fname)
+            print(f"✅ QR Code saved as '{fname}'.")
+        except Exception as e: print(f"An error occurred: {e}")
 
 def generate_barcode():
     import barcode
     from barcode.writer import ImageWriter
     print("\n=== Barcode Generator ===")
     supported_formats = {
-        '1': ('ean13', "EAN-13 (Retail - 12 digits)"),
-        '2': ('upca', "UPC-A (Retail - 11 digits)"),
-        '3': ('code128', "Code 128 (Alphanumeric)"),
-        '4': ('code39', "Code 39 (Alphanumeric, simpler)"),
+        '1': ('ean13', "EAN-13 (Retail - 12 digits)"), '2': ('upca', "UPC-A (Retail - 11 digits)"),
+        '3': ('code128', "Code 128 (Alphanumeric)"), '4': ('code39', "Code 39 (Alphanumeric, simpler)"),
     }
     print("Choose a barcode format:")
-    for key, (name, desc) in supported_formats.items(): print(f"  {key}. {desc}")
+    for key, (_, desc) in supported_formats.items(): print(f"  {key}. {desc}")
     choice = input("Your choice: ").strip()
     if choice not in supported_formats: print("Invalid choice."); return
     barcode_format, _ = supported_formats[choice]
     data = input(f"Enter data for {barcode_format.upper()}: ").strip()
     if not data: print("No data provided."); return
-    fname = input("Enter filename (default: barcode.png): ").strip() or "barcode"
-    try:
-        BarcodeClass = barcode.get_barcode_class(barcode_format)
-        my_barcode = BarcodeClass(data, writer=ImageWriter())
-        my_barcode.save(fname)
-        print(f"✅ Barcode saved as '{fname}.png'.")
-    except barcode.errors.BarcodeError as e: print(f"\nERROR: Could not generate barcode: {e}")
-    except Exception as e: print(f"An unexpected error occurred: {e}")
+    output_type = input("Choose output type: [1] Standard PNG, [2] Dymo Label Image: ").strip()
+    if output_type == '2':
+        label_info = choose_dymo_label()
+        if not label_info: print("Invalid label choice."); return
+        bottom_text = input("Enter optional text (default: barcode data): ").strip() or data
+        fname = input("Enter filename (default: dymo_barcode_label.png): ").strip() or "dymo_barcode_label.png"
+        try:
+            BarcodeClass = barcode.get_barcode_class(barcode_format)
+            barcode_pil_img = BarcodeClass(data, writer=ImageWriter()).render()
+            label_image = create_label_image(barcode_pil_img, label_info, bottom_text)
+            label_image.save(fname)
+            print(f"✅ Dymo label saved as '{fname}'.")
+        except Exception as e: print(f"\nERROR: Could not generate label: {e}")
+    else:
+        fname = input("Enter filename (default: barcode): ").strip() or "barcode"
+        try:
+            BarcodeClass = barcode.get_barcode_class(barcode_format)
+            saved_fname = BarcodeClass(data, writer=ImageWriter()).save(fname)
+            print(f"✅ Barcode saved as '{saved_fname}'.")
+        except barcode.errors.BarcodeError as e: print(f"\nERROR: {e}")
+        except Exception as e: print(f"An error occurred: {e}")
 
 # --- Central Menu Configuration ---
 MENU_OPTIONS = {
@@ -373,8 +424,8 @@ MENU_OPTIONS = {
     '5': {'d': 'Rug Size Calculator (Single)', 'f': rug_size_calculator, 'c': 'Data & Calculation Tools', 's': False},
     '6': {'d': 'BULK Process Rug Sizes from File', 'f': bulk_sizes_from_sheet, 'c': 'Data & Calculation Tools', 's': False},
     '7': {'d': 'Unit Converter (cm, m, ft, in)', 'f': unit_converter, 'c': 'Data & Calculation Tools', 's': False},
-    '8': {'d': 'QR Code Generator', 'f': generate_qr_code, 'c': 'Data & Calculation Tools', 's': False},
-    '9': {'d': 'Barcode Generator', 'f': generate_barcode, 'c': 'Data & Calculation Tools', 's': False},
+    '8': {'d': 'QR Code Generator (PNG/Dymo)', 'f': generate_qr_code, 'c': 'Data & Calculation Tools', 's': False},
+    '9': {'d': 'Barcode Generator (PNG/Dymo)', 'f': generate_barcode, 'c': 'Data & Calculation Tools', 's': False},
     's': {'d': 'Set Folders for File Operations', 'f': ask_for_folder_settings, 'c': 'Settings & Other', 's': True},
     'h': {'d': 'Help / Guide', 'f': None, 'c': 'Settings & Other', 's': False},
     'q': {'d': 'Quit', 'f': None, 'c': 'Settings & Other', 's': False}
@@ -420,5 +471,5 @@ def main():
 
 if __name__ == "__main__":
     install_and_check()
-    # check_for_updates() # Kendi reponuza yüklediğinizde bu satırı aktif edebilirsiniz
+    # check_for_updates() # You can uncomment this if you host the new version
     main()
