@@ -8,9 +8,9 @@ This script combines multiple utility programs into a single interface:
 1. File Copy/Move: Manages files based on specific numbers or identifiers.
 2. Excel/Text Formatter: Formats data from a column into a single text file line.
 3. HEIC to JPG Converter: Converts HEIC format images to JPG.
-4. Carpet Size Calculator: Calculates dimensions (inches and sqft) from feet/inch format.
+4. Rug Size Calculator: Calculates dimensions (inches and sqft) from feet/inch format.
 5. Google Maps Data Scraper: Scrapes business data from Google Maps using Playwright.
-6. BULK Excel/CSV Carpet Sizer: Reads a column of dimensions and adds Width_in / Height_in / Area_sqft.
+6. BULK Excel/CSV Rug Sizer: Reads a column of dimensions and adds Width_in / Height_in / Area_sqft.
 """
 
 import sys
@@ -250,7 +250,7 @@ def load_numbers_from_file(file_path: str) -> list:
         print(f"Error: Could not read the file. Reason: {e}")
         return []
 
-# --- Carpet Dimension Parsing (IMPROVED) ---
+# --- Rug Dimension Parsing (IMPROVED) ---
 def parse_feet_inches(value_str: str):
     if not isinstance(value_str, str) or not value_str.strip():
         return None
@@ -310,7 +310,7 @@ def calculate_sqft(size_str: str):
 
 # --- Main Modules ---
 def rug_size_calculator():
-    print("\n=== Carpet Size Calculator (inches and sqft) ===")
+    print("\n=== Rug Size Calculator (inches and sqft) ===")
     print('Examples: 11\'.5" x 5\'.6"  |  11.5x5.6  | 11\'x5\'5.5" ')
     while True:
         user_input = input("Enter dimension ('width x height') (or 'q' to quit): ").strip()
@@ -617,9 +617,9 @@ def show_usage():
     1. {green}Copy/Move Files{reset}: Transfers image files from one folder to another based on a list of identifiers.
     2. {green}Format Numbers from File{reset}: Reads the first column from a file and formats the values into a single comma-separated line.
     3. {green}Convert HEIC to JPG{reset}: Converts all Apple HEIC format images in a folder to the universal JPG format.
-    4. {green}Carpet Size Calculator (Single){reset}: Calculates the inches and sqft for a single dimension string.
+    4. {green}Rug Size Calculator (Single){reset}: Calculates the inches and sqft for a single dimension string.
     5. {green}Scrape Google Maps Data{reset}: Scrapes business info from Google Maps for a given search term.
-    6. {green}BULK Process Carpet Sizes from File{reset}: Processes an entire column of dimensions in an Excel or CSV file.
+    6. {green}BULK Process Rug Sizes from File{reset}: Processes an entire column of dimensions in an Excel or CSV file.
     
     {green}--- Settings & Other ---{reset}
     s. {green}Set Folders for File Operations{reset}: Defines the source and target folders for the Copy/Move tool.
@@ -636,9 +636,9 @@ def main():
         print("1. Copy/Move Files")
         print("2. Format Numbers from File")
         print("3. Convert HEIC to JPG")
-        print("4. Carpet Size Calculator (Single)")
+        print("4. Rug Size Calculator (Single)")
         print("5. Scrape Google Maps Data")
-        print("6. BULK Process Carpet Sizes from File")
+        print("6. BULK Process Rug Sizes from File")
         print("-----------------------------------")
         print("s. Set Folders    h. Help    q. Quit")
         choice = input("Your choice: ").strip().lower()
@@ -663,4 +663,5 @@ if __name__ == "__main__":
     install_and_check()
     check_for_updates()
     main()
+
 
