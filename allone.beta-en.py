@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # ATTENTION: When you update the code, you must increment this version number (e.g., "1.2").
-__version__ = "1.3"
+__version__ = "1.4"
 
 """
 This script combines multiple utility programs into a single interface:
@@ -9,8 +9,9 @@ This script combines multiple utility programs into a single interface:
 2. Excel/Text Formatter: Formats data from a column into a single text file line.
 3. HEIC to JPG Converter: Converts HEIC format images to JPG.
 4. Rug Size Calculator: Calculates dimensions (inches and sqft) from feet/inch format.
-5. Google Maps Data Scraper: Scrapes business data from Google Maps using Playwright.
+5. Image Resizer/Compressor: Batch resizes and compresses images in a folder.
 6. BULK Excel/CSV Rug Sizer: Reads a column of dimensions and adds Width_in / Height_in / Area_sqft.
+7. Unit Converter: Converts between cm, m, feet, and inches.
 """
 
 import sys
@@ -25,12 +26,11 @@ def install_and_check():
     """Checks for required libraries and installs them if they are missing."""
     required_packages = [
         'tqdm', 'openpyxl', 'Pillow', 'pillow-heif',
-        'pandas', 'requests', 'beautifulsoup4', 'playwright',
-        'xlrd' # Added for legacy .xls Excel format support
+        'pandas', 'requests', 'xlrd'
     ]
     
     try:
-        import tqdm, openpyxl, PIL, pillow_heif, pandas, requests, bs4, playwright, xlrd
+        import tqdm, openpyxl, PIL, pillow_heif, pandas, requests, xlrd
     except ImportError:
         print("Some required libraries are missing. Starting installation...")
         for package in required_packages:
@@ -44,13 +44,6 @@ def install_and_check():
                     print(f"ERROR: Failed to install '{package}'. Please install it manually: pip install {package}")
                     sys.exit(1)
 
-    print("\nInstalling/updating Playwright browsers (if necessary)...")
-    try:
-        subprocess.check_call([sys.executable, "-m", "playwright", "install"])
-    except subprocess.CalledProcessError:
-        print("ERROR: Failed to install Playwright browsers. Please run manually: playwright install")
-        sys.exit(1)
-    
     print("\n✅ Setup checks complete.")
 
 def check_for_updates():
@@ -59,7 +52,6 @@ def check_for_updates():
     """
     print("Checking for updates...")
     
-    # URL has been updated to the new GitHub raw link.
     script_url = "https://raw.githubusercontent.com/hakanakaslanx-code/allone/refs/heads/main/allone.beta-en.py"
     current_script_name = os.path.basename(sys.argv[0])
 
@@ -127,14 +119,10 @@ rm -- "$0"
 import shutil
 import logging
 import json
-import time
-from dataclasses import dataclass, asdict, field
 from tqdm import tqdm
 from PIL import Image
 import pillow_heif
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 import pandas as pd
-from bs4 import BeautifulSoup
 
 logging.basicConfig(
     filename="tool_operations.log",
@@ -142,39 +130,6 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 SETTINGS_FILE = "settings.json"
-
-# --- Google Maps Data Classes ---
-@dataclass
-class Business:
-    name: str = None
-    address: str = None
-    website: str = None
-    phone_number: str = None
-    reviews_count: int = None
-    reviews_average: float = None
-    latitude: float = None
-    longitude: float = None
-    facebook: str = None
-    instagram: str = None
-    email: str = None
-
-@dataclass
-class BusinessList:
-    business_list: list[Business] = field(default_factory=list)
-    save_at = 'output'
-
-    def dataframe(self):
-        return pd.json_normalize((asdict(b) for b in self.business_list), sep="_").fillna("")
-
-    def save_to_excel(self, filename):
-        os.makedirs(self.save_at, exist_ok=True)
-        self.dataframe().to_excel(f"{self.save_at}/{filename}.xlsx", index=False)
-        print(f"✅ Data successfully saved to '{self.save_at}/{filename}.xlsx'")
-
-    def save_to_csv(self, filename):
-        os.makedirs(self.save_at, exist_ok=True)
-        self.dataframe().to_csv(f"{self.save_at}/{filename}.csv", index=False)
-        print(f"✅ Data successfully saved to '{self.save_at}/{filename}.csv'")
 
 # --- Helper Functions ---
 def clean_file_path(file_path: str) -> str:
@@ -487,182 +442,211 @@ def process_files_main(settings):
     if missing:
         print("Unfound identifiers:", ", ".join(missing))
 
-# --- Google Maps Functions ---
-def extract_coordinates_from_url(url: str) -> tuple[float | None, float | None]:
-    match = re.search(r"/@(-?\d+\.\d+),(-?\d+\.\d+)", url)
-    if match:
-        return float(match.group(1)), float(match.group(2))
-    return None, None
-
-def get_social_links_and_email(website_url):
-    fb, ig, email = "", "", ""
-    if not website_url: return fb, ig, email
-
-    try:
-        url = website_url if website_url.startswith("http") else "https://" + website_url
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        res = requests.get(url, timeout=10, headers=headers, allow_redirects=True)
-        
-        soup = BeautifulSoup(res.text, "html.parser")
-        links = {a['href'] for a in soup.find_all("a", href=True)}
-        
-        fb = next((link for link in links if "facebook.com" in link), "")
-        ig = next((link for link in links if "instagram.com" in link), "")
-        
-        emails = re.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', res.text, re.IGNORECASE)
-        if not emails:
-            emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', res.text)
-        
-        email = emails[0] if emails else ""
-        if email: print(f"  -> 📧 Email found: {email}")
-            
-    except Exception as e:
-        print(f"  -> ❌ Error while scanning website ({website_url}): {e}")
-        
-    return fb, ig, email
-
-def scrape_google_maps():
-    print("\nWARNING: This function depends on the Google Maps interface and may break in the future.")
-    search_term = input("Enter the search term for Google Maps (e.g., restaurants in New York): ").strip()
-    total_str = input("Maximum number of results to scrape? (Leave empty to try for all): ").strip()
-    total = int(total_str) if total_str.isdigit() and total_str else 1_000_000
-
-    if not search_term:
-        print("Search term not provided. Operation cancelled.")
+def resize_and_compress_images():
+    print("\n=== Bulk Image Resizer and Compressor ===")
+    source_dir = clean_file_path(input("Enter the path to the folder with images: ").strip())
+    
+    if not os.path.isdir(source_dir):
+        print(f"Error: Source directory '{source_dir}' not found.")
         return
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        page = browser.new_page()
+    target_dir = os.path.join(source_dir, "resized")
+    os.makedirs(target_dir, exist_ok=True)
+    print(f"Resized images will be saved to: {target_dir}")
+
+    try:
+        max_width = int(input("Enter the maximum width for the images (e.g., 1920): ").strip())
+        quality = int(input("Enter the JPEG quality (1-95, default is 75): ").strip() or 75)
+        if not 1 <= quality <= 95:
+            quality = 75
+            print("Invalid quality value. Defaulting to 75.")
+    except ValueError:
+        print("Invalid number entered. Operation cancelled.")
+        return
+
+    valid_extensions = ('.jpg', '.jpeg', '.png', '.webp')
+    image_files = [f for f in os.listdir(source_dir) if f.lower().endswith(valid_extensions)]
+
+    if not image_files:
+        print("No compatible image files found in the directory.")
+        return
+
+    print(f"Found {len(image_files)} images to process.")
+    for filename in tqdm(image_files, desc="Resizing images"):
         try:
-            page.goto("https://www.google.com/maps", timeout=60000)
-            page.locator('//input[@id="searchboxinput"]').fill(search_term)
-            page.keyboard.press("Enter")
-            
-            print(f"🔍 Searching for '{search_term}'... Please wait for results to load.")
-            results_panel_selector = 'div[role="feed"]'
-            page.wait_for_selector(results_panel_selector, timeout=30000)
+            source_path = os.path.join(source_dir, filename)
+            target_path = os.path.join(target_dir, filename)
 
-            prev_count = 0
-            while True:
-                listings_locator = page.locator(f'{results_panel_selector} > div > div[role="article"]')
-                curr_count = listings_locator.count()
+            with Image.open(source_path) as img:
+                if img.width > max_width:
+                    ratio = max_width / float(img.width)
+                    new_height = int(float(img.height) * ratio)
+                    resample_filter = Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
+                    resized_img = img.resize((max_width, new_height), resample_filter)
+                else:
+                    resized_img = img.copy()
+
+                if resized_img.mode in ("RGBA", "P"):
+                    resized_img = resized_img.convert("RGB")
                 
-                print(f"🔄 Number of loaded listings: {curr_count}")
-                if curr_count >= total or curr_count == prev_count:
-                    print(f"✅ Scrolling complete. Found {curr_count} total results.")
-                    break
-                
-                prev_count = curr_count
-                page.evaluate(f"document.querySelector('{results_panel_selector}').scrollTop = document.querySelector('{results_panel_selector}').scrollHeight")
-                time.sleep(3)
-            
-            listings = listings_locator.all()[:total]
-            print(f"📦 Scraping information for {len(listings)} listings.")
-            
-            business_list = BusinessList()
-            for i, listing in enumerate(listings):
-                try:
-                    listing.click()
-                    print(f"\n➡️ Processing listing {i+1}/{len(listings)}...")
-                    page.wait_for_selector('h1', timeout=10000)
-                    
-                    b = Business()
-                    b.name = page.locator('h1').first.inner_text()
-                    b.address = page.locator('button[data-item-id="address"] div.fontBodyMedium').first.inner_text(timeout=2000)
-                    b.website = page.locator('a[data-item-id="authority"] div.fontBodyMedium').first.inner_text(timeout=2000)
-                    b.phone_number = page.locator('button[data-item-id*="phone:tel:"] div.fontBodyMedium').first.inner_text(timeout=2000)
-                    
-                    review_text = page.locator('div.F7nice').first.inner_text(timeout=2000)
-                    match = re.search(r'(\d[\.,]\d)\s+\((\d+)\)', review_text)
-                    if match:
-                        b.reviews_average = float(match.group(1).replace(',', '.'))
-                        b.reviews_count = int(match.group(2).replace(',', ''))
+                file_ext = os.path.splitext(filename)[1].lower()
+                if file_ext in ['.jpg', '.jpeg']:
+                    resized_img.save(target_path, "JPEG", quality=quality, optimize=True)
+                else:
+                    resized_img.save(target_path)
 
-                    b.latitude, b.longitude = extract_coordinates_from_url(page.url)
-                    
-                    if b.website:
-                        print(f"  -> 🌐 Scanning website: {b.website}")
-                        b.facebook, b.instagram, b.email = get_social_links_and_email(b.website)
-                        
-                    business_list.business_list.append(b)
-
-                except PlaywrightTimeoutError:
-                    print(f"  -> ⚠️ Some details (address, phone, etc.) for this listing could not be found or loaded.")
-                    try: 
-                        b.name = listing.get_attribute('aria-label')
-                        if b.name: business_list.business_list.append(b)
-                    except: pass
-                except Exception as e:
-                    logging.error(f"Error on listing {i+1}: {e}")
-
-            if business_list.business_list:
-                filename = f"google_maps_data_{search_term.strip().replace(' ', '_')}"
-                business_list.save_to_excel(filename)
-                business_list.save_to_csv(filename)
-                
         except Exception as e:
-            print(f"\nERROR: A problem occurred during the main process. {e}")
-            logging.critical(f"Maps scraper failed: {e}")
-        finally:
-            print("Closing browser.")
-            browser.close()
+            print(f"\nError processing {filename}: {e}")
+            logging.error(f"Failed to resize {filename}: {e}")
+    
+    print(f"\n✅ Processing complete. Resized images are in the '{target_dir}' folder.")
+
+# --- Unit Converter Helpers ---
+INCH_TO_CM = 2.54
+FOOT_TO_CM = 30.48
+METER_TO_CM = 100
+
+def convert_to_cm(value_str, unit):
+    """Converts a given value from its unit to centimeters."""
+    try:
+        if unit == 'ft':
+            decimal_feet = parse_feet_inches(value_str)
+            return decimal_feet * FOOT_TO_CM if decimal_feet is not None else None
+        
+        value = float(value_str)
+        if unit == 'cm': return value
+        if unit == 'm': return value * METER_TO_CM
+        if unit == 'in': return value * INCH_TO_CM
+        return None
+    except (ValueError, TypeError):
+        return None
+
+def convert_from_cm(cm_value, unit):
+    """Converts a value from centimeters to the target unit."""
+    if unit == 'cm': return f"{cm_value:.2f} cm"
+    if unit == 'm': return f"{cm_value / METER_TO_CM:.2f} m"
+    if unit == 'in': return f"{cm_value / INCH_TO_CM:.2f} in"
+    if unit == 'ft':
+        total_inches = cm_value / INCH_TO_CM
+        feet = int(total_inches // 12)
+        inches = total_inches % 12
+        return f"{feet}' {inches:.2f}\""
+    return "Invalid target unit"
+
+def unit_converter():
+    print("\n=== Unit Converter ===")
+    print("Convert between 'cm', 'm', 'ft', 'in'.")
+    print("Examples: '182 cm to ft', '5\\'11\" to cm', '2.5 m to in'")
+    
+    while True:
+        user_input = input("Enter conversion (or 'q' to quit): ").strip().lower()
+        if user_input == 'q':
+            break
+
+        match = re.match(r"^\s*(.+?)\s*(cm|m|ft|in)\s+to\s+(cm|m|ft|in)\s*$", user_input, re.IGNORECASE)
+        
+        if not match:
+            print("Invalid format. Please use 'value unit to target_unit' (e.g., '100 cm to in').")
+            continue
+            
+        value_str, from_unit, to_unit = match.groups()
+
+        cm_value = convert_to_cm(value_str, from_unit)
+
+        if cm_value is None:
+            print(f"Could not parse value '{value_str}'. Please check your input.")
+            continue
+            
+        result = convert_from_cm(cm_value, to_unit)
+        
+        original_input_formatted = f"{value_str} {from_unit}"
+        print(f"--> {original_input_formatted}  =  {result}")
+
+# --- Central Menu Configuration ---
+MENU_OPTIONS = {
+    # File & Image Tools
+    '1': {'description': 'Copy/Move Files by List', 'function': process_files_main, 'category': 'File & Image Tools', 'requires_settings': True},
+    '2': {'description': 'Convert HEIC to JPG', 'function': convert_heic_to_jpg_in_directory, 'category': 'File & Image Tools', 'requires_settings': False},
+    '3': {'description': 'Batch Image Resizer', 'function': resize_and_compress_images, 'category': 'File & Image Tools', 'requires_settings': False},
+    
+    # Data & Calculation Tools
+    '4': {'description': 'Format Numbers from File', 'function': format_numbers_from_file, 'category': 'Data & Calculation Tools', 'requires_settings': False},
+    '5': {'description': 'Rug Size Calculator (Single)', 'function': rug_size_calculator, 'category': 'Data & Calculation Tools', 'requires_settings': False},
+    '6': {'description': 'BULK Process Rug Sizes from File', 'function': bulk_sizes_from_sheet, 'category': 'Data & Calculation Tools', 'requires_settings': False},
+    '7': {'description': 'Unit Converter (cm, m, ft, in)', 'function': unit_converter, 'category': 'Data & Calculation Tools', 'requires_settings': False},
+    
+    # Settings & Other
+    's': {'description': 'Set Folders for File Operations', 'function': ask_for_folder_settings, 'category': 'Settings & Other', 'requires_settings': True},
+    'h': {'description': 'Help / Guide', 'function': None, 'category': 'Settings & Other', 'requires_settings': False},
+    'q': {'description': 'Quit', 'function': None, 'category': 'Settings & Other', 'requires_settings': False}
+}
 
 def show_usage():
     green = "\033[92m"
     reset = "\033[0m"
-    usage_text = f"""
-    {green}=== Combined Utility Tool - Guide ==={reset}
+    print(f"\n{green}=== Combined Utility Tool - Guide ==={reset}")
 
-    1. {green}Copy/Move Files{reset}: Transfers image files from one folder to another based on a list of identifiers.
-    2. {green}Format Numbers from File{reset}: Reads the first column from a file and formats the values into a single comma-separated line.
-    3. {green}Convert HEIC to JPG{reset}: Converts all Apple HEIC format images in a folder to the universal JPG format.
-    4. {green}Rug Size Calculator (Single){reset}: Calculates the inches and sqft for a single dimension string.
-    5. {green}Scrape Google Maps Data{reset}: Scrapes business info from Google Maps for a given search term.
-    6. {green}BULK Process Rug Sizes from File{reset}: Processes an entire column of dimensions in an Excel or CSV file.
+    current_category = ""
+    for key, options in MENU_OPTIONS.items():
+        if options['category'] != current_category:
+            current_category = options['category']
+            print(f"\n--- {green}{current_category}{reset} ---")
+        
+        print(f"  {key}. {green}{options['description']}{reset}")
     
-    {green}--- Settings & Other ---{reset}
-    s. {green}Set Folders for File Operations{reset}: Defines the source and target folders for the Copy/Move tool.
-    h. {green}Help / Guide{reset}: Displays this help menu again.
-    q. {green}Quit{reset}: Exits the program.
-    """
-    print(usage_text)
+    print("\n")
 
 def main():
     """The main function that runs the menu loop and handles user choices."""
+    settings = load_settings()
+
     while True:
         print("\n" + "="*15 + " MAIN MENU " + "="*15)
         print(f" (Version: {__version__})")
-        print("1. Copy/Move Files")
-        print("2. Format Numbers from File")
-        print("3. Convert HEIC to JPG")
-        print("4. Rug Size Calculator (Single)")
-        print("5. Scrape Google Maps Data")
-        print("6. BULK Process Rug Sizes from File")
-        print("-----------------------------------")
-        print("s. Set Folders    h. Help    q. Quit")
+        
+        categories = {}
+        for key, option in MENU_OPTIONS.items():
+            cat = option['category']
+            if cat not in categories:
+                categories[cat] = []
+            
+            # Help and Quit don't need a number, but others do.
+            if key in ('h', 'q', 's'):
+                 categories[cat].append(f"  {key}. {option['description']}")
+            else:
+                 categories[cat].append(f"{key}. {option['description']}")
+
+        # Ensure consistent order
+        cat_order = ['File & Image Tools', 'Data & Calculation Tools', 'Settings & Other']
+        for category in cat_order:
+            if category in categories:
+                print(f"\n--- {category} ---")
+                for item in categories[category]:
+                    print(item)
+        
+        print("-" * 37)
         choice = input("Your choice: ").strip().lower()
 
-        settings = load_settings()
-
-        if choice == "1": process_files_main(settings)
-        elif choice == "2": format_numbers_from_file()
-        elif choice == "3": convert_heic_to_jpg_in_directory()
-        elif choice == "4": rug_size_calculator()
-        elif choice == "5": scrape_google_maps()
-        elif choice == "6": bulk_sizes_from_sheet()
-        elif choice == "s": settings = ask_for_folder_settings(settings)
-        elif choice == "h": show_usage()
-        elif choice == "q":
+        if choice == 'q':
             print("Thank you for using the tool. Goodbye!")
             break
+        elif choice == 'h':
+            show_usage()
+        elif choice in MENU_OPTIONS:
+            selected_option = MENU_OPTIONS[choice]
+            function_to_call = selected_option['function']
+            
+            if selected_option['requires_settings']:
+                settings = function_to_call(settings)
+            else:
+                function_to_call()
         else:
-            print("Invalid choice. Please enter one of the numbers or letters from the menu.")
+            print("Invalid choice. Please enter one of the keys from the menu.")
+        
+        input("\nPress Enter to return to the menu...")
+
 
 if __name__ == "__main__":
     install_and_check()
     check_for_updates()
     main()
-
-
-
