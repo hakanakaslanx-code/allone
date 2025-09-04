@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # ATTENTION: When you update the code, you must increment this version number (e.g., "1.2").
-__version__ = "1.1"
+__version__ = "1.2"
 
 """
 This script combines multiple utility programs into a single interface:
@@ -663,3 +663,4 @@ if __name__ == "__main__":
     install_and_check()
     check_for_updates()
     main()
+
