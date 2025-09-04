@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # ATTENTION: When you update the code, you must increment this version number (e.g., "1.2").
-__version__ = "1.7.1"
+__version__ = "1.8"
 
 """
 This script combines multiple utility programs into a single interface:
@@ -13,6 +13,7 @@ This script combines multiple utility programs into a single interface:
 6. BULK Excel/CSV Rug Sizer: Reads a column of dimensions and adds Width_in / Height_in / Area_sqft.
 7. Unit Converter: Converts between cm, m, feet, and inches.
 8. QR Code Generator: Creates a QR code image from text or a URL.
+9. Barcode Generator: Creates a barcode image in various formats.
 """
 
 import sys
@@ -28,12 +29,12 @@ import shutil
 
 def install_and_check():
     """Checks for required libraries and installs them if they are missing."""
+    # GÜNCELLENDİ: 'python-barcode' kütüphanesi eklendi
     required_packages = [
         'tqdm', 'openpyxl', 'Pillow', 'pillow-heif',
-        'pandas', 'requests', 'xlrd', 'qrcode'
+        'pandas', 'requests', 'xlrd', 'qrcode', 'python-barcode'
     ]
     
-    # Check if pip is available
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except (subprocess.CalledProcessError, FileNotFoundError):
@@ -43,8 +44,9 @@ def install_and_check():
     print("Checking for required libraries...")
     for package in required_packages:
         try:
-            # Check if package can be imported
-            __import__(package.replace('-', '_'))
+            # python-barcode kütüphanesi 'barcode' olarak import edilir.
+            import_name = package.replace('-', '_')
+            __import__(import_name)
         except ImportError:
             try:
                 print(f"'{package}' not found. Installing...")
@@ -59,9 +61,8 @@ def check_for_updates():
     """
     Checks for a new version of the script on GitHub and self-updates if one is found.
     """
-    # Bu fonksiyonun içeriği değişmediği için aynı kalıyor.
     print("Checking for updates...")
-    script_url = "https://raw.githubusercontent.com/hakanakaslanx-code/allone/refs/heads/main/allone.beta-en.py"
+    script_url = "https://raw.githubusercontent.com/hakanakaslanx-code/allone/refs/heads/main/allone.beta-en.py" # Örnek URL, kendi reponuzla değiştirin
     current_script_name = os.path.basename(sys.argv[0])
     try:
         response = requests.get(script_url)
@@ -69,18 +70,17 @@ def check_for_updates():
         remote_script_content = response.text
         match = re.search(r"__version__\s*=\s*[\"'](.+?)[\"']", remote_script_content)
         if not match:
-            print("Warning: Could not determine the remote script's version. Skipping update.")
+            print("Warning: Could not determine remote version. Skipping update.")
             return
         remote_version = match.group(1)
         if remote_version > __version__:
-            print(f"--> A new version ({remote_version}) is available. Current version: {__version__}. Updating...")
+            print(f"--> New version ({remote_version}) available. Updating...")
             new_script_path = current_script_name + ".new"
             with open(new_script_path, "w", encoding='utf-8') as f: f.write(remote_script_content)
             if sys.platform == 'win32':
                 updater_script_path = "updater.bat"
                 updater_content = f"""
 @echo off
-echo Updating script... please wait.
 timeout /t 2 /nobreak > NUL
 del "{current_script_name}"
 rename "{new_script_path}" "{current_script_name}"
@@ -92,7 +92,6 @@ del "{updater_script_path}"
                 updater_script_path = "updater.sh"
                 updater_content = f"""
 #!/bin/bash
-echo "Updating script... please wait."
 sleep 2
 rm "{current_script_name}"
 mv "{new_script_path}" "{current_script_name}"
@@ -106,17 +105,11 @@ rm -- "$0"
             sys.exit(0)
         else:
             print(f"✅ Your code is up-to-date. (Version: {__version__})")
-    except requests.exceptions.RequestException as e:
-        print(f"Warning: Update check failed. Could not connect to the server. Reason: {e}")
     except Exception as e:
-        print(f"Warning: An unexpected error occurred during the update check: {e}")
+        print(f"Warning: Update check failed. Reason: {e}")
 
-
-logging.basicConfig(
-    filename="tool_operations.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
+# --- Global Settings ---
+logging.basicConfig(filename="tool_operations.log", level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 SETTINGS_FILE = "settings.json"
 
 # --- Helper Functions ---
@@ -124,313 +117,252 @@ def clean_file_path(file_path: str) -> str: return file_path.strip().strip('"').
 def load_settings() -> dict:
     if os.path.exists(SETTINGS_FILE):
         try:
-            with open(SETTINGS_FILE, "r", encoding='utf-8') as file: return json.load(file)
+            with open(SETTINGS_FILE, "r", encoding='utf-8') as f: return json.load(f)
         except json.JSONDecodeError:
-            print(f"Warning: '{SETTINGS_FILE}' is corrupt or empty. New settings will be created.")
+            print(f"Warning: '{SETTINGS_FILE}' is corrupt. New settings will be created.")
             return {}
     return {}
 def save_settings(settings: dict):
-    with open(SETTINGS_FILE, "w", encoding='utf-8') as file: json.dump(settings, file, indent=4)
+    with open(SETTINGS_FILE, "w", encoding='utf-8') as f: json.dump(settings, f, indent=4)
 
 def ask_for_folder_settings(existing_settings: dict) -> dict:
     print("\n--- Folder Settings for File Operations ---")
     print(f"Current Source Folder: {existing_settings.get('source_folder', 'Not set')}")
     print(f"Current Target Folder: {existing_settings.get('target_folder', 'Not set')}")
-    update_settings = input("Do you want to update the settings? (y/n): ").strip().lower()
-    if update_settings == "y":
-        source_folder = input("Enter the new source folder path: ").strip()
-        target_folder = input("Enter the new target folder path: ").strip()
+    if input("Update settings? (y/n): ").strip().lower() == "y":
+        source_folder = input("Enter new source folder path: ").strip()
+        target_folder = input("Enter new target folder path: ").strip()
         if not os.path.isdir(clean_file_path(source_folder)):
-            print(f"Error: Source folder '{source_folder}' not found or is not a valid directory.")
+            print(f"Error: Source folder '{source_folder}' not found.")
             return existing_settings
         if not os.path.isdir(clean_file_path(target_folder)):
-            create_folder = input(f"Warning: Target folder '{target_folder}' not found. Create it? (y/n): ").strip().lower()
-            if create_folder == 'y':
-                try:
-                    os.makedirs(clean_file_path(target_folder))
-                    print(f"Folder '{target_folder}' created successfully.")
-                except OSError as e:
-                    print(f"Error: Could not create folder. Reason: {e}")
-                    return existing_settings
-            else:
-                print("Operation cancelled. Settings were not updated.")
-                return existing_settings
+            if input(f"Target folder '{target_folder}' not found. Create it? (y/n): ").strip().lower() == 'y':
+                try: os.makedirs(clean_file_path(target_folder))
+                except OSError as e: print(f"Error creating folder: {e}"); return existing_settings
+            else: return existing_settings
         new_settings = {"source_folder": source_folder, "target_folder": target_folder}
         save_settings(new_settings)
-        print("✅ Settings updated successfully.")
-        return new_settings
-    return existing_settings
+        print("✅ Settings updated.")
+    return load_settings()
 
 def load_numbers_from_file(file_path: str) -> list:
     import pandas as pd
     try:
         p = clean_file_path(file_path)
-        if not os.path.exists(p):
-            print(f"Error: File '{file_path}' not found.")
-            return []
-        if p.lower().endswith(".csv"):
-            df = pd.read_csv(p, header=None, usecols=[0], dtype=str, on_bad_lines='skip')
-        elif p.lower().endswith((".xlsx", ".xls")):
-            df = pd.read_excel(p, header=None, usecols=[0], dtype=str, engine=None)
-        else:
-            df = pd.read_csv(p, header=None, usecols=[0], dtype=str, sep='\t', on_bad_lines='skip')
+        if not os.path.exists(p): return []
+        if p.lower().endswith(".csv"): df = pd.read_csv(p, header=None, usecols=[0], dtype=str, on_bad_lines='skip')
+        elif p.lower().endswith((".xlsx", ".xls")): df = pd.read_excel(p, header=None, usecols=[0], dtype=str, engine=None)
+        else: df = pd.read_csv(p, header=None, usecols=[0], dtype=str, sep='\t', on_bad_lines='skip')
         return df[0].dropna().str.strip().tolist()
-    except Exception as e:
-        logging.error(f"Error reading numbers from file: {e}")
-        print(f"Error: Could not read the file. Reason: {e}")
-        return []
+    except Exception as e: print(f"Error reading file '{p}': {e}"); return []
 
 def parse_feet_inches(value_str: str):
     if not isinstance(value_str, str) or not value_str.strip(): return None
     try:
-        s = value_str.strip().lower()
-        s = s.replace("”", '"').replace("″", '"').replace("′", "'").replace("’", "'")
-        s = s.replace("inches", '"').replace("inch", '"').replace("in", '"')
+        s = value_str.strip().lower().replace("”", '"').replace("″", '"').replace("′", "'").replace("’", "'").replace("inches", '"').replace("inch", '"').replace("in", '"')
         s = re.sub(r"\s+", "", s)
-        m_ft_in = re.fullmatch(r"(\d+(?:\.\d+)?)\'(\d+(?:\.\d+)?)?\"?", s)
-        if m_ft_in:
-            feet = float(m_ft_in.group(1))
-            inches = float(m_ft_in.group(2)) if m_ft_in.group(2) else 0.0
-            return feet + inches / 12.0
-        m_in_only = re.fullmatch(r'(\d+(?:\.\d+)?)"', s)
-        if m_in_only: return float(m_in_only.group(1)) / 12.0
+        m = re.fullmatch(r"(\d+(?:\.\d+)?)\'(\d+(?:\.\d+)?)?\"?", s)
+        if m: return float(m.group(1)) + (float(m.group(2)) if m.group(2) else 0.0) / 12.0
+        m = re.fullmatch(r'(\d+(?:\.\d+)?)"', s)
+        if m: return float(m.group(1)) / 12.0
         if "'" not in s and "." in s:
-            parts = s.split(".", 1)
-            feet = int(parts[0]) if parts[0] else 0
-            inches = int(parts[1]) if parts[1] else 0
-            return float(feet) + float(inches) / 12.0
+            p = s.split(".", 1); return float(p[0] or 0) + float(p[1] or 0) / 12.0
         if re.fullmatch(r'\d+(?:\.\d+)?', s): return float(s)
-        return None
     except (ValueError, TypeError): return None
 
-def size_to_inches_wh(size_str: str):
-    m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", str(size_str))
+def size_to_inches_wh(s: str):
+    m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", str(s))
     if not m: return (None, None)
-    w_ft = parse_feet_inches(m.group(1))
-    h_ft = parse_feet_inches(m.group(2))
-    if w_ft is None or h_ft is None: return (None, None)
-    return (round(w_ft * 12, 2), round(h_ft * 12, 2))
+    w = parse_feet_inches(m.group(1)); h = parse_feet_inches(m.group(2))
+    if w is None or h is None: return (None, None)
+    return (round(w * 12, 2), round(h * 12, 2))
 
-def calculate_sqft(size_str: str):
+def calculate_sqft(s: str):
     try:
-        m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", str(size_str))
+        m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", str(s))
         if not m: return None
-        width_ft = parse_feet_inches(m.group(1))
-        height_ft = parse_feet_inches(m.group(2))
-        if width_ft is None or height_ft is None: return None
-        return round(width_ft * height_ft, 2)
-    except Exception as e:
-        logging.error(f"Error calculating sqft for '{size_str}': {e}")
-        return None
+        w = parse_feet_inches(m.group(1)); h = parse_feet_inches(m.group(2))
+        return round(w * h, 2) if w is not None and h is not None else None
+    except Exception: return None
 
 # --- Main Modules ---
 def rug_size_calculator():
     print("\n=== Rug Size Calculator (inches and sqft) ===")
     while True:
-        user_input = input("Enter dimension ('width x height') (or 'q' to quit): ").strip()
-        if user_input.lower() == 'q': break
-        w_in, h_in = size_to_inches_wh(user_input)
-        sqft = calculate_sqft(user_input)
-        if w_in is not None: print(f"Result: Width: {w_in} in | Height: {h_in} in | Area: {sqft} sqft")
-        else: print("Error: Invalid format. Please use 'width x height'.")
+        i = input("Enter dimension ('width x height') (or 'q' to quit): ").strip()
+        if i.lower() == 'q': break
+        w, h = size_to_inches_wh(i); s = calculate_sqft(i)
+        if w is not None: print(f"Result: Width: {w} in | Height: {h} in | Area: {s} sqft")
+        else: print("Error: Invalid format.")
 
 def bulk_sizes_from_sheet():
     import pandas as pd
     from tqdm import tqdm
     tqdm.pandas(desc="Calculating Dimensions")
-    path = clean_file_path(input("Enter the path to the Excel/CSV file: ").strip())
-    if not os.path.exists(path):
-        print("Error: File not found."); return
-    try:
-        df = pd.read_excel(path, engine=None) if path.lower().endswith((".xlsx", ".xls")) else pd.read_csv(path)
-    except Exception as e:
-        print(f"Error reading file: {e}"); return
+    path = clean_file_path(input("Enter Excel/CSV file path: ").strip())
+    if not os.path.exists(path): print("Error: File not found."); return
+    try: df = pd.read_excel(path) if path.lower().endswith((".xlsx",".xls")) else pd.read_csv(path)
+    except Exception as e: print(f"Error reading file: {e}"); return
     print("\nColumns:", ", ".join(map(str, df.columns)))
-    col_input = input("Enter the column name or letter for dimensions (e.g., Size or A): ").strip()
-    selected_col_name = None
-    if len(col_input) == 1 and col_input.isalpha():
-        col_index = ord(col_input.upper()) - ord('A')
-        if col_index < len(df.columns): selected_col_name = df.columns[col_index]
-        else: print(f"Error: Column letter '{col_input}' is out of range."); return
-    elif col_input in df.columns: selected_col_name = col_input
-    else: print(f"Error: Column '{col_input}' not found."); return
-    results = df[selected_col_name].progress_apply(lambda s: {'w_in': size_to_inches_wh(s)[0], 'h_in': size_to_inches_wh(s)[1], 'area': calculate_sqft(s)})
-    df["Width_in"] = [r['w_in'] if r and r['w_in'] is not None else '' for r in results]
-    df["Height_in"] = [r['h_in'] if r and r['h_in'] is not None else '' for r in results]
-    df["Area_sqft"] = [r['area'] if r and r['area'] is not None else '' for r in results]
-    base, _ = os.path.splitext(path)
-    out_xlsx = f"{base}_with_sizes.xlsx"
+    col = input("Enter column name/letter for dimensions (e.g., Size or A): ").strip()
+    sel_col = None
+    if len(col) == 1 and col.isalpha():
+        idx = ord(col.upper()) - ord('A')
+        if idx < len(df.columns): sel_col = df.columns[idx]
+        else: print("Error: Column letter out of range."); return
+    elif col in df.columns: sel_col = col
+    else: print(f"Error: Column '{col}' not found."); return
+    res = df[sel_col].progress_apply(lambda s: {'w': size_to_inches_wh(s)[0], 'h': size_to_inches_wh(s)[1], 'a': calculate_sqft(s)})
+    df["Width_in"] = [r['w'] for r in res]; df["Height_in"] = [r['h'] for r in res]; df["Area_sqft"] = [r['a'] for r in res]
+    out_path = f"{os.path.splitext(path)[0]}_with_sizes.xlsx"
     try:
-        df.to_excel(out_xlsx, index=False)
-        print(f"\n✅ Successfully saved to: {out_xlsx}")
+        df.to_excel(out_path, index=False)
+        print(f"\n✅ Saved to: {out_path}")
     except Exception as e:
-        print(f"\nCould not write to Excel ({e}). Saving as CSV...")
-        out_csv = f"{base}_with_sizes.csv"
-        df.to_csv(out_csv, index=False)
-        print(f"✅ Successfully saved to: {out_csv}")
+        csv_path = f"{os.path.splitext(path)[0]}_with_sizes.csv"
+        df.to_csv(csv_path, index=False)
+        print(f"\nCould not save as Excel ({e}). ✅ Saved to CSV instead: {csv_path}")
 
 def format_numbers_from_file():
-    file_path = input("Enter path to the Excel/CSV/TXT file: ").strip()
-    numbers = load_numbers_from_file(file_path)
-    if not numbers: print("No numbers to process or file could not be read."); return
-    formatted_numbers = ",".join(numbers)
-    print("\n--- Formatted Numbers ---\n", formatted_numbers)
-    output_file = "formatted_numbers.txt"
-    with open(output_file, "w", encoding='utf-8') as file: file.write(formatted_numbers)
-    print(f"\n✅ Saved to '{output_file}'.")
+    f = input("Enter Excel/CSV/TXT file path: ").strip()
+    nums = load_numbers_from_file(f)
+    if not nums: print("No numbers found."); return
+    out = ",".join(nums); print("\n--- Formatted ---\n", out)
+    with open("formatted_numbers.txt", "w", encoding='utf-8') as f: f.write(out)
+    print("\n✅ Saved to 'formatted_numbers.txt'.")
 
 def convert_heic_to_jpg_in_directory():
     from PIL import Image
     import pillow_heif
     from tqdm import tqdm
-    directory = clean_file_path(input("Enter path to folder with HEIC files: ").strip())
-    if not os.path.isdir(directory): print(f"Error: '{directory}' is not a valid directory."); return
+    d = clean_file_path(input("Enter folder path with HEIC files: ").strip())
+    if not os.path.isdir(d): print("Error: Not a valid directory."); return
     try:
-        heic_files = [f for f in os.listdir(directory) if f.lower().endswith(".heic")]
-        if not heic_files: print("No '.heic' files found."); return
-        print(f"Found {len(heic_files)} HEIC files. Converting...")
-        for heic_file in tqdm(heic_files, desc="HEIC -> JPG", unit="file"):
-            source_path = os.path.join(directory, heic_file)
-            target_path = os.path.splitext(source_path)[0] + ".jpg"
+        files = [f for f in os.listdir(d) if f.lower().endswith(".heic")]
+        if not files: print("No HEIC files found."); return
+        for f in tqdm(files, desc="HEIC -> JPG"):
+            src = os.path.join(d, f); dst = f"{os.path.splitext(src)[0]}.jpg"
             try:
-                heif_file = pillow_heif.read_heif(source_path)
-                image = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data, "raw")
-                image.save(target_path, "JPEG")
-                logging.info(f"Converted: {source_path} -> {target_path}")
-            except Exception as e:
-                logging.error(f"Conversion error for '{source_path}': {e}")
-                print(f"\nError converting '{heic_file}': {e}")
-        print("\n✅ All possible HEIC files converted.")
-    except Exception as e:
-        logging.error(f"General conversion error: {e}")
-        print(f"\nError during conversion process: {e}")
+                heif = pillow_heif.read_heif(src)
+                img = Image.frombytes(heif.mode, heif.size, heif.data, "raw")
+                img.save(dst, "JPEG")
+            except Exception as e: print(f"\nError converting '{f}': {e}")
+        print("\n✅ Conversion complete.")
+    except Exception as e: print(f"\nAn error occurred: {e}")
 
 def process_files_main(settings):
     from tqdm import tqdm
-    source_folder = settings.get("source_folder")
-    target_folder = settings.get("target_folder")
-    if not source_folder or not target_folder:
-        print("Source and target folders must be set first (Option 's')."); return
-    file_path = input("Enter path to file with numbers (Excel/CSV/TXT): ").strip()
-    target_numbers = load_numbers_from_file(file_path)
-    if not target_numbers: print("No numbers to process."); return
-    action_choice = input("Select action: Copy (c) / Move (m): ").strip().lower()
-    if action_choice not in ['c', 'm']: print("Invalid choice."); return
-    action = "copy" if action_choice == 'c' else "move"
-    source_folder, target_folder = clean_file_path(source_folder), clean_file_path(target_folder)
-    processed_files, missing_numbers = [], set(target_numbers)
-    valid_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff'}
-    all_files_in_source = [f for f in os.listdir(source_folder) if os.path.isfile(os.path.join(source_folder, f))]
-    num_to_file_map = {num: [file for file in all_files_in_source if num in file and os.path.splitext(file)[1].lower() in valid_extensions] for num in target_numbers}
-    action_str = "Copying" if action == "copy" else "Moving"
-    for num in tqdm(target_numbers, desc=f"{action_str} files"):
-        if num_to_file_map.get(num):
-            for file_to_process in num_to_file_map[num]:
-                src_path = os.path.join(source_folder, file_to_process)
-                dst_path = os.path.join(target_folder, file_to_process)
+    src = settings.get("source_folder"); tgt = settings.get("target_folder")
+    if not src or not tgt: print("Set folders first (Option 's')."); return
+    nums_file = input("Enter file path with numbers: ").strip()
+    nums = load_numbers_from_file(nums_file)
+    if not nums: print("No numbers to process."); return
+    act = input("Copy (c) or Move (m)?: ").strip().lower()
+    if act not in ['c', 'm']: print("Invalid choice."); return
+    action = "copy" if act == 'c' else "move"
+    src, tgt = clean_file_path(src), clean_file_path(tgt)
+    proc, missing = [], set(nums)
+    exts = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff'}
+    files = [f for f in os.listdir(src) if os.path.isfile(os.path.join(src, f))]
+    map_ = {n: [f for f in files if n in f and os.path.splitext(f)[1].lower() in exts] for n in nums}
+    for n in tqdm(nums, desc=f"{action.title()}ing files"):
+        if map_.get(n):
+            for f in map_[n]:
                 try:
-                    if action == "copy": shutil.copy2(src_path, dst_path)
-                    else: shutil.move(src_path, dst_path)
-                    processed_files.append(file_to_process)
-                    missing_numbers.discard(num)
-                except Exception as e:
-                    logging.error(f"Failed to process '{file_to_process}': {e}")
-                    print(f"\nError processing '{file_to_process}': {e}")
-        else: logging.warning(f"No match found for number: {num}")
-    print("\n--- Operation Summary ---")
-    print(f"Files processed: {len(processed_files)}")
-    if processed_files: print("Some processed files:", ", ".join(list(set(processed_files))[:5]) + '...')
-    print(f"Identifiers not found: {len(missing_numbers)}")
-    if missing_numbers: print("Unfound identifiers:", ", ".join(list(missing_numbers)))
+                    if action == "copy": shutil.copy2(os.path.join(src, f), os.path.join(tgt, f))
+                    else: shutil.move(os.path.join(src, f), os.path.join(tgt, f))
+                    proc.append(f); missing.discard(n)
+                except Exception as e: print(f"\nError processing '{f}': {e}")
+        else: logging.warning(f"No match for: {n}")
+    print(f"\n--- Summary ---\nProcessed: {len(proc)}\nNot Found: {len(missing)}")
+    if missing: print("Unfound:", ", ".join(list(missing)))
 
 def resize_and_compress_images():
     from PIL import Image
     from tqdm import tqdm
-    print("\n=== Bulk Image Resizer and Compressor ===")
-    source_dir = clean_file_path(input("Enter path to the folder with images: ").strip())
-    if not os.path.isdir(source_dir): print(f"Error: Source directory '{source_dir}' not found."); return
-    target_dir = os.path.join(source_dir, "resized")
-    os.makedirs(target_dir, exist_ok=True)
-    print(f"Resized images will be saved to: {target_dir}")
+    print("\n=== Bulk Image Resizer & Compressor ===")
+    src = clean_file_path(input("Enter folder path with images: ").strip())
+    if not os.path.isdir(src): print("Error: Directory not found."); return
+    tgt = os.path.join(src, "resized"); os.makedirs(tgt, exist_ok=True)
+    print(f"Resized images will be in: {tgt}")
     try:
-        max_width = int(input("Enter maximum width (e.g., 1920): ").strip())
-        quality = int(input("Enter JPEG quality (1-95, default 75): ").strip() or 75)
-        if not 1 <= quality <= 95: quality = 75; print("Invalid quality. Defaulting to 75.")
-    except ValueError: print("Invalid number. Operation cancelled."); return
-    valid_extensions = ('.jpg', '.jpeg', '.png', '.webp')
-    image_files = [f for f in os.listdir(source_dir) if f.lower().endswith(valid_extensions)]
-    if not image_files: print("No compatible images found."); return
-    print(f"Found {len(image_files)} images to process.")
-    for filename in tqdm(image_files, desc="Resizing images"):
+        w = int(input("Enter max width (e.g., 1920): ").strip())
+        q = int(input("Enter JPEG quality (1-95, default 75): ").strip() or 75)
+        if not 1 <= q <= 95: q = 75
+    except ValueError: print("Invalid number."); return
+    files = [f for f in os.listdir(src) if f.lower().endswith(('.jpg','.jpeg','.png','.webp'))]
+    if not files: print("No compatible images found."); return
+    for f in tqdm(files, desc="Resizing images"):
         try:
-            source_path = os.path.join(source_dir, filename)
-            target_path = os.path.join(target_dir, filename)
-            with Image.open(source_path) as img:
-                if img.width > max_width:
-                    ratio = max_width / float(img.width)
-                    new_height = int(float(img.height) * ratio)
-                    resample_filter = Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
-                    resized_img = img.resize((max_width, new_height), resample_filter)
-                else: resized_img = img.copy()
-                if resized_img.mode in ("RGBA", "P"): resized_img = resized_img.convert("RGB")
-                if os.path.splitext(filename)[1].lower() in ['.jpg', '.jpeg']:
-                    resized_img.save(target_path, "JPEG", quality=quality, optimize=True)
-                else: resized_img.save(target_path)
-        except Exception as e:
-            print(f"\nError processing {filename}: {e}"); logging.error(f"Failed to resize {filename}: {e}")
-    print(f"\n✅ Processing complete. Resized images are in '{target_dir}'.")
+            with Image.open(os.path.join(src, f)) as img:
+                if img.width > w:
+                    r = w / float(img.width); h = int(float(img.height) * r)
+                    resample = Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
+                    img = img.resize((w, h), resample)
+                if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+                if f.lower().endswith(('.jpg','.jpeg')): img.save(os.path.join(tgt, f), "JPEG", quality=q, optimize=True)
+                else: img.save(os.path.join(tgt, f))
+        except Exception as e: print(f"\nError with {f}: {e}")
+    print("\n✅ Processing complete.")
 
 def unit_converter():
     print("\n=== Unit Converter ===")
-    print("Convert between 'cm', 'm', 'ft', 'in'.\nExamples: '182 cm to ft', '5\\'11\" to cm'")
+    print("Examples: '182 cm to ft', '5\\'11\" to cm'")
     while True:
-        user_input = input("Enter conversion (or 'q' to quit): ").strip().lower()
-        if user_input == 'q': break
-        match = re.match(r"^\s*(.+?)\s*(cm|m|ft|in)\s+to\s+(cm|m|ft|in)\s*$", user_input, re.IGNORECASE)
-        if not match:
-            print("Invalid format. Please use 'value unit to target_unit' (e.g., '100 cm to in')."); continue
-        value_str, from_unit, to_unit = match.groups()
-        INCH_TO_CM, FOOT_TO_CM, METER_TO_CM = 2.54, 30.48, 100
-        cm_value = None
+        i = input("Enter conversion (or 'q' to quit): ").strip().lower()
+        if i == 'q': break
+        m = re.match(r"^\s*(.+?)\s*(cm|m|ft|in)\s+to\s+(cm|m|ft|in)\s*$", i, re.I)
+        if not m: print("Invalid format."); continue
+        v, fu, tu = m.groups(); cm = None
         try:
-            if from_unit == 'ft':
-                decimal_feet = parse_feet_inches(value_str)
-                if decimal_feet is not None: cm_value = decimal_feet * FOOT_TO_CM
-            else:
-                value = float(value_str)
-                if from_unit == 'cm': cm_value = value
-                elif from_unit == 'm': cm_value = value * METER_TO_CM
-                elif from_unit == 'in': cm_value = value * INCH_TO_CM
-        except (ValueError, TypeError): pass
-        if cm_value is None:
-            print(f"Could not parse value '{value_str}'."); continue
-        if to_unit == 'cm': result = f"{cm_value:.2f} cm"
-        elif to_unit == 'm': result = f"{cm_value / METER_TO_CM:.2f} m"
-        elif to_unit == 'in': result = f"{cm_value / INCH_TO_CM:.2f} in"
-        elif to_unit == 'ft':
-            total_inches = cm_value / INCH_TO_CM
-            feet = int(total_inches // 12)
-            inches = total_inches % 12
-            result = f"{feet}' {inches:.2f}\""
-        print(f"--> {value_str} {from_unit}  =  {result}")
+            if fu == 'ft': cm = parse_feet_inches(v) * 30.48 if parse_feet_inches(v) else None
+            else: val = float(v); cm = val if fu == 'cm' else val * 100 if fu == 'm' else val * 2.54 if fu == 'in' else None
+        except: pass
+        if cm is None: print(f"Could not parse '{v}'."); continue
+        res = ""
+        if tu == 'cm': res = f"{cm:.2f} cm"
+        elif tu == 'm': res = f"{cm / 100:.2f} m"
+        elif tu == 'in': res = f"{cm / 2.54:.2f} in"
+        elif tu == 'ft': total_in = cm / 2.54; res = f"{int(total_in // 12)}' {total_in % 12:.2f}\""
+        print(f"--> {v} {fu}  =  {res}")
 
 def generate_qr_code():
-    """Generates a QR code image from user-provided text."""
     import qrcode
     print("\n=== QR Code Generator ===")
-    data_to_encode = input("Enter the text or URL for the QR code: ").strip()
-    if not data_to_encode:
-        print("No data provided. Operation cancelled."); return
-    default_filename = "qrcode.png"
-    output_filename = input(f"Enter filename (default: {default_filename}): ").strip() or default_filename
-    if not output_filename.lower().endswith('.png'): output_filename += '.png'
+    data = input("Enter text/URL for QR code: ").strip()
+    if not data: print("No data provided."); return
+    fname = input("Enter filename (default: qrcode.png): ").strip() or "qrcode.png"
+    if not fname.lower().endswith('.png'): fname += '.png'
     try:
-        print("Generating QR code...")
-        qr_img = qrcode.make(data_to_encode)
-        qr_img.save(output_filename)
-        print(f"✅ QR Code successfully saved as '{output_filename}'.")
-    except Exception as e:
-        print(f"An error occurred: {e}"); logging.error(f"QR Code generation failed: {e}")
+        qrcode.make(data).save(fname)
+        print(f"✅ QR Code saved as '{fname}'.")
+    except Exception as e: print(f"An error occurred: {e}")
+
+def generate_barcode():
+    import barcode
+    from barcode.writer import ImageWriter
+    print("\n=== Barcode Generator ===")
+    supported_formats = {
+        '1': ('ean13', "EAN-13 (Retail - 12 digits)"),
+        '2': ('upca', "UPC-A (Retail - 11 digits)"),
+        '3': ('code128', "Code 128 (Alphanumeric)"),
+        '4': ('code39', "Code 39 (Alphanumeric, simpler)"),
+    }
+    print("Choose a barcode format:")
+    for key, (name, desc) in supported_formats.items(): print(f"  {key}. {desc}")
+    choice = input("Your choice: ").strip()
+    if choice not in supported_formats: print("Invalid choice."); return
+    barcode_format, _ = supported_formats[choice]
+    data = input(f"Enter data for {barcode_format.upper()}: ").strip()
+    if not data: print("No data provided."); return
+    fname = input("Enter filename (default: barcode.png): ").strip() or "barcode"
+    try:
+        BarcodeClass = barcode.get_barcode_class(barcode_format)
+        my_barcode = BarcodeClass(data, writer=ImageWriter())
+        my_barcode.save(fname)
+        print(f"✅ Barcode saved as '{fname}.png'.")
+    except barcode.errors.BarcodeError as e: print(f"\nERROR: Could not generate barcode: {e}")
+    except Exception as e: print(f"An unexpected error occurred: {e}")
 
 # --- Central Menu Configuration ---
 MENU_OPTIONS = {
@@ -442,6 +374,7 @@ MENU_OPTIONS = {
     '6': {'d': 'BULK Process Rug Sizes from File', 'f': bulk_sizes_from_sheet, 'c': 'Data & Calculation Tools', 's': False},
     '7': {'d': 'Unit Converter (cm, m, ft, in)', 'f': unit_converter, 'c': 'Data & Calculation Tools', 's': False},
     '8': {'d': 'QR Code Generator', 'f': generate_qr_code, 'c': 'Data & Calculation Tools', 's': False},
+    '9': {'d': 'Barcode Generator', 'f': generate_barcode, 'c': 'Data & Calculation Tools', 's': False},
     's': {'d': 'Set Folders for File Operations', 'f': ask_for_folder_settings, 'c': 'Settings & Other', 's': True},
     'h': {'d': 'Help / Guide', 'f': None, 'c': 'Settings & Other', 's': False},
     'q': {'d': 'Quit', 'f': None, 'c': 'Settings & Other', 's': False}
@@ -474,8 +407,7 @@ def main():
                 for item in categories[category]: print(item)
         print("-" * 37)
         choice = input("Your choice: ").strip().lower()
-        if choice == 'q':
-            print("Thank you for using the tool. Goodbye!"); break
+        if choice == 'q': print("Thank you for using the tool. Goodbye!"); break
         elif choice == 'h': show_usage()
         elif choice in MENU_OPTIONS:
             opt = MENU_OPTIONS[choice]
@@ -488,5 +420,5 @@ def main():
 
 if __name__ == "__main__":
     install_and_check()
-    # check_for_updates() # You can uncomment this if you host the new version
+    # check_for_updates() # Kendi reponuza yüklediğinizde bu satırı aktif edebilirsiniz
     main()
