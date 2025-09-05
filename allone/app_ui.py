@@ -10,7 +10,7 @@ from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
 
-__version__ = "2.7.2"
+__version__ = "2.7.2-GUI-Refactor-Fix"
 
 DYMO_LABELS = {
     'Address (30252)': {'w_in': 3.5, 'h_in': 1.125},
@@ -92,8 +92,9 @@ class ToolApp(tk.Tk):
         if not api_key: messagebox.showerror("Error", "Please enter a Google API Key."); return
         try:
             self.log("Configuring Gemini API...")
-            backend.genai.configure(api_key=api_key)
-            self.gemini_model = backend.genai.GenerativeModel('gemini-1.5-flash')
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
             self.ai_status_label.config(text="Status: Ready", foreground="green")
             self.log("✅ Gemini API configured successfully.")
             self.settings['gemini_api_key'] = api_key
@@ -381,4 +382,3 @@ Created by Hakan Akaslan
         self.log(log_msg)
         if success_msg: messagebox.showinfo("Success", success_msg)
         else: messagebox.showerror("Error", log_msg)
-
