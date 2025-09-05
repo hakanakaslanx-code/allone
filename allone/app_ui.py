@@ -10,7 +10,7 @@ from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
 
-__version__ = "2.7.1"
+__version__ = "2.7.2"
 
 DYMO_LABELS = {
     'Address (30252)': {'w_in': 3.5, 'h_in': 1.125},
@@ -381,3 +381,4 @@ Created by Hakan Akaslan
         self.log(log_msg)
         if success_msg: messagebox.showinfo("Success", success_msg)
         else: messagebox.showerror("Error", log_msg)
+
