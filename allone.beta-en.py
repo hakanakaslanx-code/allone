@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = "2.4-GUI-EN"
+__version__ = "2.5-GUI-EN"
 
 """
 This script combines multiple utility programs into a single GUI application:
@@ -705,3 +705,4 @@ if __name__ == "__main__":
     install_and_check()
     app = ToolApp()
     app.mainloop()
+
