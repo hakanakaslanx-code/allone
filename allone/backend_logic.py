@@ -77,6 +77,33 @@ def create_label_image(code_image, label_info, bottom_text=""):
         draw.text((text_x, text_y), bottom_text, font=font, fill='black')
     return label_bg
 
+def convert_units_logic(input_string):
+    """Takes a conversion string and returns the result string."""
+    i = input_string.lower()
+    if not i: return ""
+    
+    m = re.match(r"^\s*(.+?)\s*(cm|m|ft|in)\s+to\s+(cm|m|ft|in)\s*$", i, re.I)
+    if not m: return "Invalid Format"
+
+    v_str, fu, tu = m.groups(); cm = None
+    try:
+        if fu == 'ft':
+            cm = parse_feet_inches(v_str) * 30.48 if parse_feet_inches(v_str) else None
+        else:
+            val = float(v_str)
+            cm = val if fu == 'cm' else val * 100 if fu == 'm' else val * 2.54 if fu == 'in' else None
+    except: pass
+    
+    if cm is None: return f"Could not parse '{v_str}'."
+    
+    res = ""
+    if tu == 'cm': res = f"{cm:.2f} cm"
+    elif tu == 'm': res = f"{cm / 100:.2f} m"
+    elif tu == 'in': res = f"{cm / 2.54:.2f} in"
+    elif tu == 'ft': total_in = cm / 2.54; res = f"{int(total_in // 12)}' {total_in % 12:.2f}\""
+    
+    return f"--> {res}"
+
 # --- Task Functions ---
 
 def ask_ai(model, prompt):
@@ -107,8 +134,7 @@ def process_files_task(src, tgt, nums_f, action, log_callback, completion_callba
         return
 
     if not nums:
-        log_callback("No numbers found in the file to process.")
-        return
+        log_callback("No numbers found in the file to process."); return
     
     proc, missing = [], set(nums)
     exts = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff'}
