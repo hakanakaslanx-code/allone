@@ -5,11 +5,12 @@ from tkinter.scrolledtext import ScrolledText
 import threading
 import os
 
+# Diğer modüllerimizden gerekli fonksiyonları ve değişkenleri import ediyoruz
 from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
 
-__version__ = "2.6.1"
+__version__ = "2.7.1"
 
 DYMO_LABELS = {
     'Address (30252)': {'w_in': 3.5, 'h_in': 1.125},
@@ -59,7 +60,8 @@ class ToolApp(tk.Tk):
         thread.start()
 
     def task_completion_popup(self, title, message):
-        messagebox.showinfo(title, message)
+        """Shows a messagebox popup from the main thread."""
+        self.after(0, messagebox.showinfo, title, message)
 
     def create_ai_assistant_tab(self):
         tab = ttk.Frame(self.notebook)
@@ -268,62 +270,40 @@ class ToolApp(tk.Tk):
         ttk.Entry(bc_frame, textvariable=self.bc_filename, width=60).grid(row=3, column=1, columnspan=3, padx=5, pady=5)
         ttk.Button(bc_frame, text="Generate Barcode", command=self.start_generate_barcode).grid(row=4, column=1, columnspan=2, pady=10)
 
-    # app_ui.py dosyasındaki bu fonksiyonu güncelleyin
-
     def create_about_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Help & About")
-        
-        top_frame = ttk.Frame(tab)
-        top_frame.pack(fill="x", padx=10, pady=5)
-        
+        top_frame = ttk.Frame(tab); top_frame.pack(fill="x", padx=10, pady=5)
         ttk.Button(top_frame, text="Check for Updates", command=lambda: self.run_in_thread(check_for_updates, self, self.log, __version__, silent=False)).pack(side="left")
-
         help_text_area = ScrolledText(tab, wrap=tk.WORD, padx=10, pady=10, font=("Helvetica", 10))
         help_text_area.pack(fill="both", expand=True)
-
-        # --- TAM VE GÜNCEL YARDIM METNİ ---
         help_content = f"""
 Combined Utility Tool - v{__version__}
-
 This application combines common file, image, and data processing tasks into a single interface.
-
 --- FEATURES ---
-
 ✨ AI Assistant:
    A chat interface powered by Google Gemini. Configure it with your own API key to ask questions or get help.
-
 1. Copy/Move Files by List:
    Finds and copies or moves image files based on a list in an Excel or text file.
-
 2. Convert HEIC to JPG:
    Converts Apple's HEIC format images to the universal JPG format.
-
 3. Batch Image Resizer:
    Resizes images by a fixed width or by a percentage of the original dimensions.
-
 4. Format Numbers from File:
    Formats items from a file's first column into a single, comma-separated line.
-
 5. Rug Size Calculator (Single):
    Calculates dimensions in inches and square feet from a text entry (e.g., "5'2\\" x 8'").
-
 6. BULK Process Rug Sizes from File:
    Processes a column of dimensions in an Excel/CSV file, adding calculated width, height, and area.
-
 7. Unit Converter:
    Quickly converts between units like cm, m, ft, and inches.
-
 8. QR Code Generator:
    Creates a QR code from text or a URL, savable as a PNG or Dymo label.
-
 9. Barcode Generator:
    Creates common barcodes, savable as a PNG or Dymo label.
-
 ---------------------------------
 Created by Hakan Akaslan
 """
-        
         help_text_area.insert(tk.END, help_content)
         help_text_area.config(state=tk.DISABLED)
 
@@ -370,8 +350,7 @@ Created by Hakan Akaslan
     def calculate_single_rug(self):
         dim_str = self.rug_dim_input.get()
         if not dim_str: self.rug_result_label.set("Please enter a dimension."); return
-        w, h = backend.size_to_inches_wh(dim_str)
-        s = backend.calculate_sqft(dim_str)
+        w, h = backend.size_to_inches_wh(dim_str); s = backend.calculate_sqft(dim_str)
         if w is not None: self.rug_result_label.set(f"W: {w} in | H: {h} in | Area: {s} sqft")
         else: self.rug_result_label.set("Invalid Format")
 
@@ -381,22 +360,9 @@ Created by Hakan Akaslan
         self.run_in_thread(backend.bulk_rug_sizer_task, path, col, self.log, self.task_completion_popup)
 
     def convert_units(self):
-        i = self.unit_input.get().lower()
-        if not i: return
-        m = re.match(r"^\s*(.+?)\s*(cm|m|ft|in)\s+to\s+(cm|m|ft|in)\s*$", i, re.I)
-        if not m: self.unit_result_label.set("Invalid Format"); return
-        v_str, fu, tu = m.groups(); cm = None
-        try:
-            if fu == 'ft': cm = backend.parse_feet_inches(v_str) * 30.48 if backend.parse_feet_inches(v_str) else None
-            else: val = float(v_str); cm = val if fu == 'cm' else val * 100 if fu == 'm' else val * 2.54 if fu == 'in' else None
-        except: pass
-        if cm is None: self.unit_result_label.set(f"Could not parse '{v_str}'."); return
-        res = ""
-        if tu == 'cm': res = f"{cm:.2f} cm"
-        elif tu == 'm': res = f"{cm / 100:.2f} m"
-        elif tu == 'in': res = f"{cm / 2.54:.2f} in"
-        elif tu == 'ft': total_in = cm / 2.54; res = f"{int(total_in // 12)}' {total_in % 12:.2f}\""
-        self.unit_result_label.set(f"--> {res}")
+        input_str = self.unit_input.get()
+        result_str = backend.convert_units_logic(input_str)
+        self.unit_result_label.set(result_str)
     
     def start_generate_qr(self):
         data = self.qr_data.get(); fname = self.qr_filename.get()
@@ -414,5 +380,4 @@ Created by Hakan Akaslan
         log_msg, success_msg = backend.generate_barcode_task(data, fname, self.bc_type.get(), self.bc_output_type.get(), dymo_info, self.bc_bottom_text.get() or data)
         self.log(log_msg)
         if success_msg: messagebox.showinfo("Success", success_msg)
-
         else: messagebox.showerror("Error", log_msg)
