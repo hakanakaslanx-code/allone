@@ -10,7 +10,7 @@ def check_for_updates(app_instance, log_callback, current_version, silent=False)
     """Checks for a new version of the script on GitHub and self-updates if one is found."""
     log_callback("Checking for updates...")
     # ÖNEMLİ: Bu URL'nin güncel GUI kodunu içeren dosyaya işaret ettiğinden emin olun.
-    script_url = "https://raw.githubusercontent.com/hakanakaslanx-code/allone/refs/heads/main/allone.beta-en.py"
+    script_url = "https://raw.githubusercontent.com/hakanakaslanx-code/allone/main/allone/app_ui.py"
     current_script_name = os.path.basename(sys.argv[0])
     
     try:
@@ -53,4 +53,5 @@ def check_for_updates(app_instance, log_callback, current_version, silent=False)
             
     except Exception as e:
         log_callback(f"Warning: Update check failed. Reason: {e}")
+
         if not silent: messagebox.showerror("Update Check Failed", f"Could not check for updates.\n\nReason: {e}")
