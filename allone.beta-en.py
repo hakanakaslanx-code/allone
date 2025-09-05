@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = "2.5-GUI-EN"
+__version__ = "2.4-GUI-EN"
 
 """
 This script combines multiple utility programs into a single GUI application:
@@ -67,7 +67,7 @@ logging.basicConfig(filename="tool_operations.log", level=logging.INFO, format="
 SETTINGS_FILE = "settings.json"
 
 def clean_file_path(file_path: str) -> str: return file_path.strip().strip('"').strip("'")
-# ... (Diğer tüm yardımcı fonksiyonlar önceki versiyonlarla aynı)
+
 def load_settings() -> dict:
     if os.path.exists(SETTINGS_FILE):
         try:
@@ -159,7 +159,7 @@ class ToolApp(tk.Tk):
         self.gemini_api_key = tk.StringVar(value=self.settings.get("gemini_api_key", ""))
         self.gemini_model = None
 
-        self.create_ai_assistant_tab() # Create AI tab first
+        self.create_ai_assistant_tab()
         self.create_file_image_tab()
         self.create_data_calc_tab()
         self.create_code_gen_tab()
@@ -174,7 +174,6 @@ class ToolApp(tk.Tk):
         if self.gemini_api_key.get():
             self.configure_gemini()
 
-    # ... (Diğer tüm metodlar burada yer alıyor)
     def log(self, message):
         self.log_area.config(state=tk.NORMAL)
         self.log_area.insert(tk.END, message + "\n")
@@ -190,7 +189,6 @@ class ToolApp(tk.Tk):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="✨ AI Assistant")
 
-        # --- API Key Configuration ---
         api_frame = ttk.LabelFrame(tab, text="Gemini API Configuration")
         api_frame.pack(fill="x", padx=10, pady=5)
 
@@ -203,7 +201,6 @@ class ToolApp(tk.Tk):
         self.ai_status_label = ttk.Label(api_frame, text="Status: Not Configured", foreground="red")
         self.ai_status_label.grid(row=0, column=3, padx=10, pady=5)
 
-        # --- Chat Interface ---
         chat_frame = ttk.LabelFrame(tab, text="Chat")
         chat_frame.pack(fill="both", expand=True, padx=10, pady=5)
         
@@ -233,7 +230,6 @@ class ToolApp(tk.Tk):
             self.ai_status_label.config(text="Status: Ready", foreground="green")
             self.log("✅ Gemini API configured successfully.")
             
-            # Save the key for next time
             self.settings['gemini_api_key'] = api_key
             save_settings(self.settings)
 
@@ -256,7 +252,6 @@ class ToolApp(tk.Tk):
         self.user_input_entry.delete(0, tk.END)
         self.ai_status_label.config(text="Status: AI is thinking...")
 
-        # Run the API call in a thread
         self.run_in_thread(self.get_and_display_ai_response, user_prompt)
         
     def get_and_display_ai_response(self, prompt):
@@ -267,7 +262,6 @@ class ToolApp(tk.Tk):
         except Exception as e:
             ai_response = f"Sorry, an error occurred: {e}"
         
-        # Schedule the UI update to run in the main thread
         self.after(0, self._update_chat_window, f"AI: {ai_response}")
         self.after(0, self.ai_status_label.config, {"text": "Status: Ready"})
 
@@ -278,8 +272,6 @@ class ToolApp(tk.Tk):
         self.chat_display.see(tk.END)
         self.chat_display.config(state=tk.DISABLED)
 
-    # --- ALL OTHER TABS AND METHODS FROM PREVIOUS VERSION GO HERE ---
-    # (I've included them all below for a complete, runnable script)
     def check_for_updates(self, silent=False):
         self.log("Checking for updates...")
         script_url = "https://raw.githubusercontent.com/hakanakaslanx-code/allone/refs/heads/main/allone.beta-en.py"
@@ -290,27 +282,32 @@ class ToolApp(tk.Tk):
             remote_script_content = response.text
             match = re.search(r"__version__\s*=\s*[\"'](.+?)[\"']", remote_script_content)
             if not match:
-                if not silent: messagebox.showwarning("Update Check", "Could not determine remote version.")
+                self.log("Warning: Could not determine remote version. Skipping update.")
+                if not silent: messagebox.showwarning("Update Check", "Could not determine remote version number. Update skipped.")
                 return
             remote_version = match.group(1)
             if remote_version > __version__:
-                if messagebox.askyesno("Update Available", f"New version ({remote_version}) available. Update now?"):
-                    messagebox.showinfo("Updating...", "Application will close, update, and restart.")
+                self.log(f"--> New version ({remote_version}) available.")
+                if messagebox.askyesno("Update Available", f"A new version ({remote_version}) is available.\nYour current version is {__version__}.\n\nDo you want to update now?"):
+                    messagebox.showinfo("Updating...", "The application will now close, update itself, and restart. Please wait.")
+                    self.log("Updating...")
                     new_script_path = current_script_name + ".new"
                     with open(new_script_path, "w", encoding='utf-8') as f: f.write(remote_script_content)
                     if sys.platform == 'win32':
-                        updater_path = "updater.bat"
-                        content = f'@echo off\ntimeout /t 2 /nobreak > NUL\ndel "{current_script_name}"\nrename "{new_script_path}" "{current_script_name}"\nstart "" "{sys.executable}" "{current_script_name}"\ndel "{updater_path}"'
+                        updater_script_path = "updater.bat"
+                        updater_content = f'@echo off\necho Updating script... please wait.\ntimeout /t 2 /nobreak > NUL\ndel "{current_script_name}"\nrename "{new_script_path}" "{current_script_name}"\necho ✅ Update complete. Relaunching...\nstart "" "{sys.executable}" "{current_script_name}"\ndel "{updater_script_path}"'
                     else:
-                        updater_path = "updater.sh"
-                        content = f'#!/bin/bash\nsleep 2\nrm "{current_script_name}"\nmv "{new_script_path}" "{current_script_name}"\nchmod +x "{current_script_name}"\n"{sys.executable}" "{current_script_name}" &\nrm -- "$0"'
-                    with open(updater_path, "w", encoding='utf-8') as f: f.write(content)
-                    if sys.platform != 'win32': os.chmod(updater_path, 0o755)
-                    subprocess.Popen([updater_path])
+                        updater_script_path = "updater.sh"
+                        updater_content = f'#!/bin/bash\necho "Updating script... please wait."\nsleep 2\nrm "{current_script_name}"\nmv "{new_script_path}" "{current_script_name}"\necho "✅ Update complete. Relaunching..."\nchmod +x "{current_script_name}"\n"{sys.executable}" "{current_script_name}" &\nrm -- "$0"'
+                    with open(updater_script_path, "w", encoding='utf-8') as f: f.write(updater_content)
+                    if sys.platform != 'win32': os.chmod(updater_script_path, 0o755)
+                    subprocess.Popen([updater_script_path])
                     self.destroy(); sys.exit(0)
             else:
+                self.log(f"✅ Your application is up-to-date. (Version: {__version__})")
                 if not silent: messagebox.showinfo("Update Check", "You are running the latest version.")
         except Exception as e:
+            self.log(f"Warning: Update check failed. Reason: {e}")
             if not silent: messagebox.showerror("Update Check Failed", f"Could not check for updates.\n\nReason: {e}")
 
     def create_file_image_tab(self):
@@ -463,24 +460,111 @@ class ToolApp(tk.Tk):
     def create_about_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Help & About")
-        top_frame = ttk.Frame(tab); top_frame.pack(fill="x", padx=10, pady=5)
+        top_frame = ttk.Frame(tab)
+        top_frame.pack(fill="x", padx=10, pady=5)
         ttk.Button(top_frame, text="Check for Updates", command=lambda: self.run_in_thread(self.check_for_updates, silent=False)).pack(side="left")
         help_text_area = ScrolledText(tab, wrap=tk.WORD, padx=10, pady=10)
         help_text_area.pack(fill="both", expand=True)
-        help_content = f"Combined Utility Tool - v{__version__}\n\n... (Help text from previous version) ...\n\n---------------------------------\nCreated by Hakan Akaslan"
+        help_content = f"""
+Combined Utility Tool - v{__version__}
+
+This application combines common file, image, and data processing tasks into a single interface.
+
+--- FEATURES ---
+
+✨ AI Assistant:
+   A chat interface powered by Google Gemini. Configure it with your own API key to ask questions or get help.
+
+1. Copy/Move Files by List:
+   Finds and copies or moves image files based on a list in an Excel or text file.
+
+2. Convert HEIC to JPG:
+   Converts Apple's HEIC format images to the universal JPG format.
+
+3. Batch Image Resizer:
+   Resizes images by a fixed width or by a percentage of the original dimensions.
+
+4. Format Numbers from File:
+   Formats items from a file's first column into a single, comma-separated line.
+
+5. Rug Size Calculator (Single):
+   Calculates dimensions in inches and square feet from a text entry (e.g., "5'2\\" x 8'").
+
+6. BULK Process Rug Sizes from File:
+   Processes a column of dimensions in an Excel/CSV file, adding calculated width, height, and area.
+
+7. Unit Converter:
+   Quickly converts between units like cm, m, ft, and inches.
+
+8. QR Code Generator:
+   Creates a QR code from text or a URL, savable as a PNG or Dymo label.
+
+9. Barcode Generator:
+   Creates common barcodes, savable as a PNG or Dymo label.
+
+---------------------------------
+Created by Hakan Akaslan
+"""
         help_text_area.insert(tk.END, help_content)
         help_text_area.config(state=tk.DISABLED)
 
-    # ... (Tüm aksiyon metodları resize_images hariç aynı kalır)
     def save_folder_settings(self):
-        self.settings['source_folder'] = self.source_folder.get(); self.settings['target_folder'] = self.target_folder.get()
-        save_settings(self.settings); self.log("✅ Settings saved.")
+        src = self.source_folder.get(); tgt = self.target_folder.get()
+        if not src or not tgt: messagebox.showwarning("Warning", "Source and Target folders cannot be empty."); return
+        self.settings['source_folder'] = src; self.settings['target_folder'] = tgt
+        save_settings(self.settings)
+        self.log("✅ Settings saved to settings.json")
         messagebox.showinfo("Success", "Folder settings have been saved.")
 
-    def process_files(self, action): # Placeholder for brevity
-        self.log(f"Process files action '{action}' executed.")
-    def convert_heic(self): # Placeholder
-        self.log("Convert HEIC action executed.")
+    def process_files(self, action):
+        from tqdm import tqdm
+        src = self.source_folder.get(); tgt = self.target_folder.get(); nums_f = self.numbers_file.get()
+        if not all([src, tgt, nums_f]): messagebox.showerror("Error", "Please specify Source, Target, and Numbers File."); return
+        self.log(f"Starting file {action} process...")
+        nums = load_numbers_from_file(nums_f)
+        if not nums: self.log("No numbers found in the file."); return
+        src, tgt = clean_file_path(src), clean_file_path(tgt)
+        proc, missing = [], set(nums)
+        exts = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff'}
+        files = [f for f in os.listdir(src) if os.path.isfile(os.path.join(src, f))]
+        map_ = {n: [f for f in files if n in f and os.path.splitext(f)[1].lower() in exts] for n in nums}
+        for n in tqdm(nums, desc=f"{action.title()}ing files"):
+            if map_.get(n):
+                for f in map_[n]:
+                    try:
+                        if action == "copy": shutil.copy2(os.path.join(src, f), os.path.join(tgt, f))
+                        else: shutil.move(os.path.join(src, f), os.path.join(tgt, f))
+                        proc.append(f); missing.discard(n)
+                    except Exception as e: self.log(f"Error processing '{f}': {e}")
+            else: logging.warning(f"No match for: {n}")
+        summary = f"\n--- Summary ---\nProcessed: {len(proc)}\nNot Found: {len(missing)}"
+        self.log(summary)
+        if missing: self.log(f"Unfound: {', '.join(list(missing))}")
+        messagebox.showinfo("Complete", f"File {action} process finished. See log for details.")
+
+    def convert_heic(self):
+        from PIL import Image
+        import pillow_heif
+        from tqdm import tqdm
+        folder = self.heic_folder.get()
+        if not folder or not os.path.isdir(folder): messagebox.showerror("Error", "Please select a valid folder."); return
+        self.log("Starting HEIC to JPG conversion...")
+        try:
+            files = [f for f in os.listdir(folder) if f.lower().endswith(".heic")]
+            if not files: self.log("No HEIC files found."); return
+            for f in tqdm(files, desc="HEIC -> JPG"):
+                src, dst = os.path.join(folder, f), f"{os.path.splitext(os.path.join(folder, f))[0]}.jpg"
+                try:
+                    heif = pillow_heif.read_heif(src)
+                    img = Image.frombytes(heif.mode, heif.size, heif.data, "raw")
+                    img.save(dst, "JPEG")
+                    self.log(f"Converted: {f} -> {os.path.basename(dst)}")
+                except Exception as e: self.log(f"Error converting '{f}': {e}")
+            self.log("\n✅ Conversion complete.")
+            messagebox.showinfo("Success", "HEIC conversion is complete.")
+        except Exception as e:
+            self.log(f"An error occurred: {e}"); messagebox.showerror("Error", f"An error occurred: {e}")
+
     def resize_images(self):
         from PIL import Image
         from tqdm import tqdm
@@ -491,11 +575,13 @@ class ToolApp(tk.Tk):
             if mode == "width": w = int(self.max_width.get())
             else: p = int(self.resize_percentage.get()); assert p > 0
             q = int(self.quality.get()); assert 1 <= q <= 95
-        except (ValueError, AssertionError): messagebox.showerror("Error", "Invalid numeric input."); return
+        except (ValueError, AssertionError): messagebox.showerror("Error", "Resize values and quality must be valid numbers."); return
         tgt_folder = os.path.join(src_folder, "resized"); os.makedirs(tgt_folder, exist_ok=True)
-        self.log(f"Resizing to '{tgt_folder}' in '{mode}' mode...")
+        self.log(f"Resized images will be saved in: {tgt_folder}")
         files = [f for f in os.listdir(src_folder) if f.lower().endswith(('.jpg','.jpeg','.png','.webp'))]
-        for f in tqdm(files, desc="Resizing"):
+        if not files: self.log("No compatible images found."); return
+        self.log(f"Starting resize process in '{mode}' mode...")
+        for f in tqdm(files, desc="Resizing images"):
             try:
                 with Image.open(os.path.join(src_folder, f)) as img:
                     ow, oh = img.size; nw, nh = ow, oh
@@ -505,30 +591,115 @@ class ToolApp(tk.Tk):
                     if nw < 1: nw = 1; 
                     if nh < 1: nh = 1
                     if (nw, nh) != (ow, oh):
-                        resample = Image.Resampling.LANCZOS
+                        resample = Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
                         img = img.resize((nw, nh), resample)
                     if img.mode in ("RGBA", "P"): img = img.convert("RGB")
-                    save_path = os.path.join(tgt_folder, f)
-                    if f.lower().endswith(('.jpg','.jpeg')): img.save(save_path, "JPEG", quality=q, optimize=True)
-                    else: img.save(save_path)
+                    if f.lower().endswith(('.jpg','.jpeg')): img.save(os.path.join(tgt_folder, f), "JPEG", quality=q, optimize=True)
+                    else: img.save(os.path.join(tgt_folder, f))
                     self.log(f"Resized: {f} -> {nw}x{nh}")
             except Exception as e: self.log(f"Error with {f}: {e}")
         self.log("\n✅ Image resizing complete.")
         messagebox.showinfo("Success", "Image processing is complete.")
 
-    def format_numbers(self): # Placeholder
-        self.log("Format numbers executed.")
-    def calculate_single_rug(self): # Placeholder
-        w, h = size_to_inches_wh(self.rug_dim_input.get()); s = calculate_sqft(self.rug_dim_input.get())
-        self.rug_result_label.set(f"W: {w} in | H: {h} in | Area: {s} sqft" if w is not None else "Invalid Format")
-    def bulk_process_rugs(self): # Placeholder
-        self.log("Bulk process rugs executed.")
-    def convert_units(self): # Placeholder
-        self.log("Convert units executed.")
-    def generate_qr(self): # Placeholder
-        self.log("Generate QR executed.")
-    def generate_barcode(self): # Placeholder
-        self.log("Generate Barcode executed.")
+    def format_numbers(self):
+        file_path = self.format_file.get()
+        if not file_path: messagebox.showerror("Error", "Please select a file."); return
+        nums = load_numbers_from_file(file_path)
+        if not nums: self.log("No numbers found in file."); return
+        out_str = ",".join(nums)
+        try:
+            with open("formatted_numbers.txt", "w", encoding='utf-8') as f: f.write(out_str)
+            self.log("Formatted numbers saved to 'formatted_numbers.txt'.")
+            messagebox.showinfo("Success", f"Formatted text saved to {os.path.abspath('formatted_numbers.txt')}")
+        except Exception as e:
+            self.log(f"Error saving file: {e}"); messagebox.showerror("Error", f"Could not save file: {e}")
+
+    def calculate_single_rug(self):
+        dim_str = self.rug_dim_input.get()
+        if not dim_str: self.rug_result_label.set("Please enter a dimension."); return
+        w, h = size_to_inches_wh(dim_str); s = calculate_sqft(dim_str)
+        if w is not None: self.rug_result_label.set(f"W: {w} in | H: {h} in | Area: {s} sqft")
+        else: self.rug_result_label.set("Invalid Format")
+
+    def bulk_process_rugs(self):
+        import pandas as pd
+        from tqdm import tqdm
+        tqdm.pandas(desc="Calculating Dimensions")
+        path = self.bulk_rug_file.get(); col = self.bulk_rug_col.get()
+        if not path or not col: messagebox.showerror("Error", "Please select a file and specify a column."); return
+        self.log(f"Processing rug sizes from: {path}")
+        try: df = pd.read_excel(path) if path.lower().endswith((".xlsx",".xls")) else pd.read_csv(path)
+        except Exception as e: self.log(f"Error reading file: {e}"); messagebox.showerror("Error", f"Could not read file: {e}"); return
+        sel_col = None
+        if len(col) == 1 and col.isalpha(): idx = ord(col.upper()) - ord('A'); sel_col = df.columns[idx] if idx < len(df.columns) else None
+        elif col in df.columns: sel_col = col
+        if not sel_col: messagebox.showerror("Error", f"Column '{col}' not found."); return
+        res = df[sel_col].progress_apply(lambda s: {'w': size_to_inches_wh(s)[0], 'h': size_to_inches_wh(s)[1], 'a': calculate_sqft(s)})
+        df["Width_in"] = [r['w'] for r in res]; df["Height_in"] = [r['h'] for r in res]; df["Area_sqft"] = [r['a'] for r in res]
+        out_path = f"{os.path.splitext(path)[0]}_with_sizes.xlsx"
+        try:
+            df.to_excel(out_path, index=False)
+            self.log(f"✅ Saved to: {out_path}")
+            messagebox.showinfo("Success", f"Processed file saved to:\n{out_path}")
+        except Exception as e:
+            csv_path = f"{os.path.splitext(path)[0]}_with_sizes.csv"; df.to_csv(csv_path, index=False)
+            self.log(f"Could not save as Excel ({e}). ✅ Saved to CSV instead: {csv_path}")
+            messagebox.showwarning("Saved as CSV", f"Could not save as Excel. Saved as CSV instead:\n{csv_path}")
+
+    def convert_units(self):
+        i = self.unit_input.get().lower()
+        if not i: return
+        m = re.match(r"^\s*(.+?)\s*(cm|m|ft|in)\s+to\s+(cm|m|ft|in)\s*$", i, re.I)
+        if not m: self.unit_result_label.set("Invalid Format"); return
+        v_str, fu, tu = m.groups(); cm = None
+        try:
+            if fu == 'ft': cm = parse_feet_inches(v_str) * 30.48 if parse_feet_inches(v_str) else None
+            else: val = float(v_str); cm = val if fu == 'cm' else val * 100 if fu == 'm' else val * 2.54 if fu == 'in' else None
+        except: pass
+        if cm is None: self.unit_result_label.set(f"Could not parse '{v_str}'."); return
+        res = ""
+        if tu == 'cm': res = f"{cm:.2f} cm"
+        elif tu == 'm': res = f"{cm / 100:.2f} m"
+        elif tu == 'in': res = f"{cm / 2.54:.2f} in"
+        elif tu == 'ft': total_in = cm / 2.54; res = f"{int(total_in // 12)}' {total_in % 12:.2f}\""
+        self.unit_result_label.set(f"--> {res}")
+    
+    def generate_qr(self):
+        import qrcode
+        data = self.qr_data.get(); fname = self.qr_filename.get(); output_type = self.qr_output_type.get()
+        if not data or not fname: messagebox.showerror("Error", "Data and filename are required."); return
+        try:
+            if output_type == "PNG":
+                qrcode.make(data).save(fname)
+            else:
+                label_info = DYMO_LABELS[self.qr_dymo_size.get()]
+                label_image = create_label_image(qrcode.make(data), label_info, self.qr_bottom_text.get())
+                label_image.save(fname)
+            self.log(f"✅ QR Code saved as '{fname}'")
+            messagebox.showinfo("Success", f"QR Code saved to:\n{os.path.abspath(fname)}")
+        except Exception as e:
+            self.log(f"Error generating QR Code: {e}"); messagebox.showerror("Error", f"Error: {e}")
+
+    def generate_barcode(self):
+        import barcode
+        from barcode.writer import ImageWriter
+        data = self.bc_data.get(); fname = self.bc_filename.get(); bc_format = self.bc_type.get(); output_type = self.bc_output_type.get()
+        if not data or not fname: messagebox.showerror("Error", "Data and filename are required."); return
+        try:
+            BarcodeClass = barcode.get_barcode_class(bc_format)
+            if output_type == "PNG":
+                saved_fname = BarcodeClass(data, writer=ImageWriter()).save(fname.replace('.png',''))
+                self.log(f"✅ Barcode saved as '{saved_fname}'")
+                messagebox.showinfo("Success", f"Barcode saved to:\n{os.path.abspath(saved_fname)}")
+            else:
+                label_info = DYMO_LABELS[self.bc_dymo_size.get()]
+                barcode_pil_img = BarcodeClass(data, writer=ImageWriter()).render()
+                label_image = create_label_image(barcode_pil_img, label_info, self.bc_bottom_text.get() or data)
+                label_image.save(fname)
+                self.log(f"✅ Dymo Barcode Label saved as '{fname}'")
+                messagebox.showinfo("Success", f"Dymo Label saved to:\n{os.path.abspath(fname)}")
+        except Exception as e:
+            self.log(f"Error generating barcode: {e}"); messagebox.showerror("Error", f"Error: {e}")
 
 if __name__ == "__main__":
     install_and_check()
