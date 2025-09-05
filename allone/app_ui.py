@@ -9,7 +9,7 @@ from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
 
-__version__ = "2.6-GUI-Refactored"
+__version__ = "2.6.1"
 
 DYMO_LABELS = {
     'Address (30252)': {'w_in': 3.5, 'h_in': 1.125},
@@ -414,4 +414,5 @@ Created by Hakan Akaslan
         log_msg, success_msg = backend.generate_barcode_task(data, fname, self.bc_type.get(), self.bc_output_type.get(), dymo_info, self.bc_bottom_text.get() or data)
         self.log(log_msg)
         if success_msg: messagebox.showinfo("Success", success_msg)
+
         else: messagebox.showerror("Error", log_msg)
