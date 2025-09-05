@@ -19,8 +19,9 @@ import google.generativeai as genai
 def clean_file_path(file_path: str) -> str:
     """Removes quotes and whitespace from a file path string."""
     return file_path.strip().strip('"').strip("'")
-# ... (Diğer tüm yardımcı fonksiyonlar aynı kalacak, sadece en alta yeni bir fonksiyon ekledim)
+
 def parse_feet_inches(value_str: str):
+    """Parses various string formats (e.g., 5'2", 5.2', 8") into a decimal foot value."""
     if not isinstance(value_str, str) or not value_str.strip(): return None
     try:
         s = value_str.strip().lower().replace("”",'"').replace("″",'"').replace("′","'").replace("’","'").replace("inches",'"').replace("inch",'"').replace("in",'"')
@@ -34,12 +35,14 @@ def parse_feet_inches(value_str: str):
     except: return None
 
 def size_to_inches_wh(s: str):
+    """Converts a dimension string (e.g., "5'2" x 8'") into a tuple of (width_in, height_in)."""
     m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", str(s))
     if not m: return (None, None)
     w = parse_feet_inches(m.group(1)); h = parse_feet_inches(m.group(2))
     return (round(w*12, 2), round(h*12, 2)) if w is not None and h is not None else (None, None)
 
 def calculate_sqft(s: str):
+    """Calculates the square footage from a dimension string."""
     try:
         m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", str(s))
         if not m: return None
@@ -48,6 +51,7 @@ def calculate_sqft(s: str):
     except: return None
     
 def create_label_image(code_image, label_info, bottom_text=""):
+    """Creates a label image for Dymo printers with the code centered and optional text."""
     DPI = 300
     label_width_px = int(label_info['w_in'] * DPI)
     label_height_px = int(label_info['h_in'] * DPI)
@@ -75,21 +79,37 @@ def create_label_image(code_image, label_info, bottom_text=""):
     return label_bg
 
 def convert_units_logic(input_string):
+    """Takes a conversion string and returns the result string."""
     i = input_string.lower()
-    if not i: return ""
+    if not i:
+        return ""
+    
     m = re.match(r"^\s*(.+?)\s*(cm|m|ft|in)\s+to\s+(cm|m|ft|in)\s*$", i, re.I)
-    if not m: return "Invalid Format"
-    v_str, fu, tu = m.groups(); cm = None
+    if not m:
+        return "Invalid Format"
+
+    v_str, fu, tu = m.groups()
+    cm = None
     try:
-        if fu == 'ft': cm = parse_feet_inches(v_str) * 30.48 if parse_feet_inches(v_str) else None
-        else: val = float(v_str); cm = val if fu == 'cm' else val * 100 if fu == 'm' else val * 2.54 if fu == 'in' else None
-    except: pass
-    if cm is None: return f"Could not parse '{v_str}'."
+        if fu == 'ft':
+            cm = parse_feet_inches(v_str) * 30.48 if parse_feet_inches(v_str) else None
+        else:
+            val = float(v_str)
+            cm = val if fu == 'cm' else val * 100 if fu == 'm' else val * 2.54 if fu == 'in' else None
+    except:
+        pass
+    
+    if cm is None:
+        return f"Could not parse '{v_str}'."
+    
     res = ""
     if tu == 'cm': res = f"{cm:.2f} cm"
     elif tu == 'm': res = f"{cm / 100:.2f} m"
     elif tu == 'in': res = f"{cm / 2.54:.2f} in"
-    elif tu == 'ft': total_in = cm / 2.54; res = f"{int(total_in // 12)}' {total_in % 12:.2f}\""
+    elif tu == 'ft':
+        total_in = cm / 2.54
+        res = f"{int(total_in // 12)}' {total_in % 12:.2f}\""
+    
     return f"--> {res}"
 
 # --- Task Functions ---
@@ -111,8 +131,188 @@ def ask_ai(model, prompt):
     except Exception as e:
         return f"Sorry, an error occurred: {e}"
 
-# (Diğer tüm backend fonksiyonları burada devam ediyor, onlar aynı kalabilir)
 def process_files_task(src, tgt, nums_f, action, log_callback, completion_callback):
-    # ...
-    pass
-# ...
+    """Finds files based on a list and copies or moves them."""
+    log_callback(f"Starting file {action} process...")
+    try:
+        p = clean_file_path(nums_f)
+        if not os.path.exists(p):
+            log_callback(f"Error: Numbers file not found at '{p}'")
+            completion_callback("Error", f"Numbers file not found at '{p}'")
+            return
+        if p.lower().endswith((".xlsx",".xls")):
+            df = pd.read_excel(p, header=None, usecols=[0], dtype=str)
+        else:
+            df = pd.read_csv(p, header=None, usecols=[0], dtype=str, on_bad_lines='skip', sep=r'\s+|\t|,', engine='python')
+        nums = df[0].dropna().str.strip().tolist()
+    except Exception as e:
+        log_callback(f"Error reading numbers file: {e}")
+        completion_callback("Error", f"Could not read the numbers file: {e}")
+        return
+
+    if not nums:
+        log_callback("No numbers found in the file to process."); return
+    
+    proc, missing = [], set(nums)
+    exts = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff'}
+    files = [f for f in os.listdir(src) if os.path.isfile(os.path.join(src, f))]
+    map_ = {n: [f for f in files if n in f and os.path.splitext(f)[1].lower() in exts] for n in nums}
+    
+    for n in tqdm(nums, desc=f"{action.title()}ing files"):
+        if map_.get(n):
+            for f in map_[n]:
+                try:
+                    if action == "copy": shutil.copy2(os.path.join(src, f), os.path.join(tgt, f))
+                    else: shutil.move(os.path.join(src, f), os.path.join(tgt, f))
+                    proc.append(f)
+                    missing.discard(n)
+                except Exception as e: log_callback(f"Error processing '{f}': {e}")
+        else:
+            logging.warning(f"No match for: {n}")
+    
+    summary = f"--- Summary ---\nProcessed: {len(proc)}\nNot Found: {len(missing)}"
+    log_callback(summary)
+    if missing: log_callback(f"Unfound: {', '.join(list(missing))}")
+    completion_callback("Complete", f"File {action} process finished. See log for details.")
+
+def convert_heic_task(folder, log_callback, completion_callback):
+    """Converts all HEIC files in a folder to JPG."""
+    log_callback("Starting HEIC to JPG conversion...")
+    try:
+        files = [f for f in os.listdir(folder) if f.lower().endswith(".heic")]
+        if not files:
+            log_callback("No HEIC files found."); return
+        
+        for f in tqdm(files, desc="HEIC -> JPG"):
+            src, dst = os.path.join(folder, f), f"{os.path.splitext(os.path.join(folder, f))[0]}.jpg"
+            try:
+                heif = pillow_heif.read_heif(src)
+                img = Image.frombytes(heif.mode, heif.size, heif.data, "raw")
+                img.save(dst, "JPEG")
+                log_callback(f"Converted: {f} -> {os.path.basename(dst)}")
+            except Exception as e: log_callback(f"Error converting '{f}': {e}")
+        
+        log_callback("\n✅ Conversion complete.")
+        completion_callback("Success", "HEIC conversion is complete.")
+    except Exception as e:
+        log_callback(f"An error occurred: {e}")
+        completion_callback("Error", f"An error occurred: {e}")
+
+def resize_images_task(src_folder, mode, value, quality, log_callback, completion_callback):
+    """Resizes all images in a folder based on width or percentage."""
+    tgt_folder = os.path.join(src_folder, "resized")
+    os.makedirs(tgt_folder, exist_ok=True)
+    log_callback(f"Resized images will be saved in: {tgt_folder}")
+    files = [f for f in os.listdir(src_folder) if f.lower().endswith(('.jpg','.jpeg','.png','.webp'))]
+    if not files:
+        log_callback("No compatible images found."); return
+    
+    log_callback(f"Starting resize process in '{mode}' mode...")
+    for f in tqdm(files, desc="Resizing images"):
+        try:
+            with Image.open(os.path.join(src_folder, f)) as img:
+                ow, oh = img.size
+                nw, nh = ow, oh
+                if mode == "width":
+                    if ow > value:
+                        ratio = value / float(ow)
+                        nw, nh = value, int(float(oh) * ratio)
+                else:  # percentage
+                    nw, nh = int(ow * value / 100), int(oh * value / 100)
+                
+                if nw < 1: nw = 1
+                if nh < 1: nh = 1
+
+                if (nw, nh) != (ow, oh):
+                    resample = Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
+                    img = img.resize((nw, nh), resample)
+
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                
+                save_path = os.path.join(tgt_folder, f)
+                if f.lower().endswith(('.jpg', '.jpeg')):
+                    img.save(save_path, "JPEG", quality=quality, optimize=True)
+                else:
+                    img.save(save_path)
+                
+                log_callback(f"Resized: {f} -> {nw}x{nh}")
+        except Exception as e:
+            log_callback(f"Error with {f}: {e}")
+            
+    log_callback("\n✅ Image resizing complete.")
+    completion_callback("Success", "Image processing is complete.")
+
+def format_numbers_task(file_path):
+    """Reads a column from a file and formats it into a single line."""
+    try:
+        p = clean_file_path(file_path)
+        if p.lower().endswith((".xlsx",".xls")): df = pd.read_excel(p, header=None, usecols=[0], dtype=str)
+        else: df = pd.read_csv(p, header=None, usecols=[0], dtype=str, on_bad_lines='skip', sep=r'\s+|\t|,', engine='python')
+        nums = df[0].dropna().str.strip().tolist()
+        if not nums: return ("No numbers found.", None)
+        out_str = ",".join(nums)
+        out_path = "formatted_numbers.txt"
+        with open(out_path, "w", encoding='utf-8') as f: f.write(out_str)
+        return (None, f"Formatted text saved to {os.path.abspath(out_path)}")
+    except Exception as e:
+        return (f"Could not process file: {e}", None)
+
+def bulk_rug_sizer_task(path, col, log_callback, completion_callback):
+    """Processes a sheet of rug dimensions and adds calculated columns."""
+    tqdm.pandas(desc="Calculating Dimensions")
+    log_callback(f"Processing rug sizes from: {path}")
+    try:
+        df = pd.read_excel(path) if path.lower().endswith((".xlsx",".xls")) else pd.read_csv(path)
+    except Exception as e:
+        log_callback(f"Error reading file: {e}"); completion_callback("Error", f"Could not read file: {e}"); return
+    
+    sel_col = None
+    if len(col) == 1 and col.isalpha():
+        idx = ord(col.upper()) - ord('A')
+        if idx < len(df.columns): sel_col = df.columns[idx]
+    elif col in df.columns: sel_col = col
+    
+    if not sel_col:
+        completion_callback("Error", f"Column '{col}' not found."); return
+
+    res = df[sel_col].progress_apply(lambda s: {'w': size_to_inches_wh(s)[0], 'h': size_to_inches_wh(s)[1], 'a': calculate_sqft(s)})
+    df["Width_in"] = [r['w'] for r in res]; df["Height_in"] = [r['h'] for r in res]; df["Area_sqft"] = [r['a'] for r in res]
+    
+    out_path = f"{os.path.splitext(path)[0]}_with_sizes.xlsx"
+    try:
+        df.to_excel(out_path, index=False)
+        log_callback(f"✅ Saved to: {out_path}")
+        completion_callback("Success", f"Processed file saved to:\n{out_path}")
+    except Exception as e:
+        csv_path = f"{os.path.splitext(path)[0]}_with_sizes.csv"; df.to_csv(csv_path, index=False)
+        log_callback(f"Could not save as Excel ({e}). ✅ Saved to CSV instead: {csv_path}")
+        completion_callback("Saved as CSV", f"Could not save as Excel. Saved as CSV instead:\n{csv_path}")
+
+def generate_qr_task(data, fname, output_type, dymo_size_info, bottom_text):
+    """Generates a QR code as a PNG or Dymo label image."""
+    try:
+        img = qrcode.make(data)
+        if output_type == "PNG":
+            img.save(fname)
+        else: # Dymo
+            label_image = create_label_image(img, dymo_size_info, bottom_text)
+            label_image.save(fname)
+        return (f"✅ QR Code saved as '{fname}'", f"QR Code saved to:\n{os.path.abspath(fname)}")
+    except Exception as e:
+        return (f"Error generating QR Code: {e}", None)
+
+def generate_barcode_task(data, fname, bc_format, output_type, dymo_size_info, bottom_text):
+    """Generates a barcode as a PNG or Dymo label image."""
+    try:
+        BarcodeClass = barcode.get_barcode_class(bc_format)
+        if output_type == "PNG":
+            saved_fname = BarcodeClass(data, writer=ImageWriter()).save(fname.replace('.png',''))
+            return (f"✅ Barcode saved as '{saved_fname}'", f"Barcode saved to:\n{os.path.abspath(saved_fname)}")
+        else: # Dymo
+            barcode_pil_img = BarcodeClass(data, writer=ImageWriter()).render()
+            label_image = create_label_image(barcode_pil_img, dymo_size_info, bottom_text)
+            label_image.save(fname)
+            return (f"✅ Dymo Label saved as '{fname}'", f"Dymo Label saved to:\n{os.path.abspath(fname)}")
+    except Exception as e:
+        return (f"Error generating barcode: {e}", None)
