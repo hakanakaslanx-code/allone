@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-__version__ = "2.3-GUI-EN"
+__version__ = "2.4-GUI-EN"
 
 """
 This script combines multiple utility programs into a single GUI application:
 - Features Auto-Update functionality.
-- English UI.
+- English UI with Percentage-based resizing.
 - Dymo Label support.
 """
 
@@ -154,7 +154,6 @@ class ToolApp(tk.Tk):
         self.log("Welcome to the Combined Utility Tool!")
         
         # --- AUTO-UPDATE ---
-        # Run the update check in a separate thread on startup
         self.run_in_thread(self.check_for_updates, silent=True)
 
     def log(self, message):
@@ -171,10 +170,7 @@ class ToolApp(tk.Tk):
     def check_for_updates(self, silent=False):
         """Checks for a new version of the script on GitHub and self-updates if one is found."""
         self.log("Checking for updates...")
-        
-        # IMPORTANT: This URL should point to the raw file of THIS script on your GitHub.
         script_url = "https://raw.githubusercontent.com/hakanakaslanx-code/allone/refs/heads/main/allone.beta-en.py"
-        
         current_script_name = os.path.basename(sys.argv[0])
         
         try:
@@ -192,8 +188,6 @@ class ToolApp(tk.Tk):
             
             if remote_version > __version__:
                 self.log(f"--> New version ({remote_version}) available.")
-                
-                # Ask user for confirmation
                 update_confirmation = messagebox.askyesno("Update Available", f"A new version ({remote_version}) is available.\nYour current version is {__version__}.\n\nDo you want to update now?")
                 
                 if not update_confirmation:
@@ -204,8 +198,7 @@ class ToolApp(tk.Tk):
                 self.log("Updating...")
                 
                 new_script_path = current_script_name + ".new"
-                with open(new_script_path, "w", encoding='utf-8') as f:
-                    f.write(remote_script_content)
+                with open(new_script_path, "w", encoding='utf-8') as f: f.write(remote_script_content)
                 
                 if sys.platform == 'win32':
                     updater_script_path = "updater.bat"
@@ -219,7 +212,7 @@ echo ✅ Update complete. Relaunching...
 start "" "{sys.executable}" "{current_script_name}"
 del "{updater_script_path}"
                     """
-                else:  # for macOS and Linux
+                else:
                     updater_script_path = "updater.sh"
                     updater_content = f"""
 #!/bin/bash
@@ -233,14 +226,11 @@ chmod +x "{current_script_name}"
 rm -- "$0"
                     """
                 
-                with open(updater_script_path, "w", encoding='utf-8') as f:
-                    f.write(updater_content)
-                
-                if sys.platform != 'win32':
-                    os.chmod(updater_script_path, 0o755)
+                with open(updater_script_path, "w", encoding='utf-8') as f: f.write(updater_content)
+                if sys.platform != 'win32': os.chmod(updater_script_path, 0o755)
                 
                 subprocess.Popen([updater_script_path])
-                self.destroy() # Close the GUI gracefully
+                self.destroy()
                 sys.exit(0)
                 
             else:
@@ -251,36 +241,32 @@ rm -- "$0"
             self.log(f"Warning: Update check failed. Reason: {e}")
             if not silent: messagebox.showerror("Update Check Failed", f"Could not check for updates.\n\nReason: {e}")
 
-
     def create_file_image_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="File & Image Tools")
 
+        # --- File Copy/Move Section ---
         file_ops_frame = ttk.LabelFrame(tab, text="1. Copy/Move Files by List")
         file_ops_frame.pack(fill="x", padx=10, pady=10)
-
         self.source_folder = tk.StringVar(value=self.settings.get("source_folder", ""))
         self.target_folder = tk.StringVar(value=self.settings.get("target_folder", ""))
         self.numbers_file = tk.StringVar()
-
         ttk.Label(file_ops_frame, text="Source Folder:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
         ttk.Entry(file_ops_frame, textvariable=self.source_folder, width=60).grid(row=0, column=1, padx=5, pady=5)
         ttk.Button(file_ops_frame, text="Browse...", command=lambda: self.source_folder.set(filedialog.askdirectory())).grid(row=0, column=2, padx=5, pady=5)
-        
         ttk.Label(file_ops_frame, text="Target Folder:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
         ttk.Entry(file_ops_frame, textvariable=self.target_folder, width=60).grid(row=1, column=1, padx=5, pady=5)
         ttk.Button(file_ops_frame, text="Browse...", command=lambda: self.target_folder.set(filedialog.askdirectory())).grid(row=1, column=2, padx=5, pady=5)
-
         ttk.Label(file_ops_frame, text="Numbers File (List):").grid(row=2, column=0, padx=5, pady=5, sticky="w")
         ttk.Entry(file_ops_frame, textvariable=self.numbers_file, width=60).grid(row=2, column=1, padx=5, pady=5)
         ttk.Button(file_ops_frame, text="Browse...", command=lambda: self.numbers_file.set(filedialog.askopenfilename())).grid(row=2, column=2, padx=5, pady=5)
-
         btn_frame = ttk.Frame(file_ops_frame)
         btn_frame.grid(row=3, column=1, pady=10)
         ttk.Button(btn_frame, text="Copy Files", command=lambda: self.run_in_thread(self.process_files, "copy")).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="Move Files", command=lambda: self.run_in_thread(self.process_files, "move")).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="Save Settings", command=self.save_folder_settings).pack(side="left", padx=5)
 
+        # --- HEIC to JPG Converter ---
         heic_frame = ttk.LabelFrame(tab, text="2. Convert HEIC to JPG")
         heic_frame.pack(fill="x", padx=10, pady=10)
         self.heic_folder = tk.StringVar()
@@ -289,22 +275,51 @@ rm -- "$0"
         ttk.Button(heic_frame, text="Browse...", command=lambda: self.heic_folder.set(filedialog.askdirectory())).pack(side="left", padx=5, pady=5)
         ttk.Button(heic_frame, text="Convert", command=lambda: self.run_in_thread(self.convert_heic)).pack(side="left", padx=5, pady=5)
         
+        # --- Batch Image Resizer (UPDATED SECTION) ---
         resize_frame = ttk.LabelFrame(tab, text="3. Batch Image Resizer")
         resize_frame.pack(fill="x", padx=10, pady=10)
+        
         self.resize_folder = tk.StringVar()
-        self.max_width = tk.StringVar(value="1920")
         self.quality = tk.StringVar(value="75")
         
-        ttk.Label(resize_frame, text="Image Folder:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        ttk.Entry(resize_frame, textvariable=self.resize_folder, width=60).grid(row=0, column=1, columnspan=2, padx=5, pady=5, sticky="ew")
-        ttk.Button(resize_frame, text="Browse...", command=lambda: self.resize_folder.set(filedialog.askdirectory())).grid(row=0, column=3, padx=5, pady=5)
+        self.resize_mode = tk.StringVar(value="width")
+        self.max_width = tk.StringVar(value="1920")
+        self.resize_percentage = tk.StringVar(value="50")
 
-        ttk.Label(resize_frame, text="Max Width:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
-        ttk.Entry(resize_frame, textvariable=self.max_width, width=10).grid(row=1, column=1, padx=5, pady=5, sticky="w")
-        ttk.Label(resize_frame, text="JPEG Quality (1-95):").grid(row=1, column=2, padx=5, pady=5, sticky="e")
-        ttk.Entry(resize_frame, textvariable=self.quality, width=10).grid(row=1, column=3, padx=5, pady=5, sticky="w")
+        ttk.Label(resize_frame, text="Image Folder:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        ttk.Entry(resize_frame, textvariable=self.resize_folder, width=60).grid(row=0, column=1, columnspan=3, padx=5, pady=5, sticky="ew")
+        ttk.Button(resize_frame, text="Browse...", command=lambda: self.resize_folder.set(filedialog.askdirectory())).grid(row=0, column=4, padx=5, pady=5)
+
+        ttk.Label(resize_frame, text="Resize Mode:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        radio_frame = ttk.Frame(resize_frame)
+        radio_frame.grid(row=1, column=1, columnspan=3, sticky="w")
         
-        ttk.Button(resize_frame, text="Resize & Compress", command=lambda: self.run_in_thread(self.resize_images)).grid(row=2, column=1, columnspan=2, pady=10)
+        ttk.Radiobutton(radio_frame, text="By Width", variable=self.resize_mode, value="width", command=self.toggle_resize_mode).pack(side="left")
+        ttk.Radiobutton(radio_frame, text="By Percentage", variable=self.resize_mode, value="percentage", command=self.toggle_resize_mode).pack(side="left", padx=10)
+
+        ttk.Label(resize_frame, text="Max Width:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        self.width_entry = ttk.Entry(resize_frame, textvariable=self.max_width, width=10)
+        self.width_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+        
+        ttk.Label(resize_frame, text="Percentage (%):").grid(row=2, column=2, padx=5, pady=5, sticky="e")
+        self.percentage_entry = ttk.Entry(resize_frame, textvariable=self.resize_percentage, width=10)
+        self.percentage_entry.grid(row=2, column=3, padx=5, pady=5, sticky="w")
+
+        ttk.Label(resize_frame, text="JPEG Quality (1-95):").grid(row=3, column=0, padx=5, pady=5, sticky="w")
+        ttk.Entry(resize_frame, textvariable=self.quality, width=10).grid(row=3, column=1, padx=5, pady=5, sticky="w")
+        
+        ttk.Button(resize_frame, text="Resize & Compress", command=lambda: self.run_in_thread(self.resize_images)).grid(row=4, column=1, columnspan=2, pady=10)
+        
+        self.toggle_resize_mode()
+
+    def toggle_resize_mode(self):
+        """Enables/disables entry fields based on the selected resize mode."""
+        if self.resize_mode.get() == "width":
+            self.width_entry.config(state="normal")
+            self.percentage_entry.config(state="disabled")
+        else:
+            self.width_entry.config(state="disabled")
+            self.percentage_entry.config(state="normal")
 
     def create_data_calc_tab(self):
         tab = ttk.Frame(self.notebook)
@@ -450,7 +465,7 @@ This application combines common file, image, and data processing tasks into a s
    Converts all of Apple's HEIC format images in a selected folder to the universal JPG format.
 
 3. Batch Image Resizer:
-   Resizes and compresses all images in a folder to a specified maximum width while preserving the aspect ratio.
+   Resizes and compresses all images in a folder. You can resize by a fixed maximum width or by a percentage of the original dimensions.
 
 4. Format Numbers from File:
    Reads the first column of a file and formats all items into a single, comma-separated line of text.
@@ -476,7 +491,6 @@ Created by Hakan Akaslan
         
         help_text_area.insert(tk.END, help_content)
         help_text_area.config(state=tk.DISABLED)
-
 
     # --- Action Methods ---
     def save_folder_settings(self):
@@ -560,33 +574,68 @@ Created by Hakan Akaslan
         from tqdm import tqdm
         
         src_folder = self.resize_folder.get()
-        if not src_folder or not os.path.isdir(src_folder): messagebox.showerror("Error", "Please select a valid image folder."); return
+        if not src_folder or not os.path.isdir(src_folder):
+            messagebox.showerror("Error", "Please select a valid image folder.")
+            return
 
+        mode = self.resize_mode.get()
+        
         try:
-            w = int(self.max_width.get()); q = int(self.quality.get())
+            if mode == "width":
+                w = int(self.max_width.get())
+            else: # percentage
+                p = int(self.resize_percentage.get())
+                if not 1 <= p:
+                    messagebox.showerror("Error", "Percentage must be a positive number.")
+                    return
+
+            q = int(self.quality.get())
             if not 1 <= q <= 95: q = 75
-        except ValueError: messagebox.showerror("Error", "Max width and quality must be valid numbers."); return
+        except ValueError:
+            messagebox.showerror("Error", "Resize values and quality must be valid numbers."); return
         
         tgt_folder = os.path.join(src_folder, "resized")
         os.makedirs(tgt_folder, exist_ok=True)
         self.log(f"Resized images will be saved in: {tgt_folder}")
         
         files = [f for f in os.listdir(src_folder) if f.lower().endswith(('.jpg','.jpeg','.png','.webp'))]
-        if not files: self.log("No compatible images found."); return
+        if not files:
+            self.log("No compatible images found.")
+            return
         
+        self.log(f"Starting resize process in '{mode}' mode...")
         for f in tqdm(files, desc="Resizing images"):
             try:
                 with Image.open(os.path.join(src_folder, f)) as img:
-                    if img.width > w:
-                        r = w / float(img.width); h = int(float(img.height) * r)
-                        resample = Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
-                        img = img.resize((w, h), resample)
-                    if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+                    original_width, original_height = img.size
+                    new_width, new_height = original_width, original_height
+
+                    if mode == "width":
+                        if original_width > w:
+                            ratio = w / float(original_width)
+                            new_width = w
+                            new_height = int(float(original_height) * ratio)
+                    else: # percentage
+                        new_width = int(original_width * p / 100)
+                        new_height = int(original_height * p / 100)
+
+                    if new_width < 1: new_width = 1
+                    if new_height < 1: new_height = 1
                     
-                    if f.lower().endswith(('.jpg','.jpeg')): img.save(os.path.join(tgt_folder, f), "JPEG", quality=q, optimize=True)
-                    else: img.save(os.path.join(tgt_folder, f))
-                    self.log(f"Resized: {f}")
-            except Exception as e: self.log(f"Error with {f}: {e}")
+                    if (new_width, new_height) != (original_width, original_height):
+                        resample = Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
+                        img = img.resize((new_width, new_height), resample)
+
+                    if img.mode in ("RGBA", "P"):
+                        img = img.convert("RGB")
+                    
+                    if f.lower().endswith(('.jpg','.jpeg')):
+                        img.save(os.path.join(tgt_folder, f), "JPEG", quality=q, optimize=True)
+                    else:
+                        img.save(os.path.join(tgt_folder, f))
+                    self.log(f"Resized: {f} -> {new_width}x{new_height}")
+            except Exception as e:
+                self.log(f"Error with {f}: {e}")
         
         self.log("\n✅ Image resizing complete.")
         messagebox.showinfo("Success", "Image processing is complete.")
@@ -736,4 +785,3 @@ if __name__ == "__main__":
     install_and_check()
     app = ToolApp()
     app.mainloop()
-
