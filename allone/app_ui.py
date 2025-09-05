@@ -10,7 +10,7 @@ from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
 
-__version__ = "2.7.2-GUI-Refactor-Fix"
+__version__ = "2.8.2"
 
 DYMO_LABELS = {
     'Address (30252)': {'w_in': 3.5, 'h_in': 1.125},
@@ -88,21 +88,29 @@ class ToolApp(tk.Tk):
         send_button.pack(side="right")
         
     def configure_gemini(self):
+        """Gets key from UI and asks backend to initialize the AI model."""
         api_key = self.gemini_api_key.get()
-        if not api_key: messagebox.showerror("Error", "Please enter a Google API Key."); return
-        try:
-            self.log("Configuring Gemini API...")
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
-            self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+        if not api_key:
+            messagebox.showerror("Error", "Please enter a Google API Key.")
+            return
+        
+        self.log("Configuring Gemini API...")
+        
+        model, error = backend.initialize_gemini_model(api_key)
+        
+        if error:
+            self.gemini_model = None
+            self.ai_status_label.config(text="Status: Configuration Failed", foreground="red")
+            error_message = f"Could not configure the Gemini API.\nCheck project settings (API enabled, billing, etc.).\n\nError: {error}"
+            self.log(f"ERROR: {error_message}")
+            messagebox.showerror("Configuration Failed", error_message)
+        else:
+            self.gemini_model = model
             self.ai_status_label.config(text="Status: Ready", foreground="green")
             self.log("✅ Gemini API configured successfully.")
             self.settings['gemini_api_key'] = api_key
             save_settings(self.settings)
             self.log("API Key has been securely saved to settings.json.")
-        except Exception as e:
-            self.gemini_model = None; self.ai_status_label.config(text="Status: Failed", foreground="red")
-            messagebox.showerror("Configuration Failed", f"Could not configure Gemini API.\n\nError: {e}")
 
     def on_send_message(self, event=None):
         if not self.gemini_model: messagebox.showwarning("Warning", "Please set API key first."); return
@@ -371,7 +379,7 @@ Created by Hakan Akaslan
         dymo_info = DYMO_LABELS[self.qr_dymo_size.get()] if self.qr_output_type.get() == "Dymo" else None
         log_msg, success_msg = backend.generate_qr_task(data, fname, self.qr_output_type.get(), dymo_info, self.qr_bottom_text.get())
         self.log(log_msg)
-        if success_msg: messagebox.showinfo("Success", success_msg)
+        if success_msg: self.task_completion_popup("Success", success_msg)
         else: messagebox.showerror("Error", log_msg)
 
     def start_generate_barcode(self):
@@ -380,5 +388,5 @@ Created by Hakan Akaslan
         dymo_info = DYMO_LABELS[self.bc_dymo_size.get()] if self.bc_output_type.get() == "Dymo" else None
         log_msg, success_msg = backend.generate_barcode_task(data, fname, self.bc_type.get(), self.bc_output_type.get(), dymo_info, self.bc_bottom_text.get() or data)
         self.log(log_msg)
-        if success_msg: messagebox.showinfo("Success", success_msg)
+        if success_msg: self.task_completion_popup("Success", success_msg)
         else: messagebox.showerror("Error", log_msg)
