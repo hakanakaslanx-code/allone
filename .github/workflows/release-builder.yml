@@ -1,5 +1,5 @@
-# Bu dosyanın tam yolu: .github/workflows/release-builder.yml olmalı
-name: Python Release EXE Builder
+# HATA AYIKLAMA İÇİN DÜZENLENMİŞ SÜRÜM
+name: Python Release EXE Builder (Debug Mode)
 
 on:
   push:
@@ -9,23 +9,18 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-
-    # GEREKLİ İZİN BLOĞU: Bu, 403 hatasını düzeltecektir.
     permissions:
       contents: write
 
     steps:
-    # Adım 1: Proje kodunu sanal makineye indir (v4'e güncellendi)
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # Adım 2: Python'u kur (v5'e güncellendi)
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
-    # Adım 3: Gerekli kütüphaneleri yükle
     - name: Install dependencies
       working-directory: ./allone
       run: |
@@ -33,16 +28,16 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
 
-    # Adım 4: PyInstaller ile .exe dosyasını oluştur
-    - name: Build executable with PyInstaller
+    # Adım 4: PyInstaller komutundan --windowed kaldırıldı ve isim değiştirildi
+    - name: Build executable with PyInstaller for Debugging
       working-directory: ./allone
       run: |
-        pyinstaller --onefile --windowed --name="AllOneTool" --icon="icon.ico" main.py
+        pyinstaller --onefile --name="AllOneTool_Debug" --icon="icon.ico" --hidden-import="numpy" main.py
 
-    # Adım 5: Yeni GitHub Release'i oluştur ve .exe'yi yükle (v2'ye güncellendi)
+    # Adım 5: Yeni GitHub Release'i oluştur ve debug .exe'yi yükle
     - name: Create GitHub Release and Upload EXE
       uses: softprops/action-gh-release@v2
       with:
-        files: allone/dist/AllOneTool.exe
+        files: allone/dist/AllOneTool_Debug.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
