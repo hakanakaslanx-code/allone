@@ -10,7 +10,7 @@ from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
 
-__version__ = "3.1.9"
+__version__ = "3.2.0"
 
 DYMO_LABELS = {
     'Address (30252)': {'w_in': 3.5, 'h_in': 1.125},
@@ -49,8 +49,22 @@ class ToolApp(tk.Tk):
             self.configure_gemini()
 
     def log(self, message):
+        # Bu fonksiyon, ilerleme çubuğunun düzgün çalışması için güncellendi.
+        if not isinstance(message, str):
+            message = str(message)
+            
         self.log_area.config(state=tk.NORMAL)
-        self.log_area.insert(tk.END, str(message) + "\n")
+        
+        if '\r' in message:
+            # Eğer satır başı karakteri varsa, mevcut satırı sil ve yenisini yaz
+            # Bu, tqdm ilerleme çubuğunun aynı satırda güncellenmesini sağlar
+            self.log_area.delete("end-1l", "end")
+            # \r karakterini kaldırarak mesajı ekle
+            self.log_area.insert(tk.END, message.replace('\r', ''))
+        else:
+            # Normal mesajları sonuna \n ekleyerek yaz
+            self.log_area.insert(tk.END, message + "\n")
+            
         self.log_area.see(tk.END)
         self.log_area.config(state=tk.DISABLED)
     
@@ -390,13 +404,3 @@ Created by Hakan Akaslan
         self.log(log_msg)
         if success_msg: self.task_completion_popup("Success", success_msg)
         else: messagebox.showerror("Error", log_msg)
-
-
-
-
-
-
-
-
-
-
