@@ -10,6 +10,9 @@ import qrcode
 import barcode
 from barcode.writer import ImageWriter
 from tqdm import tqdm
+
+# Google AI kütüphanesindeki bir uyumluluk sorununu çözmek için bu satır eklendi.
+os.environ['GRPC_DNS_RESOLVER'] = 'native'
 import google.generativeai as genai
 
 # This file contains NO tkinter code.
