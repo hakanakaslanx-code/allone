@@ -3,17 +3,17 @@ import os
 import sys
 import re
 import requests
-import subprocess
+import webbrowser
 from tkinter import messagebox
 
 def check_for_updates(app_instance, log_callback, current_version, silent=False):
     log_callback("Checking for updates...")
     
-    # Versiyon kontrolü için app_ui.py'yi kullanıyoruz
-    version_check_url = "https://raw.githubusercontent.com/hakanakaslanx-code/allone/main/allone/app_ui.py"
+    owner = "hakanakaslanx-code"
+    repo = "allone"
     
-    # Güncelleme için ise downloader.py'yi indireceğiz
-    downloader_url = "https://raw.githubusercontent.com/hakanakaslanx-code/allone/main/allone/downloader.py"
+    # Versiyon kontrolünü hala app_ui.py üzerinden yapıyoruz
+    version_check_url = f"https://raw.githubusercontent.com/{owner}/{repo}/main/allone/app_ui.py"
     
     try:
         response = requests.get(version_check_url, timeout=10)
@@ -29,22 +29,23 @@ def check_for_updates(app_instance, log_callback, current_version, silent=False)
         
         if remote_version > current_version:
             log_callback(f"--> New version ({remote_version}) available.")
-            if messagebox.askyesno("Update Available", f"A new version ({remote_version}) is available.\n\nThis will download all new files and restart the application.\n\nDo you want to update now?"):
-                log_callback("Downloading updater...")
+            
+            # GitHub'daki son sürümün URL'ini oluşturuyoruz
+            latest_release_url = f"https://github.com/{owner}/{repo}/releases/latest"
+            
+            if messagebox.askyesno("Update Available", f"A new version ({remote_version}) is available.\n\nDo you want to open the download page now?"):
+                log_callback(f"Opening download page: {latest_release_url}")
+                webbrowser.open(latest_release_url)
                 
-                # Yeni downloader.py'yi indir ve geçici bir dosyaya kaydet
-                downloader_content = requests.get(downloader_url).text
-                downloader_path = "downloader_update.py"
-                with open(downloader_path, "w", encoding='utf-8') as f:
-                    f.write(downloader_content)
+                # Kullanıcıya ne yapması gerektiğini açıklıyoruz
+                messagebox.showinfo("Update", 
+                                  "The download page has been opened in your browser.\n\n"
+                                  "Please download the new 'AllOneTool.exe' and replace your old application with it.")
                 
-                log_callback("Update started. The application will now close.")
-                
-                # Ana uygulamayı kapat ve downloader'ı çalıştır
-                # Downloader daha sonra eski downloader_update.py'yi silebilir.
-                subprocess.Popen([sys.executable, downloader_path])
+                # Uygulamayı kapatıyoruz ki kullanıcı dosyayı rahatça değiştirebilsin.
                 app_instance.destroy()
                 sys.exit(0)
+
         else:
             log_callback(f"✅ Your application is up-to-date. (Version: {current_version})")
             if not silent: messagebox.showinfo("Update Check", "You are running the latest version.")
