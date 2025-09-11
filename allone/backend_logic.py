@@ -9,7 +9,8 @@ import pillow_heif
 import qrcode
 import barcode
 from barcode.writer import ImageWriter
-from tqdm import tqdm
+# tqdm kütüphanesi artık kullanılmadığı için import satırını silebiliriz veya bırakabiliriz.
+# from tqdm import tqdm
 
 os.environ['GRPC_DNS_RESOLVER'] = 'native'
 import google.generativeai as genai
@@ -123,7 +124,7 @@ def initialize_gemini_model(api_key):
     try:
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-1.5-flash')
-        return model, None  # (model, error)
+        return model, None
     except Exception as e:
         return None, e
 
@@ -162,14 +163,22 @@ def process_files_task(src, tgt, nums_f, action, log_callback, completion_callba
     files = [f for f in os.listdir(src) if os.path.isfile(os.path.join(src, f))]
     map_ = {n: [f for f in files if n in f and os.path.splitext(f)[1].lower() in exts] for n in nums}
     
-    for n in tqdm(nums, desc=f"{action.title()}ing files"):
+    # tqdm'i GUI log alanına yönlendirmek kilitlenmeye neden olabildiği için
+    # basit bir manuel ilerleme bildirimi kullanıyoruz.
+    total_files = len(nums)
+    log_callback(f"Processing {total_files} items from list...")
+    for i, n in enumerate(nums):
+        if (i + 1) % (total_files // 10 or 1) == 0:
+            percentage = (i + 1) * 100 / total_files
+            log_callback(f"  ...Progress: {percentage:.0f}% ({i + 1}/{total_files})")
+            
         if map_.get(n):
             for f in map_[n]:
                 try:
                     if action == "copy": shutil.copy2(os.path.join(src, f), os.path.join(tgt, f))
                     else: shutil.move(os.path.join(src, f), os.path.join(tgt, f))
                     proc.append(f)
-                    missing.discard(n)
+                    if n in missing: missing.remove(n)
                 except Exception as e: log_callback(f"Error processing '{f}': {e}")
         else:
             logging.warning(f"No match for: {n}")
@@ -179,6 +188,7 @@ def process_files_task(src, tgt, nums_f, action, log_callback, completion_callba
     if missing: log_callback(f"Unfound: {', '.join(list(missing))}")
     completion_callback("Complete", f"File {action} process finished. See log for details.")
 
+
 def convert_heic_task(folder, log_callback, completion_callback):
     """Converts all HEIC files in a folder to JPG."""
     log_callback("Starting HEIC to JPG conversion...")
@@ -187,13 +197,14 @@ def convert_heic_task(folder, log_callback, completion_callback):
         if not files:
             log_callback("No HEIC files found."); return
         
-        for f in tqdm(files, desc="HEIC -> JPG"):
+        total_files = len(files)
+        for i, f in enumerate(files):
+            log_callback(f"Converting ({i+1}/{total_files}): {f}")
             src, dst = os.path.join(folder, f), f"{os.path.splitext(os.path.join(folder, f))[0]}.jpg"
             try:
                 heif = pillow_heif.read_heif(src)
                 img = Image.frombytes(heif.mode, heif.size, heif.data, "raw")
                 img.save(dst, "JPEG")
-                log_callback(f"Converted: {f} -> {os.path.basename(dst)}")
             except Exception as e: log_callback(f"Error converting '{f}': {e}")
         
         log_callback("\n✅ Conversion complete.")
@@ -211,8 +222,10 @@ def resize_images_task(src_folder, mode, value, quality, log_callback, completio
     if not files:
         log_callback("No compatible images found."); return
     
-    log_callback(f"Starting resize process in '{mode}' mode...")
-    for f in tqdm(files, desc="Resizing images"):
+    log_callback(f"Starting resize process for {len(files)} images...")
+    for i, f in enumerate(files):
+        if (i + 1) % 20 == 0: # Her 20 resimde bir ilerleme bildir
+            log_callback(f"  ...resizing image {i+1} of {len(files)}")
         try:
             with Image.open(os.path.join(src_folder, f)) as img:
                 ow, oh = img.size
@@ -221,7 +234,7 @@ def resize_images_task(src_folder, mode, value, quality, log_callback, completio
                     if ow > value:
                         ratio = value / float(ow)
                         nw, nh = value, int(float(oh) * ratio)
-                else:  # percentage
+                else:
                     nw, nh = int(ow * value / 100), int(oh * value / 100)
                 
                 if nw < 1: nw = 1
@@ -239,8 +252,6 @@ def resize_images_task(src_folder, mode, value, quality, log_callback, completio
                     img.save(save_path, "JPEG", quality=quality, optimize=True)
                 else:
                     img.save(save_path)
-                
-                log_callback(f"Resized: {f} -> {nw}x{nh}")
         except Exception as e:
             log_callback(f"Error with {f}: {e}")
             
@@ -262,23 +273,21 @@ def format_numbers_task(file_path):
     except Exception as e:
         return (f"Could not process file: {e}", None)
 
-# --- YENİ YARDIMCI FONKSİYON ---
 def _process_rug_size_row(s):
-    """Tek bir halı ölçüsü satırını güvenli bir şekilde işler."""
+    """Safely processes a single rug dimension string."""
     try:
         w_in, h_in = size_to_inches_wh(s)
         area = calculate_sqft(s)
         return {'w': w_in, 'h': h_in, 'a': area}
     except Exception:
-        # Tek bir satırdaki herhangi bir beklenmedik hatayı yakala
         return {'w': None, 'h': None, 'a': None}
 
 def bulk_rug_sizer_task(path, col, log_callback, completion_callback):
     """Processes a sheet of rug dimensions and adds calculated columns."""
-    tqdm.pandas(desc="Calculating Dimensions")
     log_callback(f"Processing rug sizes from: {path}")
     try:
         df = pd.read_excel(path) if path.lower().endswith((".xlsx",".xls")) else pd.read_csv(path)
+        log_callback(f"Successfully loaded {len(df)} rows from the file.")
     except Exception as e:
         log_callback(f"Error reading file: {e}"); completion_callback("Error", f"Could not read file: {e}"); return
     
@@ -291,8 +300,18 @@ def bulk_rug_sizer_task(path, col, log_callback, completion_callback):
     if not sel_col:
         completion_callback("Error", f"Column '{col}' not found."); return
 
-    # ESKİ HASSAS KODUN YERİNE YENİ GÜVENLİ KOD
-    res = df[sel_col].progress_apply(_process_rug_size_row)
+    # tqdm ve progress_apply yerine manuel, daha güvenli bir döngü kullanıyoruz
+    total_rows = len(df)
+    results = []
+    for i, row_value in enumerate(df[sel_col]):
+        results.append(_process_rug_size_row(row_value))
+        # Her %10'da bir veya her 100 satırda bir (hangisi daha sık ise) ilerleme bildir
+        check_interval = min(100, total_rows // 10 or 1)
+        if (i + 1) % check_interval == 0:
+            percentage = (i + 1) * 100 / total_rows
+            log_callback(f"  ...Progress: {percentage:.0f}% ({i + 1}/{total_rows})")
+
+    res = pd.Series(results, index=df.index)
     
     df["Width_in"] = [r['w'] for r in res]; df["Height_in"] = [r['h'] for r in res]; df["Area_sqft"] = [r['a'] for r in res]
     
