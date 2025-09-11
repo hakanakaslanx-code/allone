@@ -1,5 +1,5 @@
-# HATA AYIKLAMA İÇİN DÜZENLENMİŞ SÜRÜM
-name: Python Release EXE Builder (Debug Mode)
+# NİHAİ ÜRETİM SÜRÜMÜ
+name: Python Release EXE Builder
 
 on:
   push:
@@ -28,16 +28,16 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
 
-    # Adım 4: PyInstaller komutundan --windowed kaldırıldı ve isim değiştirildi
-    - name: Build executable with PyInstaller for Debugging
+    # Adım 4: PyInstaller komutu son kullanıcı için düzenlendi
+    - name: Build executable with PyInstaller
       working-directory: ./allone
       run: |
-        pyinstaller --onefile --name="AllOneTool_Debug" --icon="icon.ico" --hidden-import="numpy" main.py
+        pyinstaller --onefile --windowed --name="AllOneTool" --icon="icon.ico" --hidden-import="numpy" main.py
 
-    # Adım 5: Yeni GitHub Release'i oluştur ve debug .exe'yi yükle
+    # Adım 5: Yeni GitHub Release'i oluştur ve .exe'yi yükle
     - name: Create GitHub Release and Upload EXE
       uses: softprops/action-gh-release@v2
       with:
-        files: allone/dist/AllOneTool_Debug.exe
+        files: allone/dist/AllOneTool.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
