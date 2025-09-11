@@ -10,7 +10,7 @@ def install_and_check():
     required_packages = [
         'tqdm', 'openpyxl', 'Pillow', 'pillow-heif',
         'pandas', 'requests', 'xlrd', 'qrcode', 'python-barcode',
-        'google-generativeai'
+        'google-generativeai', 'numpy'
     ]
     print("Checking for required libraries...")
     for package in required_packages:
@@ -28,8 +28,10 @@ def install_and_check():
 
 
 if __name__ == "__main__":
-    # Önce gerekli kütüphanelerin yüklü olduğundan emin olalım.
-    install_and_check()
+    # Eğer program bir .exe olarak derlenmişse, bu kontrolü atla.
+    # 'sys.frozen' özelliği sadece PyInstaller .exe'lerinde bulunur.
+    if not getattr(sys, 'frozen', False):
+        install_and_check()
     
     # Uygulama arayüzünü başlat.
     app = ToolApp()
