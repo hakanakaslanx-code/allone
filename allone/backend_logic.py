@@ -11,7 +11,6 @@ import barcode
 from barcode.writer import ImageWriter
 from tqdm import tqdm
 
-# Google AI kütüphanesindeki bir uyumluluk sorununu çözmek için bu satır eklendi.
 os.environ['GRPC_DNS_RESOLVER'] = 'native'
 import google.generativeai as genai
 
@@ -39,15 +38,17 @@ def parse_feet_inches(value_str: str):
 
 def size_to_inches_wh(s: str):
     """Converts a dimension string (e.g., "5'2" x 8'") into a tuple of (width_in, height_in)."""
-    m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", str(s))
+    if not isinstance(s, str): return (None, None)
+    m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", s)
     if not m: return (None, None)
     w = parse_feet_inches(m.group(1)); h = parse_feet_inches(m.group(2))
     return (round(w*12, 2), round(h*12, 2)) if w is not None and h is not None else (None, None)
 
 def calculate_sqft(s: str):
     """Calculates the square footage from a dimension string."""
+    if not isinstance(s, str): return None
     try:
-        m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", str(s))
+        m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", s)
         if not m: return None
         w, h = parse_feet_inches(m.group(1)), parse_feet_inches(m.group(2))
         return round(w * h, 2) if w is not None and h is not None else None
@@ -261,6 +262,17 @@ def format_numbers_task(file_path):
     except Exception as e:
         return (f"Could not process file: {e}", None)
 
+# --- YENİ YARDIMCI FONKSİYON ---
+def _process_rug_size_row(s):
+    """Tek bir halı ölçüsü satırını güvenli bir şekilde işler."""
+    try:
+        w_in, h_in = size_to_inches_wh(s)
+        area = calculate_sqft(s)
+        return {'w': w_in, 'h': h_in, 'a': area}
+    except Exception:
+        # Tek bir satırdaki herhangi bir beklenmedik hatayı yakala
+        return {'w': None, 'h': None, 'a': None}
+
 def bulk_rug_sizer_task(path, col, log_callback, completion_callback):
     """Processes a sheet of rug dimensions and adds calculated columns."""
     tqdm.pandas(desc="Calculating Dimensions")
@@ -279,7 +291,9 @@ def bulk_rug_sizer_task(path, col, log_callback, completion_callback):
     if not sel_col:
         completion_callback("Error", f"Column '{col}' not found."); return
 
-    res = df[sel_col].progress_apply(lambda s: {'w': size_to_inches_wh(s)[0], 'h': size_to_inches_wh(s)[1], 'a': calculate_sqft(s)})
+    # ESKİ HASSAS KODUN YERİNE YENİ GÜVENLİ KOD
+    res = df[sel_col].progress_apply(_process_rug_size_row)
+    
     df["Width_in"] = [r['w'] for r in res]; df["Height_in"] = [r['h'] for r in res]; df["Area_sqft"] = [r['a'] for r in res]
     
     out_path = f"{os.path.splitext(path)[0]}_with_sizes.xlsx"
