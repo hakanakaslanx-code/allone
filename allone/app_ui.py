@@ -10,7 +10,7 @@ from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
 
-__version__ = "3.2.3"
+__version__ = "3.2.4"
 
 DYMO_LABELS = {
     'Address (30252)': {'w_in': 3.5, 'h_in': 1.125},
@@ -243,6 +243,27 @@ class ToolApp(tk.Tk):
         ttk.Entry(unit_frame, textvariable=self.unit_input, width=20).pack(side="left", padx=5, pady=5)
         ttk.Button(unit_frame, text="Convert", command=self.convert_units).pack(side="left", padx=5, pady=5)
         ttk.Label(unit_frame, textvariable=self.unit_result_label, font=("Helvetica", 10, "bold")).pack(side="left", padx=15, pady=5)
+        
+        # YENİ ÖZELLİK: Resim Bağlantılarını Eşleştir
+        image_link_frame = ttk.LabelFrame(tab, text="8. Resim Bağlantılarını Eşleştir")
+        image_link_frame.pack(fill="x", padx=10, pady=10)
+        
+        self.input_excel_file = tk.StringVar()
+        self.image_links_file = tk.StringVar(value="image link shopify.csv")
+        self.key_column = tk.StringVar(value="A")
+        
+        ttk.Label(image_link_frame, text="Kaynak Excel/CSV Dosyası:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        ttk.Entry(image_link_frame, textvariable=self.input_excel_file, width=50).grid(row=0, column=1, padx=5, pady=5)
+        ttk.Button(image_link_frame, text="Gözat...", command=lambda: self.input_excel_file.set(filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls"), ("CSV files", "*.csv")]))).grid(row=0, column=2, padx=5, pady=5)
+        
+        ttk.Label(image_link_frame, text="Resim Bağlantıları Dosyası (CSV):").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        ttk.Entry(image_link_frame, textvariable=self.image_links_file, width=50).grid(row=1, column=1, padx=5, pady=5)
+        ttk.Button(image_link_frame, text="Gözat...", command=lambda: self.image_links_file.set(filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")]))).grid(row=1, column=2, padx=5, pady=5)
+        
+        ttk.Label(image_link_frame, text="Anahtar Sütun Adı/Harfi:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        ttk.Entry(image_link_frame, textvariable=self.key_column, width=10).grid(row=2, column=1, padx=5, pady=5, sticky="w")
+        
+        ttk.Button(image_link_frame, text="Bağlantıları Eşleştir ve Ekle", command=self.start_add_image_links).grid(row=3, column=1, pady=10)
 
     def create_code_gen_tab(self):
         tab = ttk.Frame(self.notebook)
@@ -320,10 +341,8 @@ This application combines common file, image, and data processing tasks into a s
    Processes a column of dimensions in an Excel/CSV file, adding calculated width, height, and area.
 7. Unit Converter:
    Quickly converts between units like cm, m, ft, and inches.
-8. QR Code Generator:
-   Creates a QR code from text or a URL, savable as a PNG or Dymo label.
-9. Barcode Generator:
-   Creates common barcodes, savable as a PNG or Dymo label.
+8. Match Image Links:
+   Matches image links from a separate file to a key column in an Excel/CSV file and adds them as new columns.
 ---------------------------------
 Created by Hakan Akaslan
 """
@@ -386,6 +405,23 @@ Created by Hakan Akaslan
         input_str = self.unit_input.get()
         result_str = backend.convert_units_logic(input_str)
         self.unit_result_label.set(result_str)
+        
+    def start_add_image_links(self):
+        input_path = self.input_excel_file.get()
+        links_path = self.image_links_file.get()
+        key_col = self.key_column.get()
+        if not all([input_path, links_path, key_col]):
+            messagebox.showerror("Hata", "Lütfen tüm dosya yollarını ve sütun adını doldurun.")
+            return
+        
+        self.run_in_thread(
+            backend.add_image_links_task,
+            input_path,
+            links_path,
+            key_col,
+            self.log,
+            self.task_completion_popup
+        )
     
     def start_generate_qr(self):
         data = self.qr_data.get(); fname = self.qr_filename.get()
@@ -404,6 +440,3 @@ Created by Hakan Akaslan
         self.log(log_msg)
         if success_msg: self.task_completion_popup("Success", success_msg)
         else: messagebox.showerror("Error", log_msg)
-
-
-
