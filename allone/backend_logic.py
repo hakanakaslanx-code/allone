@@ -379,18 +379,31 @@ def add_image_links_task(input_path, links_path, key_col, log_callback, completi
         
         # Bağlantıları hızlı arama için bir sözlükte grupla
         link_map = {}
+        # Log: Okunan link sayısı
+        log_callback(f"Toplam {len(df_links)} link okundu.")
         for link in df_links[0].dropna().tolist():
             # Daha esnek bir regex kullanarak anahtar kelimeyi çıkar
+            # regex: /files/ kısmından sonraki ilk tire veya nokta işaretine kadar olan her şeyi yakalar
             match = re.search(r"/files/([^/]+?)(-\d+)?\.(jpg|jpeg|png|webp|gif|bmp|tiff)", link, re.IGNORECASE)
             if match:
                 key = match.group(1)
-                # "-1", "-2" gibi ifadelerden ve diğer kimliklerden temizle
+                # "-1", "_a2e50163" gibi ifadeleri temizle
                 clean_key = re.sub(r'(-\d+|\.|_|\s+).*$', '', key)
                 
-                if clean_key not in link_map:
-                    link_map[clean_key] = []
-                link_map[clean_key].append(link)
+                # Sadece sayısal kısmı alıp almadığını kontrol et
+                # Eğer anahtarın sadece sayısal kısmı varsa, bu kısmı kullan
+                if re.match(r'^\d+$', clean_key):
+                    final_key = clean_key
+                else:
+                    final_key = key
+                
+                if final_key not in link_map:
+                    link_map[final_key] = []
+                link_map[final_key].append(link)
         
+        # Log: Kaç tane benzersiz anahtar bulunduğunu yaz
+        log_callback(f"Toplam {len(link_map)} benzersiz anahtar bulundu.")
+
         # Tutarlılık için bağlantıları sırala (-1, -2, vb.)
         for key in link_map:
             link_map[key].sort()
@@ -400,14 +413,19 @@ def add_image_links_task(input_path, links_path, key_col, log_callback, completi
         
         for index, row in df_main.iterrows():
             key_val = str(row[sel_col]).strip()
+            
+            # Log: Eşleşecek anahtarı yaz
+            log_callback(f"Anahtar aranıyor: '{key_val}'")
+            
             if key_val in link_map:
                 links = link_map[key_val]
                 # Bağlantılar için yeni sütunlar ekle
                 for i, link in enumerate(links):
                     col_name = f"Image_Link_{i + 1}"
                     df_main.loc[index, col_name] = link
+                log_callback(f"✅ Anahtar '{key_val}' için {len(links)} bağlantı eklendi.")
             else:
-                log_callback(f"Anahtar '{key_val}' için resim bağlantısı bulunamadı.")
+                log_callback(f"⚠️ Anahtar '{key_val}' için resim bağlantısı bulunamadı.")
                 
         # Güncellenmiş dosyayı kaydet
         out_path = f"{os.path.splitext(input_path)[0]}_with_images.xlsx"
