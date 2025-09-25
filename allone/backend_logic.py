@@ -220,7 +220,7 @@ def resize_images_task(src_folder, mode, value, quality, log_callback, completio
     
     log_callback(f"Starting resize process for {len(files)} images...")
     for i, f in enumerate(files):
-        if (i + 1) % 20 == 0: # Her 20 resimde bir ilerleme bildir
+        if (i + 1) % 20 == 0: 
             log_callback(f"  ...resizing image {i+1} of {len(files)}")
         try:
             with Image.open(os.path.join(src_folder, f)) as img:
@@ -348,19 +348,13 @@ def generate_barcode_task(data, fname, bc_format, output_type, dymo_size_info, b
         return (f"Error generating barcode: {e}", None)
 
 def add_image_links_task(input_path, links_path, key_col, log_callback, completion_callback):
-    """
-    Anahtar bir sütuna göre, resim bağlantılarını ayrı bir CSV dosyasından
-    bir Excel/CSV dosyasına ekler.
-    """
     log_callback("Resim bağlantılarını ekleme işlemi başlatılıyor...")
     try:
-        # Ana veri dosyasını yükle (Excel veya CSV)
         if input_path.lower().endswith((".xlsx", ".xls")):
             df_main = pd.read_excel(input_path, dtype={key_col: str})
         else:
             df_main = pd.read_csv(input_path, dtype={key_col: str})
             
-        # Anahtar sütunu bul
         sel_col = None
         if len(key_col) == 1 and key_col.isalpha():
             idx = ord(key_col.upper()) - ord('A')
@@ -373,25 +367,17 @@ def add_image_links_task(input_path, links_path, key_col, log_callback, completi
             completion_callback("Hata", f"Anahtar sütun '{key_col}' bulunamadı.")
             return
 
-        # Resim bağlantıları dosyasını yükle
         log_callback("Resim bağlantıları dosyası yükleniyor...")
         df_links = pd.read_csv(links_path, header=None, dtype=str)
         
-        # Bağlantıları hızlı arama için bir sözlükte grupla
         link_map = {}
-        # Log: Okunan link sayısı
         log_callback(f"Toplam {len(df_links)} link okundu.")
         for link in df_links[0].dropna().tolist():
-            # Daha esnek bir regex kullanarak anahtar kelimeyi çıkar
-            # regex: /files/ kısmından sonraki ilk tire veya nokta işaretine kadar olan her şeyi yakalar
             match = re.search(r"/files/([^/]+?)(-\d+)?\.(jpg|jpeg|png|webp|gif|bmp|tiff)", link, re.IGNORECASE)
             if match:
                 key = match.group(1)
-                # "-1", "_a2e50163" gibi ifadeleri temizle
                 clean_key = re.sub(r'(-\d+|\.|_|\s+).*$', '', key)
                 
-                # Sadece sayısal kısmı alıp almadığını kontrol et
-                # Eğer anahtarın sadece sayısal kısmı varsa, bu kısmı kullan
                 if re.match(r'^\d+$', clean_key):
                     final_key = clean_key
                 else:
@@ -401,25 +387,20 @@ def add_image_links_task(input_path, links_path, key_col, log_callback, completi
                     link_map[final_key] = []
                 link_map[final_key].append(link)
         
-        # Log: Kaç tane benzersiz anahtar bulunduğunu yaz
         log_callback(f"Toplam {len(link_map)} benzersiz anahtar bulundu.")
 
-        # Tutarlılık için bağlantıları sırala (-1, -2, vb.)
         for key in link_map:
             link_map[key].sort()
 
-        # Ana DataFrame'de dolaşarak bağlantıları ekle
         log_callback("Bağlantılar eşleştiriliyor ve veriye ekleniyor...")
         
         for index, row in df_main.iterrows():
             key_val = str(row[sel_col]).strip()
             
-            # Log: Eşleşecek anahtarı yaz
             log_callback(f"Anahtar aranıyor: '{key_val}'")
             
             if key_val in link_map:
                 links = link_map[key_val]
-                # Bağlantılar için yeni sütunlar ekle
                 for i, link in enumerate(links):
                     col_name = f"Image_Link_{i + 1}"
                     df_main.loc[index, col_name] = link
@@ -427,7 +408,6 @@ def add_image_links_task(input_path, links_path, key_col, log_callback, completi
             else:
                 log_callback(f"⚠️ Anahtar '{key_val}' için resim bağlantısı bulunamadı.")
                 
-        # Güncellenmiş dosyayı kaydet
         out_path = f"{os.path.splitext(input_path)[0]}_with_images.xlsx"
         try:
             df_main.to_excel(out_path, index=False)
@@ -442,4 +422,3 @@ def add_image_links_task(input_path, links_path, key_col, log_callback, completi
     except Exception as e:
         log_callback(f"Bir hata oluştu: {e}")
         completion_callback("Hata", f"Bir hata oluştu: {e}")
-bu kodu ekledim yeni exe yaptim calisiyor artik ozellik icin sagol
