@@ -9,22 +9,20 @@ import pillow_heif
 import qrcode
 import barcode
 from barcode.writer import ImageWriter
-# tqdm kütüphanesi artık kullanılmadığı için import satırını silebiliriz veya bırakabiliriz.
-# from tqdm import tqdm
 
 os.environ['GRPC_DNS_RESOLVER'] = 'native'
 import google.generativeai as genai
 
-# This file contains NO tkinter code.
+# Bu dosya hiçbir Tkinter kodu içermez.
 
-# --- Helper Functions ---
+# --- Yardımcı Fonksiyonlar ---
 
 def clean_file_path(file_path: str) -> str:
-    """Removes quotes and whitespace from a file path string."""
+    """Dosya yolu dizesindeki tırnakları ve boşlukları temizler."""
     return file_path.strip().strip('"').strip("'")
 
 def parse_feet_inches(value_str: str):
-    """Parses various string formats (e.g., 5'2", 5.2', 8") into a decimal foot value."""
+    """Çeşitli dize formatlarını (ör. 5'2", 5.2', 8") ondalık fit değerine dönüştürür."""
     if not isinstance(value_str, str) or not value_str.strip(): return None
     try:
         s = value_str.strip().lower().replace("”",'"').replace("″",'"').replace("′","'").replace("’","'").replace("inches",'"').replace("inch",'"').replace("in",'"')
@@ -38,7 +36,7 @@ def parse_feet_inches(value_str: str):
     except: return None
 
 def size_to_inches_wh(s: str):
-    """Converts a dimension string (e.g., "5'2" x 8'") into a tuple of (width_in, height_in)."""
+    """Bir boyut dizesini (ör. "5'2" x 8'") (genişlik_in, yükseklik_in) çiftine dönüştürür."""
     if not isinstance(s, str): return (None, None)
     m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", s)
     if not m: return (None, None)
@@ -46,7 +44,7 @@ def size_to_inches_wh(s: str):
     return (round(w*12, 2), round(h*12, 2)) if w is not None and h is not None else (None, None)
 
 def calculate_sqft(s: str):
-    """Calculates the square footage from a dimension string."""
+    """Bir boyut dizesinden kare ayak ölçüsünü hesaplar."""
     if not isinstance(s, str): return None
     try:
         m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", s)
@@ -56,7 +54,7 @@ def calculate_sqft(s: str):
     except: return None
     
 def create_label_image(code_image, label_info, bottom_text=""):
-    """Creates a label image for Dymo printers with the code centered and optional text."""
+    """Ortalanmış bir kod ve isteğe bağlı metin içeren Dymo yazıcılar için etiket görüntüsü oluşturur."""
     DPI = 300
     label_width_px = int(label_info['w_in'] * DPI)
     label_height_px = int(label_info['h_in'] * DPI)
@@ -84,7 +82,7 @@ def create_label_image(code_image, label_info, bottom_text=""):
     return label_bg
 
 def convert_units_logic(input_string):
-    """Takes a conversion string and returns the result string."""
+    """Bir dönüşüm dizesi alır ve sonuç dizesini döndürür."""
     i = input_string.lower()
     if not i:
         return ""
@@ -117,10 +115,10 @@ def convert_units_logic(input_string):
     
     return f"--> {res}"
 
-# --- Task Functions ---
+# --- Görev Fonksiyonları ---
 
 def initialize_gemini_model(api_key):
-    """Configures the API and returns the model object, or an error."""
+    """API'yi yapılandırır ve model nesnesini veya bir hata döndürür."""
     try:
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-1.5-flash')
@@ -129,7 +127,7 @@ def initialize_gemini_model(api_key):
         return None, e
 
 def ask_ai(model, prompt):
-    """Sends a prompt to the configured Gemini model."""
+    """Yapılandırılmış Gemini modeline bir komut gönderir."""
     try:
         response = model.generate_content(prompt)
         return response.text
@@ -137,7 +135,7 @@ def ask_ai(model, prompt):
         return f"Sorry, an error occurred: {e}"
 
 def process_files_task(src, tgt, nums_f, action, log_callback, completion_callback):
-    """Finds files based on a list and copies or moves them."""
+    """Bir listeye göre dosyaları bulur ve kopyalar veya taşır."""
     log_callback(f"Starting file {action} process...")
     try:
         p = clean_file_path(nums_f)
@@ -163,8 +161,6 @@ def process_files_task(src, tgt, nums_f, action, log_callback, completion_callba
     files = [f for f in os.listdir(src) if os.path.isfile(os.path.join(src, f))]
     map_ = {n: [f for f in files if n in f and os.path.splitext(f)[1].lower() in exts] for n in nums}
     
-    # tqdm'i GUI log alanına yönlendirmek kilitlenmeye neden olabildiği için
-    # basit bir manuel ilerleme bildirimi kullanıyoruz.
     total_files = len(nums)
     log_callback(f"Processing {total_files} items from list...")
     for i, n in enumerate(nums):
@@ -190,7 +186,7 @@ def process_files_task(src, tgt, nums_f, action, log_callback, completion_callba
 
 
 def convert_heic_task(folder, log_callback, completion_callback):
-    """Converts all HEIC files in a folder to JPG."""
+    """Bir klasördeki tüm HEIC dosyalarını JPG'ye dönüştürür."""
     log_callback("Starting HEIC to JPG conversion...")
     try:
         files = [f for f in os.listdir(folder) if f.lower().endswith(".heic")]
@@ -214,7 +210,7 @@ def convert_heic_task(folder, log_callback, completion_callback):
         completion_callback("Error", f"An error occurred: {e}")
 
 def resize_images_task(src_folder, mode, value, quality, log_callback, completion_callback):
-    """Resizes all images in a folder based on width or percentage."""
+    """Bir klasördeki tüm resimleri genişliğe veya yüzdeye göre yeniden boyutlandırır."""
     tgt_folder = os.path.join(src_folder, "resized")
     os.makedirs(tgt_folder, exist_ok=True)
     log_callback(f"Resized images will be saved in: {tgt_folder}")
@@ -259,7 +255,7 @@ def resize_images_task(src_folder, mode, value, quality, log_callback, completio
     completion_callback("Success", "Image processing is complete.")
 
 def format_numbers_task(file_path):
-    """Reads a column from a file and formats it into a single line."""
+    """Bir dosyadaki bir sütunu okur ve tek bir satırda biçimlendirir."""
     try:
         p = clean_file_path(file_path)
         if p.lower().endswith((".xlsx",".xls")): df = pd.read_excel(p, header=None, usecols=[0], dtype=str)
@@ -274,7 +270,7 @@ def format_numbers_task(file_path):
         return (f"Could not process file: {e}", None)
 
 def _process_rug_size_row(s):
-    """Safely processes a single rug dimension string."""
+    """Bir halı boyutu dizesini güvenli bir şekilde işler."""
     try:
         w_in, h_in = size_to_inches_wh(s)
         area = calculate_sqft(s)
@@ -283,7 +279,7 @@ def _process_rug_size_row(s):
         return {'w': None, 'h': None, 'a': None}
 
 def bulk_rug_sizer_task(path, col, log_callback, completion_callback):
-    """Processes a sheet of rug dimensions and adds calculated columns."""
+    """Bir halı boyutları sayfasını işler ve hesaplanmış sütunlar ekler."""
     log_callback(f"Processing rug sizes from: {path}")
     try:
         df = pd.read_excel(path) if path.lower().endswith((".xlsx",".xls")) else pd.read_csv(path)
@@ -300,12 +296,10 @@ def bulk_rug_sizer_task(path, col, log_callback, completion_callback):
     if not sel_col:
         completion_callback("Error", f"Column '{col}' not found."); return
 
-    # tqdm ve progress_apply yerine manuel, daha güvenli bir döngü kullanıyoruz
     total_rows = len(df)
     results = []
     for i, row_value in enumerate(df[sel_col]):
         results.append(_process_rug_size_row(row_value))
-        # Her %10'da bir veya her 100 satırda bir (hangisi daha sık ise) ilerleme bildir
         check_interval = min(100, total_rows // 10 or 1)
         if (i + 1) % check_interval == 0:
             percentage = (i + 1) * 100 / total_rows
@@ -326,7 +320,7 @@ def bulk_rug_sizer_task(path, col, log_callback, completion_callback):
         completion_callback("Saved as CSV", f"Could not save as Excel. Saved as CSV instead:\n{csv_path}")
 
 def generate_qr_task(data, fname, output_type, dymo_size_info, bottom_text):
-    """Generates a QR code as a PNG or Dymo label image."""
+    """Bir QR kodu PNG veya Dymo etiket görüntüsü olarak oluşturur."""
     try:
         img = qrcode.make(data)
         if output_type == "PNG":
@@ -339,7 +333,7 @@ def generate_qr_task(data, fname, output_type, dymo_size_info, bottom_text):
         return (f"Error generating QR Code: {e}", None)
 
 def generate_barcode_task(data, fname, bc_format, output_type, dymo_size_info, bottom_text):
-    """Generates a barcode as a PNG or Dymo label image."""
+    """Bir barkodu PNG veya Dymo etiket görüntüsü olarak oluşturur."""
     try:
         BarcodeClass = barcode.get_barcode_class(bc_format)
         if output_type == "PNG":
@@ -362,9 +356,9 @@ def add_image_links_task(input_path, links_path, key_col, log_callback, completi
     try:
         # Ana veri dosyasını yükle (Excel veya CSV)
         if input_path.lower().endswith((".xlsx", ".xls")):
-            df_main = pd.read_excel(input_path)
+            df_main = pd.read_excel(input_path, dtype={key_col: str})
         else:
-            df_main = pd.read_csv(input_path)
+            df_main = pd.read_csv(input_path, dtype={key_col: str})
             
         # Anahtar sütunu bul
         sel_col = None
