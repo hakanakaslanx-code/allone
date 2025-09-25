@@ -316,8 +316,8 @@ def bulk_rug_sizer_task(path, col, log_callback, completion_callback):
         completion_callback("Success", f"Processed file saved to:\n{out_path}")
     except Exception as e:
         csv_path = f"{os.path.splitext(path)[0]}_with_sizes.csv"; df.to_csv(csv_path, index=False)
-        log_callback(f"Could not save as Excel ({e}). ✅ Saved to CSV instead: {csv_path}")
-        completion_callback("Saved as CSV", f"Could not save as Excel. Saved as CSV instead:\n{csv_path}")
+        log_callback(f"Could not save as Excel ({e}). ✅ Bunun yerine CSV olarak kaydedildi: {csv_path}")
+        completion_callback("Saved as CSV", f"Could not save as Excel. Bunun yerine CSV olarak kaydedildi:\n{csv_path}")
 
 def generate_qr_task(data, fname, output_type, dymo_size_info, bottom_text):
     """Bir QR kodu PNG veya Dymo etiket görüntüsü olarak oluşturur."""
@@ -380,10 +380,17 @@ def add_image_links_task(input_path, links_path, key_col, log_callback, completi
         # Bağlantıları hızlı arama için bir sözlükte grupla
         link_map = {}
         for link in df_links[0].dropna().tolist():
-            # Anahtar numarayı (örneğin, "073910") çıkar ve bağlantıları grupla
-            match = re.search(r"/(\d{6,})(-\d+)?\.jpg", link)
+            # Daha esnek bir regex kullanarak anahtar kelimeyi çıkar
+            match = re.search(r"/files/([^/]+?)(-\d+)?\.jpg", link)
             if match:
                 key = match.group(1)
+                # "-1", "-2" gibi ifadelerden temizle
+                if '-' in key:
+                    key = key.split('-')[0]
+                # Alt çizgi ile ayrılmış kimlikleri de ele al
+                if '_' in key:
+                    key = key.split('_')[0]
+                
                 if key not in link_map:
                     link_map[key] = []
                 link_map[key].append(link)
