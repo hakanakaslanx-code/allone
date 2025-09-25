@@ -381,19 +381,15 @@ def add_image_links_task(input_path, links_path, key_col, log_callback, completi
         link_map = {}
         for link in df_links[0].dropna().tolist():
             # Daha esnek bir regex kullanarak anahtar kelimeyi çıkar
-            match = re.search(r"/files/([^/]+?)(-\d+)?\.jpg", link)
+            match = re.search(r"/files/([^/]+?)(-\d+)?\.(jpg|jpeg|png|webp|gif|bmp|tiff)", link, re.IGNORECASE)
             if match:
                 key = match.group(1)
-                # "-1", "-2" gibi ifadelerden temizle
-                if '-' in key:
-                    key = key.split('-')[0]
-                # Alt çizgi ile ayrılmış kimlikleri de ele al
-                if '_' in key:
-                    key = key.split('_')[0]
+                # "-1", "-2" gibi ifadelerden ve diğer kimliklerden temizle
+                clean_key = re.sub(r'(-\d+|\.|_|\s+).*$', '', key)
                 
-                if key not in link_map:
-                    link_map[key] = []
-                link_map[key].append(link)
+                if clean_key not in link_map:
+                    link_map[clean_key] = []
+                link_map[clean_key].append(link)
         
         # Tutarlılık için bağlantıları sırala (-1, -2, vb.)
         for key in link_map:
