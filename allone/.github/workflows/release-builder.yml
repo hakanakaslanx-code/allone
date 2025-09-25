@@ -1,4 +1,4 @@
-# NİHAİ ÜRETİM SÜRÜMÜ
+# NİHAİ ÜRETİM SÜRÜMÜ v2
 name: Python Release EXE Builder
 
 on:
@@ -28,11 +28,11 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
 
-    # Adım 4: PyInstaller komutu son kullanıcı için düzenlendi
+    # Adım 4: PyInstaller komutu, backend_logic'i açıkça dahil edecek şekilde güncellendi
     - name: Build executable with PyInstaller
       working-directory: ./allone
       run: |
-        pyinstaller --onefile --windowed --name="AllOneTool" --icon="icon.ico" --hidden-import="numpy" main.py
+        pyinstaller --onefile --windowed --name="AllOneTool" --icon="icon.ico" --hidden-import="backend_logic" main.py
 
     # Adım 5: Yeni GitHub Release'i oluştur ve .exe'yi yükle
     - name: Create GitHub Release and Upload EXE
