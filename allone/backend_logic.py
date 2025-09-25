@@ -442,3 +442,4 @@ def add_image_links_task(input_path, links_path, key_col, log_callback, completi
     except Exception as e:
         log_callback(f"Bir hata oluştu: {e}")
         completion_callback("Hata", f"Bir hata oluştu: {e}")
+bu kodu ekledim yeni exe yaptim calisiyor artik ozellik icin sagol
