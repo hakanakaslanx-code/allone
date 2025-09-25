@@ -10,7 +10,7 @@ from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
 
-__version__ = "3.3.6"
+__version__ = "3.3.7"
 
 DYMO_LABELS = {
     'Address (30252)': {'w_in': 3.5, 'h_in': 1.125},
@@ -49,20 +49,15 @@ class ToolApp(tk.Tk):
             self.configure_gemini()
 
     def log(self, message):
-        # Bu fonksiyon, ilerleme çubuğunun düzgün çalışması için güncellendi.
         if not isinstance(message, str):
             message = str(message)
             
         self.log_area.config(state=tk.NORMAL)
         
         if '\r' in message:
-            # Eğer satır başı karakteri varsa, mevcut satırı sil ve yenisini yaz
-            # Bu, tqdm ilerleme çubuğunun aynı satırda güncellenmesini sağlar
             self.log_area.delete("end-1l", "end")
-            # \r karakterini kaldırarak mesajı ekle
             self.log_area.insert(tk.END, message.replace('\r', ''))
         else:
-            # Normal mesajları sonuna \n ekleyerek yaz
             self.log_area.insert(tk.END, message + "\n")
             
         self.log_area.see(tk.END)
@@ -102,14 +97,12 @@ class ToolApp(tk.Tk):
         send_button.pack(side="right")
         
     def configure_gemini(self):
-        """Gets key from UI and asks backend to initialize the AI model."""
         api_key = self.gemini_api_key.get()
         if not api_key:
             messagebox.showerror("Error", "Please enter a Google API Key.")
             return
         
         self.log("Configuring Gemini API...")
-        
         model, error = backend.initialize_gemini_model(api_key)
         
         if error:
@@ -243,26 +236,19 @@ class ToolApp(tk.Tk):
         ttk.Entry(unit_frame, textvariable=self.unit_input, width=20).pack(side="left", padx=5, pady=5)
         ttk.Button(unit_frame, text="Convert", command=self.convert_units).pack(side="left", padx=5, pady=5)
         ttk.Label(unit_frame, textvariable=self.unit_result_label, font=("Helvetica", 10, "bold")).pack(side="left", padx=15, pady=5)
-        
-        # YENİ ÖZELLİK: Resim Bağlantılarını Eşleştir
         image_link_frame = ttk.LabelFrame(tab, text="8. Resim Bağlantılarını Eşleştir")
         image_link_frame.pack(fill="x", padx=10, pady=10)
-        
         self.input_excel_file = tk.StringVar()
         self.image_links_file = tk.StringVar(value="image link shopify.csv")
         self.key_column = tk.StringVar(value="A")
-        
         ttk.Label(image_link_frame, text="Kaynak Excel/CSV Dosyası:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
         ttk.Entry(image_link_frame, textvariable=self.input_excel_file, width=50).grid(row=0, column=1, padx=5, pady=5)
         ttk.Button(image_link_frame, text="Gözat...", command=lambda: self.input_excel_file.set(filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls"), ("CSV files", "*.csv")]))).grid(row=0, column=2, padx=5, pady=5)
-        
         ttk.Label(image_link_frame, text="Resim Bağlantıları Dosyası (CSV):").grid(row=1, column=0, padx=5, pady=5, sticky="w")
         ttk.Entry(image_link_frame, textvariable=self.image_links_file, width=50).grid(row=1, column=1, padx=5, pady=5)
         ttk.Button(image_link_frame, text="Gözat...", command=lambda: self.image_links_file.set(filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")]))).grid(row=1, column=2, padx=5, pady=5)
-        
         ttk.Label(image_link_frame, text="Anahtar Sütun Adı/Harfi:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
         ttk.Entry(image_link_frame, textvariable=self.key_column, width=10).grid(row=2, column=1, padx=5, pady=5, sticky="w")
-        
         ttk.Button(image_link_frame, text="Bağlantıları Eşleştir ve Ekle", command=self.start_add_image_links).grid(row=3, column=1, pady=10)
 
     def create_code_gen_tab(self):
@@ -349,7 +335,6 @@ Created by Hakan Akaslan
         help_text_area.insert(tk.END, help_content)
         help_text_area.config(state=tk.DISABLED)
 
-    # --- UI Starter Methods ---
     def save_folder_settings(self):
         src = self.source_folder.get(); tgt = self.target_folder.get()
         if not src or not tgt: messagebox.showwarning("Warning", "Source and Target folders cannot be empty."); return
@@ -413,7 +398,6 @@ Created by Hakan Akaslan
         if not all([input_path, links_path, key_col]):
             messagebox.showerror("Hata", "Lütfen tüm dosya yollarını ve sütun adını doldurun.")
             return
-        
         self.run_in_thread(
             backend.add_image_links_task,
             input_path,
@@ -440,12 +424,3 @@ Created by Hakan Akaslan
         self.log(log_msg)
         if success_msg: self.task_completion_popup("Success", success_msg)
         else: messagebox.showerror("Error", log_msg)
-
-
-
-
-
-
-
-
-
