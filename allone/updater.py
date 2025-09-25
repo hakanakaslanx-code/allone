@@ -12,7 +12,6 @@ def check_for_updates(app_instance, log_callback, current_version, silent=False)
     owner = "hakanakaslanx-code"
     repo = "allone"
     
-    # Versiyon kontrolünü hala app_ui.py üzerinden yapıyoruz
     version_check_url = f"https://raw.githubusercontent.com/{owner}/{repo}/main/allone/app_ui.py"
     
     try:
@@ -30,19 +29,16 @@ def check_for_updates(app_instance, log_callback, current_version, silent=False)
         if remote_version > current_version:
             log_callback(f"--> New version ({remote_version}) available.")
             
-            # GitHub'daki son sürümün URL'ini oluşturuyoruz
             latest_release_url = f"https://github.com/{owner}/{repo}/releases/latest"
             
             if messagebox.askyesno("Update Available", f"A new version ({remote_version}) is available.\n\nDo you want to open the download page now?"):
                 log_callback(f"Opening download page: {latest_release_url}")
                 webbrowser.open(latest_release_url)
                 
-                # Kullanıcıya ne yapması gerektiğini açıklıyoruz
                 messagebox.showinfo("Update", 
                                   "The download page has been opened in your browser.\n\n"
                                   "Please download the new 'AllOneTool.exe' and replace your old application with it.")
                 
-                # Uygulamayı kapatıyoruz ki kullanıcı dosyayı rahatça değiştirebilsin.
                 app_instance.destroy()
                 sys.exit(0)
 
