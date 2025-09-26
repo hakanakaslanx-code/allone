@@ -13,16 +13,16 @@ from barcode.writer import ImageWriter
 os.environ['GRPC_DNS_RESOLVER'] = 'native'
 import google.generativeai as genai
 
-# Bu dosya hiçbir Tkinter kodu içermez.
+# This file contains no Tkinter code.
 
-# --- Yardımcı Fonksiyonlar ---
+# --- Helper Functions ---
 
 def clean_file_path(file_path: str) -> str:
-    """Dosya yolu dizesindeki tırnakları ve boşlukları temizler."""
+    """Cleans quotes and spaces from the file path string."""
     return file_path.strip().strip('"').strip("'")
 
 def parse_feet_inches(value_str: str):
-    """Çeşitli dize formatlarını (ör. 5'2", 5.2', 8") ondalık fit değerine dönüştürür."""
+    """Converts various string formats (e.g., 5'2", 5.2', 8") to a decimal feet value."""
     if not isinstance(value_str, str) or not value_str.strip(): return None
     try:
         s = value_str.strip().lower().replace("”",'"').replace("″",'"').replace("′","'").replace("’","'").replace("inches",'"').replace("inch",'"').replace("in",'"')
@@ -36,7 +36,7 @@ def parse_feet_inches(value_str: str):
     except: return None
 
 def size_to_inches_wh(s: str):
-    """Bir boyut dizesini (ör. "5'2" x 8'") (genişlik_in, yükseklik_in) çiftine dönüştürür."""
+    """Converts a dimension string (e.g., "5'2" x 8'") to a (width_in, height_in) tuple."""
     if not isinstance(s, str): return (None, None)
     m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", s)
     if not m: return (None, None)
@@ -44,7 +44,7 @@ def size_to_inches_wh(s: str):
     return (round(w*12, 2), round(h*12, 2)) if w is not None and h is not None else (None, None)
 
 def calculate_sqft(s: str):
-    """Bir boyut dizesinden kare ayak ölçüsünü hesaplar."""
+    """Calculates the square footage from a dimension string."""
     if not isinstance(s, str): return None
     try:
         m = re.match(r"^\s*(.+?)\s*[xX×]\s*(.+?)\s*$", s)
@@ -54,7 +54,7 @@ def calculate_sqft(s: str):
     except: return None
     
 def create_label_image(code_image, label_info, bottom_text=""):
-    """Ortalanmış bir kod ve isteğe bağlı metin içeren Dymo yazıcılar için etiket görüntüsü oluşturur."""
+    """Creates a label image for Dymo printers with a centered code and optional text."""
     DPI = 300
     label_width_px = int(label_info['w_in'] * DPI)
     label_height_px = int(label_info['h_in'] * DPI)
@@ -82,7 +82,7 @@ def create_label_image(code_image, label_info, bottom_text=""):
     return label_bg
 
 def convert_units_logic(input_string):
-    """Bir dönüşüm dizesi alır ve sonuç dizesini döndürür."""
+    """Takes a conversion string and returns the result string."""
     i = input_string.lower()
     if not i:
         return ""
@@ -115,10 +115,10 @@ def convert_units_logic(input_string):
     
     return f"--> {res}"
 
-# --- Görev Fonksiyonları ---
+# --- Task Functions ---
 
 def initialize_gemini_model(api_key):
-    """API'yi yapılandırır ve model nesnesini veya bir hata döndürür."""
+    """Configures the API and returns the model object or an error."""
     try:
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-1.5-flash')
@@ -127,7 +127,7 @@ def initialize_gemini_model(api_key):
         return None, e
 
 def ask_ai(model, prompt):
-    """Yapılandırılmış Gemini modeline bir komut gönderir."""
+    """Sends a prompt to the configured Gemini model."""
     try:
         response = model.generate_content(prompt)
         return response.text
@@ -135,7 +135,7 @@ def ask_ai(model, prompt):
         return f"Sorry, an error occurred: {e}"
 
 def process_files_task(src, tgt, nums_f, action, log_callback, completion_callback):
-    """Bir listeye göre dosyaları bulur ve kopyalar veya taşır."""
+    """Finds and copies or moves files based on a list."""
     log_callback(f"Starting file {action} process...")
     try:
         p = clean_file_path(nums_f)
@@ -186,7 +186,7 @@ def process_files_task(src, tgt, nums_f, action, log_callback, completion_callba
 
 
 def convert_heic_task(folder, log_callback, completion_callback):
-    """Bir klasördeki tüm HEIC dosyalarını JPG'ye dönüştürür."""
+    """Converts all HEIC files in a folder to JPG."""
     log_callback("Starting HEIC to JPG conversion...")
     try:
         files = [f for f in os.listdir(folder) if f.lower().endswith(".heic")]
@@ -210,7 +210,7 @@ def convert_heic_task(folder, log_callback, completion_callback):
         completion_callback("Error", f"An error occurred: {e}")
 
 def resize_images_task(src_folder, mode, value, quality, log_callback, completion_callback):
-    """Bir klasördeki tüm resimleri genişliğe veya yüzdeye göre yeniden boyutlandırır."""
+    """Resizes all images in a folder by width or percentage."""
     tgt_folder = os.path.join(src_folder, "resized")
     os.makedirs(tgt_folder, exist_ok=True)
     log_callback(f"Resized images will be saved in: {tgt_folder}")
@@ -255,7 +255,7 @@ def resize_images_task(src_folder, mode, value, quality, log_callback, completio
     completion_callback("Success", "Image processing is complete.")
 
 def format_numbers_task(file_path):
-    """Bir dosyadaki bir sütunu okur ve tek bir satırda biçimlendirir."""
+    """Reads a column from a file and formats it into a single line."""
     try:
         p = clean_file_path(file_path)
         if p.lower().endswith((".xlsx",".xls")): df = pd.read_excel(p, header=None, usecols=[0], dtype=str)
@@ -270,7 +270,7 @@ def format_numbers_task(file_path):
         return (f"Could not process file: {e}", None)
 
 def _process_rug_size_row(s):
-    """Bir halı boyutu dizesini güvenli bir şekilde işler."""
+    """Safely processes a rug size string."""
     try:
         w_in, h_in = size_to_inches_wh(s)
         area = calculate_sqft(s)
@@ -279,7 +279,7 @@ def _process_rug_size_row(s):
         return {'w': None, 'h': None, 'a': None}
 
 def bulk_rug_sizer_task(path, col, log_callback, completion_callback):
-    """Bir halı boyutları sayfasını işler ve hesaplanmış sütunlar ekler."""
+    """Processes a sheet of rug sizes and adds calculated columns."""
     log_callback(f"Processing rug sizes from: {path}")
     try:
         df = pd.read_excel(path) if path.lower().endswith((".xlsx",".xls")) else pd.read_csv(path)
@@ -316,11 +316,11 @@ def bulk_rug_sizer_task(path, col, log_callback, completion_callback):
         completion_callback("Success", f"Processed file saved to:\n{out_path}")
     except Exception as e:
         csv_path = f"{os.path.splitext(path)[0]}_with_sizes.csv"; df.to_csv(csv_path, index=False)
-        log_callback(f"Could not save as Excel ({e}). ✅ Bunun yerine CSV olarak kaydedildi: {csv_path}")
-        completion_callback("Saved as CSV", f"Could not save as Excel. Bunun yerine CSV olarak kaydedildi:\n{csv_path}")
+        log_callback(f"Could not save as Excel ({e}). ✅ Saved as CSV instead: {csv_path}")
+        completion_callback("Saved as CSV", f"Could not save as Excel. Saved as CSV instead:\n{csv_path}")
 
 def generate_qr_task(data, fname, output_type, dymo_size_info, bottom_text):
-    """Bir QR kodu PNG veya Dymo etiket görüntüsü olarak oluşturur."""
+    """Generates a QR code as a PNG or Dymo label image."""
     try:
         img = qrcode.make(data)
         if output_type == "PNG":
@@ -333,7 +333,7 @@ def generate_qr_task(data, fname, output_type, dymo_size_info, bottom_text):
         return (f"Error generating QR Code: {e}", None)
 
 def generate_barcode_task(data, fname, bc_format, output_type, dymo_size_info, bottom_text):
-    """Bir barkodu PNG veya Dymo etiket görüntüsü olarak oluşturur."""
+    """Generates a barcode as a PNG or Dymo label image."""
     try:
         BarcodeClass = barcode.get_barcode_class(bc_format)
         if output_type == "PNG":
@@ -348,7 +348,7 @@ def generate_barcode_task(data, fname, bc_format, output_type, dymo_size_info, b
         return (f"Error generating barcode: {e}", None)
 
 def add_image_links_task(input_path, links_path, key_col, log_callback, completion_callback):
-    log_callback("Resim bağlantılarını ekleme işlemi başlatılıyor...")
+    log_callback("Starting process to add image links...")
     try:
         if input_path.lower().endswith((".xlsx", ".xls")):
             df_main = pd.read_excel(input_path, dtype={key_col: str})
@@ -364,14 +364,14 @@ def add_image_links_task(input_path, links_path, key_col, log_callback, completi
             sel_col = key_col
             
         if not sel_col:
-            completion_callback("Hata", f"Anahtar sütun '{key_col}' bulunamadı.")
+            completion_callback("Error", f"Key column '{key_col}' not found.")
             return
 
-        log_callback("Resim bağlantıları dosyası yükleniyor...")
+        log_callback("Loading image links file...")
         df_links = pd.read_csv(links_path, header=None, dtype=str)
         
         link_map = {}
-        log_callback(f"Toplam {len(df_links)} link okundu.")
+        log_callback(f"Read a total of {len(df_links)} links.")
         for link in df_links[0].dropna().tolist():
             match = re.search(r"/files/([^/]+?)(-\d+)?\.(jpg|jpeg|png|webp|gif|bmp|tiff)", link, re.IGNORECASE)
             if match:
@@ -387,38 +387,38 @@ def add_image_links_task(input_path, links_path, key_col, log_callback, completi
                     link_map[final_key] = []
                 link_map[final_key].append(link)
         
-        log_callback(f"Toplam {len(link_map)} benzersiz anahtar bulundu.")
+        log_callback(f"Found a total of {len(link_map)} unique keys.")
 
         for key in link_map:
             link_map[key].sort()
 
-        log_callback("Bağlantılar eşleştiriliyor ve veriye ekleniyor...")
+        log_callback("Matching and adding links to the data...")
         
         for index, row in df_main.iterrows():
             key_val = str(row[sel_col]).strip()
             
-            log_callback(f"Anahtar aranıyor: '{key_val}'")
+            log_callback(f"Searching for key: '{key_val}'")
             
             if key_val in link_map:
                 links = link_map[key_val]
                 for i, link in enumerate(links):
                     col_name = f"Image_Link_{i + 1}"
                     df_main.loc[index, col_name] = link
-                log_callback(f"✅ Anahtar '{key_val}' için {len(links)} bağlantı eklendi.")
+                log_callback(f"✅ Added {len(links)} links for key '{key_val}'.")
             else:
-                log_callback(f"⚠️ Anahtar '{key_val}' için resim bağlantısı bulunamadı.")
+                log_callback(f"⚠️ Image link not found for key '{key_val}'.")
                 
         out_path = f"{os.path.splitext(input_path)[0]}_with_images.xlsx"
         try:
             df_main.to_excel(out_path, index=False)
-            log_callback(f"✅ Dosya başarıyla kaydedildi: {out_path}")
-            completion_callback("Başarılı", f"Bağlantılar eklendi ve dosya şu konuma kaydedildi:\n{out_path}")
+            log_callback(f"✅ File successfully saved: {out_path}")
+            completion_callback("Success", f"Links have been added and the file is saved to:\n{out_path}")
         except Exception as e:
             csv_path = f"{os.path.splitext(input_path)[0]}_with_images.csv"
             df_main.to_csv(csv_path, index=False)
-            log_callback(f"Excel olarak kaydedilemedi ({e}). ✅ Bunun yerine CSV olarak kaydedildi: {csv_path}")
-            completion_callback("CSV Olarak Kaydedildi", f"Excel olarak kaydedilemedi. Bunun yerine CSV olarak kaydedildi:\n{csv_path}")
+            log_callback(f"Could not save as Excel ({e}). ✅ Saved as CSV instead: {csv_path}")
+            completion_callback("Saved as CSV", f"Could not save as Excel. Saved as CSV instead:\n{csv_path}")
 
     except Exception as e:
-        log_callback(f"Bir hata oluştu: {e}")
-        completion_callback("Hata", f"Bir hata oluştu: {e}")
+        log_callback(f"An error occurred: {e}")
+        completion_callback("Error", f"An error occurred: {e}")

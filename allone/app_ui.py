@@ -5,12 +5,12 @@ from tkinter.scrolledtext import ScrolledText
 import threading
 import os
 
-# Diğer modüllerimizden gerekli fonksiyonları ve değişkenleri import ediyoruz
+# We import the necessary functions and variables from our other modules
 from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
 
-__version__ = "3.4.2"
+__version__ = "3.4.3"
 
 DYMO_LABELS = {
     'Address (30252)': {'w_in': 3.5, 'h_in': 1.125},
@@ -236,20 +236,20 @@ class ToolApp(tk.Tk):
         ttk.Entry(unit_frame, textvariable=self.unit_input, width=20).pack(side="left", padx=5, pady=5)
         ttk.Button(unit_frame, text="Convert", command=self.convert_units).pack(side="left", padx=5, pady=5)
         ttk.Label(unit_frame, textvariable=self.unit_result_label, font=("Helvetica", 10, "bold")).pack(side="left", padx=15, pady=5)
-        image_link_frame = ttk.LabelFrame(tab, text="8. Resim Bağlantılarını Eşleştir")
+        image_link_frame = ttk.LabelFrame(tab, text="8. Match Image Links")
         image_link_frame.pack(fill="x", padx=10, pady=10)
         self.input_excel_file = tk.StringVar()
         self.image_links_file = tk.StringVar(value="image link shopify.csv")
         self.key_column = tk.StringVar(value="A")
-        ttk.Label(image_link_frame, text="Kaynak Excel/CSV Dosyası:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        ttk.Label(image_link_frame, text="Source Excel/CSV File:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
         ttk.Entry(image_link_frame, textvariable=self.input_excel_file, width=50).grid(row=0, column=1, padx=5, pady=5)
-        ttk.Button(image_link_frame, text="Gözat...", command=lambda: self.input_excel_file.set(filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls"), ("CSV files", "*.csv")]))).grid(row=0, column=2, padx=5, pady=5)
-        ttk.Label(image_link_frame, text="Resim Bağlantıları Dosyası (CSV):").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        ttk.Button(image_link_frame, text="Browse...", command=lambda: self.input_excel_file.set(filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls"), ("CSV files", "*.csv")]))).grid(row=0, column=2, padx=5, pady=5)
+        ttk.Label(image_link_frame, text="Image Links File (CSV):").grid(row=1, column=0, padx=5, pady=5, sticky="w")
         ttk.Entry(image_link_frame, textvariable=self.image_links_file, width=50).grid(row=1, column=1, padx=5, pady=5)
-        ttk.Button(image_link_frame, text="Gözat...", command=lambda: self.image_links_file.set(filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")]))).grid(row=1, column=2, padx=5, pady=5)
-        ttk.Label(image_link_frame, text="Anahtar Sütun Adı/Harfi:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        ttk.Button(image_link_frame, text="Browse...", command=lambda: self.image_links_file.set(filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")]))).grid(row=1, column=2, padx=5, pady=5)
+        ttk.Label(image_link_frame, text="Key Column Name/Letter:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
         ttk.Entry(image_link_frame, textvariable=self.key_column, width=10).grid(row=2, column=1, padx=5, pady=5, sticky="w")
-        ttk.Button(image_link_frame, text="Bağlantıları Eşleştir ve Ekle", command=self.start_add_image_links).grid(row=3, column=1, pady=10)
+        ttk.Button(image_link_frame, text="Match and Add Links", command=self.start_add_image_links).grid(row=3, column=1, pady=10)
 
     def create_code_gen_tab(self):
         tab = ttk.Frame(self.notebook)
@@ -396,7 +396,7 @@ Created by Hakan Akaslan
         links_path = self.image_links_file.get()
         key_col = self.key_column.get()
         if not all([input_path, links_path, key_col]):
-            messagebox.showerror("Hata", "Lütfen tüm dosya yollarını ve sütun adını doldurun.")
+            messagebox.showerror("Error", "Please fill in all file paths and the column name.")
             return
         self.run_in_thread(
             backend.add_image_links_task,
@@ -424,7 +424,3 @@ Created by Hakan Akaslan
         self.log(log_msg)
         if success_msg: self.task_completion_popup("Success", success_msg)
         else: messagebox.showerror("Error", log_msg)
-
-
-
-
