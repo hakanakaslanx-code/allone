@@ -5,7 +5,6 @@ from tkinter.scrolledtext import ScrolledText
 import threading
 import os
 
-# We import the necessary functions and variables from our other modules
 from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
@@ -19,20 +18,258 @@ DYMO_LABELS = {
     'File Folder (30258)': {'w_in': 3.5, 'h_in': 0.5625},
 }
 
+LANGUAGE_DISPLAY = {"en": "English", "tr": "Türkçe"}
+
+TEXTS = {
+    "en": {
+        "app_title": "Combined Utility Tool v{version}",
+        "welcome_log": "Welcome to the Combined Utility Tool!",
+        "language_label": "Language:",
+        "language_changed_log": "Language switched to {language}.",
+        "tab_file_image": "File & Image Tools",
+        "tab_data_calc": "Data & Calculation",
+        "tab_code_gen": "Code Generators",
+        "tab_about": "Help & About",
+        "section_copy_move": "1. Copy/Move Files by List",
+        "section_heic": "2. Convert HEIC to JPG",
+        "section_resize": "3. Batch Image Resizer",
+        "section_format_numbers": "4. Format Numbers from File",
+        "section_rug_single": "5. Rug Size Calculator (Single)",
+        "section_rug_bulk": "6. BULK Process Rug Sizes from File",
+        "section_unit_converter": "7. Unit Converter",
+        "section_match_links": "8. Match Image Links",
+        "section_qr": "8. QR Code Generator",
+        "section_barcode": "9. Barcode Generator",
+        "label_source_folder": "Source Folder:",
+        "label_target_folder": "Target Folder:",
+        "label_numbers_file": "Numbers File (List):",
+        "btn_browse": "Browse...",
+        "btn_copy_files": "Copy Files",
+        "btn_move_files": "Move Files",
+        "btn_save_settings": "Save Settings",
+        "label_heic_folder": "Folder with HEIC files:",
+        "btn_convert": "Convert",
+        "label_image_folder": "Image Folder:",
+        "label_resize_mode": "Resize Mode:",
+        "radio_by_width": "By Width",
+        "radio_by_percentage": "By Percentage",
+        "label_max_width": "Max Width:",
+        "label_percentage": "Percentage (%):",
+        "label_quality": "JPEG Quality (1-95):",
+        "btn_resize": "Resize & Compress",
+        "label_format_file": "Excel/CSV/TXT File:",
+        "btn_format": "Format",
+        "label_rug_dimension": "Dimension (e.g., 5'2\" x 8'):",
+        "btn_calculate": "Calculate",
+        "rug_enter_dimension": "Please enter a dimension.",
+        "rug_invalid": "Invalid Format",
+        "rug_result": "W: {width} in | H: {height} in | Area: {area} sqft",
+        "label_bulk_file": "Excel/CSV File:",
+        "label_bulk_column": "Column Name/Letter:",
+        "btn_process_file": "Process File",
+        "label_conversion": "Conversion:",
+        "btn_convert_units": "Convert",
+        "label_source_excel": "Source Excel/CSV File:",
+        "label_image_links": "Image Links File (CSV):",
+        "label_key_column": "Key Column Name/Letter:",
+        "btn_match_links": "Match and Add Links",
+        "label_data_url": "Data/URL:",
+        "label_output_type": "Output Type:",
+        "radio_png": "Standard PNG",
+        "radio_dymo": "Dymo Label",
+        "label_dymo_size": "Dymo Size:",
+        "label_bottom_text": "Bottom Text:",
+        "label_filename": "Filename:",
+        "btn_generate_qr": "Generate QR Code",
+        "label_barcode_data": "Data:",
+        "label_format": "Format:",
+        "btn_generate_barcode": "Generate Barcode",
+        "btn_check_updates": "Check for Updates",
+        "help_content": (
+            "Combined Utility Tool - v{version}\n"
+            "This application combines common file, image, and data processing tasks into a single interface.\n"
+            "--- FEATURES ---\n"
+            "1. Copy/Move Files by List:\n"
+            "   Finds and copies or moves image files based on a list in an Excel or text file.\n"
+            "2. Convert HEIC to JPG:\n"
+            "   Converts Apple's HEIC format images to the universal JPG format.\n"
+            "3. Batch Image Resizer:\n"
+            "   Resizes images by a fixed width or by a percentage of the original dimensions.\n"
+            "4. Format Numbers from File:\n"
+            "   Formats items from a file's first column into a single, comma-separated line.\n"
+            "5. Rug Size Calculator (Single):\n"
+            "   Calculates dimensions in inches and square feet from a text entry (e.g., \"5'2\\\" x 8'\").\n"
+            "6. BULK Process Rug Sizes from File:\n"
+            "   Processes a column of dimensions in an Excel/CSV file, adding calculated width, height, and area.\n"
+            "7. Unit Converter:\n"
+            "   Quickly converts between units like cm, m, ft, and inches.\n"
+            "8. Match Image Links:\n"
+            "   Matches image links from a separate file to a key column in an Excel/CSV file and adds them as new columns.\n"
+            "--- SUGGESTED ADDITIONS ---\n"
+            "• Shopify product data cleaner to normalize titles, tags, and prices before upload.\n"
+            "• Image background removal helper that links to local CLI tools or web APIs.\n"
+            "• Bulk CSV quality checker to flag missing media, invalid UPCs, or duplicate handles.\n"
+            "---------------------------------\n"
+            "Created by Hakan Akaslan\n"
+        ),
+        "warning_title": "Warning",
+        "settings_empty": "Source and Target folders cannot be empty.",
+        "log_settings_saved": "✅ Settings saved to settings.json",
+        "success_title": "Success",
+        "settings_saved_popup": "Folder settings have been saved.",
+        "error_title": "Error",
+        "missing_required_fields": "Please specify Source, Target, and Numbers File.",
+        "invalid_folder": "Please select a valid folder.",
+        "resize_value_error": "Resize values and quality must be valid numbers.",
+        "select_file": "Please select a file.",
+        "missing_file_and_column": "Please select a file and specify a column.",
+        "missing_inputs": "Please fill in all file paths and the column name.",
+        "data_filename_required": "Data and filename are required.",
+        "complete_title": "Complete",
+    },
+    "tr": {
+        "app_title": "Birleşik Yardımcı Araç v{version}",
+        "welcome_log": "Combined Utility Tool'a hoş geldiniz!",
+        "language_label": "Dil:",
+        "language_changed_log": "Dil {language} olarak değiştirildi.",
+        "tab_file_image": "Dosya ve Görsel Araçları",
+        "tab_data_calc": "Veri ve Hesaplama",
+        "tab_code_gen": "Kod Üreticileri",
+        "tab_about": "Yardım ve Hakkında",
+        "section_copy_move": "1. Listeye Göre Dosya Kopyala/Taşı",
+        "section_heic": "2. HEIC'i JPG'ye Dönüştür",
+        "section_resize": "3. Toplu Görsel Yeniden Boyutlandırıcı",
+        "section_format_numbers": "4. Dosyadan Sayıları Biçimlendir",
+        "section_rug_single": "5. Halı Ölçü Hesaplayıcı (Tek)",
+        "section_rug_bulk": "6. Dosyadan Toplu Halı Ölçüleri",
+        "section_unit_converter": "7. Birim Dönüştürücü",
+        "section_match_links": "8. Görsel Bağlantılarını Eşleştir",
+        "section_qr": "8. QR Kod Üreticisi",
+        "section_barcode": "9. Barkod Üreticisi",
+        "label_source_folder": "Kaynak Klasör:",
+        "label_target_folder": "Hedef Klasör:",
+        "label_numbers_file": "Numara Dosyası (Liste):",
+        "btn_browse": "Gözat...",
+        "btn_copy_files": "Dosyaları Kopyala",
+        "btn_move_files": "Dosyaları Taşı",
+        "btn_save_settings": "Ayarları Kaydet",
+        "label_heic_folder": "HEIC dosyalarının olduğu klasör:",
+        "btn_convert": "Dönüştür",
+        "label_image_folder": "Görsel Klasörü:",
+        "label_resize_mode": "Boyutlandırma Modu:",
+        "radio_by_width": "Genişliğe Göre",
+        "radio_by_percentage": "Yüzdeye Göre",
+        "label_max_width": "Azami Genişlik:",
+        "label_percentage": "Yüzde (%):",
+        "label_quality": "JPEG Kalitesi (1-95):",
+        "btn_resize": "Yeniden Boyutlandır ve Sıkıştır",
+        "label_format_file": "Excel/CSV/TXT Dosyası:",
+        "btn_format": "Biçimlendir",
+        "label_rug_dimension": "Ölçü (örn. 5'2\" x 8'):",
+        "btn_calculate": "Hesapla",
+        "rug_enter_dimension": "Lütfen bir ölçü girin.",
+        "rug_invalid": "Geçersiz Format",
+        "rug_result": "G: {width} inç | Y: {height} inç | Alan: {area} ft²",
+        "label_bulk_file": "Excel/CSV Dosyası:",
+        "label_bulk_column": "Sütun Adı/Harf:",
+        "btn_process_file": "Dosyayı İşle",
+        "label_conversion": "Dönüşüm:",
+        "btn_convert_units": "Dönüştür",
+        "label_source_excel": "Kaynak Excel/CSV Dosyası:",
+        "label_image_links": "Görsel Bağlantı Dosyası (CSV):",
+        "label_key_column": "Anahtar Sütun Adı/Harf:",
+        "btn_match_links": "Bağlantıları Eşleştir ve Ekle",
+        "label_data_url": "Veri/URL:",
+        "label_output_type": "Çıktı Türü:",
+        "radio_png": "Standart PNG",
+        "radio_dymo": "Dymo Etiketi",
+        "label_dymo_size": "Dymo Boyutu:",
+        "label_bottom_text": "Alt Metin:",
+        "label_filename": "Dosya Adı:",
+        "btn_generate_qr": "QR Kod Oluştur",
+        "label_barcode_data": "Veri:",
+        "label_format": "Format:",
+        "btn_generate_barcode": "Barkod Oluştur",
+        "btn_check_updates": "Güncellemeleri Kontrol Et",
+        "help_content": (
+            "Birleşik Yardımcı Araç - v{version}\n"
+            "Bu uygulama sık kullanılan dosya, görsel ve veri işlemlerini tek bir arayüzde toplar.\n"
+            "--- ÖZELLİKLER ---\n"
+            "1. Listeye Göre Dosya Kopyala/Taşı:\n"
+            "   Excel veya metin dosyasındaki listeye göre görselleri bulur ve kopyalar/taşır.\n"
+            "2. HEIC'i JPG'ye Dönüştür:\n"
+            "   Apple'ın HEIC formatındaki görsellerini evrensel JPG biçimine çevirir.\n"
+            "3. Toplu Görsel Yeniden Boyutlandırıcı:\n"
+            "   Görselleri sabit genişliğe veya orijinal boyutun yüzdesine göre yeniden boyutlandırır.\n"
+            "4. Dosyadan Sayıları Biçimlendir:\n"
+            "   Dosyanın ilk sütunundaki değerleri tek satırlık virgüllü listeye dönüştürür.\n"
+            "5. Halı Ölçü Hesaplayıcı (Tek):\n"
+            "   Metin girişinden (örn. \"5'2\\\" x 8'\") inç ve metrekare karşılığını hesaplar.\n"
+            "6. Dosyadan Toplu Halı Ölçüleri:\n"
+            "   Excel/CSV dosyasındaki ölçü sütununu işleyip genişlik, yükseklik ve alan ekler.\n"
+            "7. Birim Dönüştürücü:\n"
+            "   cm, m, ft ve inç gibi birimler arasında hızlı dönüşüm yapar.\n"
+            "8. Görsel Bağlantılarını Eşleştir:\n"
+            "   Ayrı dosyadaki görsel bağlantılarını Excel/CSV içindeki anahtar sütuna ekler.\n"
+            "--- ÖNERİLEN EKLEMELER ---\n"
+            "• Yükleme öncesi başlık, etiket ve fiyatları normalize eden Shopify ürün verisi temizleyici.\n"
+            "• Yerel CLI araçlarına veya web API'lerine bağlanan arka plan kaldırma yardımcısı.\n"
+            "• Eksik medya, geçersiz UPC veya kopya handle'ları işaretleyen toplu CSV kalite kontrolcüsü.\n"
+            "---------------------------------\n"
+            "Hazırlayan: Hakan Akaslan\n"
+        ),
+        "warning_title": "Uyarı",
+        "settings_empty": "Kaynak ve hedef klasörler boş olamaz.",
+        "log_settings_saved": "✅ Ayarlar settings.json dosyasına kaydedildi",
+        "success_title": "Başarılı",
+        "settings_saved_popup": "Klasör ayarları kaydedildi.",
+        "error_title": "Hata",
+        "missing_required_fields": "Lütfen Kaynak, Hedef ve Numara Dosyasını belirtin.",
+        "invalid_folder": "Lütfen geçerli bir klasör seçin.",
+        "resize_value_error": "Boyutlandırma değerleri ve kalite geçerli sayı olmalıdır.",
+        "select_file": "Lütfen bir dosya seçin.",
+        "missing_file_and_column": "Lütfen bir dosya seçin ve bir sütun belirtin.",
+        "missing_inputs": "Lütfen tüm dosya yollarını ve sütun adını doldurun.",
+        "data_filename_required": "Veri ve dosya adı gereklidir.",
+        "complete_title": "Tamamlandı",
+    },
+}
+
+
 class ToolApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(f"Combined Utility Tool v{__version__}")
+        self.settings = load_settings()
+        initial_lang = self.settings.get("language", "en")
+        if initial_lang not in TEXTS:
+            initial_lang = "en"
+        self.language_var = tk.StringVar(value=initial_lang)
+        self.language_var.trace_add("write", self.on_language_change)
+        self.language_display = tk.StringVar(value=self.display_for_language(initial_lang))
+        self.translatables = []
+
+        self.title(self.t("app_title", version=__version__))
         self.geometry("900x750")
 
-        self.settings = load_settings()
+        header_frame = ttk.Frame(self)
+        header_frame.pack(fill="x", padx=10, pady=(10, 0))
+        language_label = ttk.Label(header_frame, text=self.t("language_label"))
+        language_label.pack(side="left")
+        self.add_translation_target(lambda text, widget=language_label: widget.config(text=text), "language_label")
+
+        self.language_combo = ttk.Combobox(
+            header_frame,
+            textvariable=self.language_display,
+            values=list(LANGUAGE_DISPLAY.values()),
+            state="readonly",
+            width=12,
+        )
+        self.language_combo.pack(side="left", padx=(5, 0))
+        self.language_combo.bind("<<ComboboxSelected>>", self.on_language_combo_selected)
+
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(pady=10, padx=10, fill="both", expand=True)
-        
-        self.gemini_api_key = tk.StringVar(value=self.settings.get("gemini_api_key", ""))
-        self.gemini_model = None
 
-        self.create_ai_assistant_tab()
         self.create_file_image_tab()
         self.create_data_calc_tab()
         self.create_code_gen_tab()
@@ -41,362 +278,651 @@ class ToolApp(tk.Tk):
         self.log_area = ScrolledText(self, height=12)
         self.log_area.pack(pady=10, padx=10, fill="both", expand=True)
         self.log_area.config(state=tk.DISABLED)
-        self.log("Welcome to the Combined Utility Tool!")
-        
+
+        self.apply_language()
+        self.log(self.t("welcome_log"))
+
         self.run_in_thread(check_for_updates, self, self.log, __version__, silent=True)
-        
-        if self.gemini_api_key.get():
-            self.configure_gemini()
+
+    def t(self, key, **kwargs):
+        lang = self.language_var.get()
+        lang_dict = TEXTS.get(lang, TEXTS["en"])
+        template = lang_dict.get(key, TEXTS["en"].get(key, key))
+        if kwargs:
+            return template.format(**kwargs)
+        return template
+
+    def add_translation_target(self, setter, key, fmt=None):
+        self.translatables.append((setter, key, fmt))
+        if fmt:
+            setter(self.t(key, **fmt))
+        else:
+            setter(self.t(key))
+
+    def apply_language(self):
+        self.title(self.t("app_title", version=__version__))
+        for setter, key, fmt in self.translatables:
+            if fmt:
+                setter(self.t(key, **fmt))
+            else:
+                setter(self.t(key))
+        if hasattr(self, "help_text_area"):
+            self.help_text_area.config(state=tk.NORMAL)
+            self.help_text_area.delete("1.0", tk.END)
+            self.help_text_area.insert(tk.END, self.t("help_content", version=__version__))
+            self.help_text_area.config(state=tk.DISABLED)
+        self.language_display.set(self.display_for_language(self.language_var.get()))
+
+    def display_for_language(self, code):
+        return LANGUAGE_DISPLAY.get(code, LANGUAGE_DISPLAY["en"])
+
+    def on_language_combo_selected(self, _event):
+        selected = self.language_display.get()
+        for code, name in LANGUAGE_DISPLAY.items():
+            if name == selected and self.language_var.get() != code:
+                self.language_var.set(code)
+                break
+
+    def on_language_change(self, *_):
+        lang = self.language_var.get()
+        if lang not in TEXTS:
+            lang = "en"
+            self.language_var.set(lang)
+            return
+        self.settings["language"] = lang
+        save_settings(self.settings)
+        self.apply_language()
+        self.log(self.t("language_changed_log", language=self.display_for_language(lang)))
 
     def log(self, message):
         if not isinstance(message, str):
             message = str(message)
-            
+
         self.log_area.config(state=tk.NORMAL)
-        
+
         if '\r' in message:
             self.log_area.delete("end-1l", "end")
             self.log_area.insert(tk.END, message.replace('\r', ''))
         else:
             self.log_area.insert(tk.END, message + "\n")
-            
+
         self.log_area.see(tk.END)
         self.log_area.config(state=tk.DISABLED)
-    
+
     def run_in_thread(self, target_func, *args, **kwargs):
         thread = threading.Thread(target=target_func, args=args, kwargs=kwargs)
         thread.daemon = True
         thread.start()
 
     def task_completion_popup(self, title, message):
-        """Shows a messagebox popup from the main thread."""
-        self.after(0, messagebox.showinfo, title, message)
-
-    def create_ai_assistant_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="✨ AI Assistant")
-        api_frame = ttk.LabelFrame(tab, text="Gemini API Configuration")
-        api_frame.pack(fill="x", padx=10, pady=5)
-        ttk.Label(api_frame, text="Google API Key:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        api_entry = ttk.Entry(api_frame, textvariable=self.gemini_api_key, width=50, show="*")
-        api_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        api_frame.grid_columnconfigure(1, weight=1)
-        ttk.Button(api_frame, text="Set & Save Key", command=self.configure_gemini).grid(row=0, column=2, padx=5, pady=5)
-        self.ai_status_label = ttk.Label(api_frame, text="Status: Not Configured", foreground="red")
-        self.ai_status_label.grid(row=0, column=3, padx=10, pady=5)
-        chat_frame = ttk.LabelFrame(tab, text="Chat")
-        chat_frame.pack(fill="both", expand=True, padx=10, pady=5)
-        self.chat_display = ScrolledText(chat_frame, wrap=tk.WORD, state=tk.DISABLED, font=("Helvetica", 10))
-        self.chat_display.pack(fill="both", expand=True, padx=5, pady=5)
-        input_frame = ttk.Frame(chat_frame)
-        input_frame.pack(fill="x", padx=5, pady=5)
-        self.user_input_entry = ttk.Entry(input_frame, font=("Helvetica", 10))
-        self.user_input_entry.pack(fill="x", expand=True, side="left", padx=(0, 5))
-        self.user_input_entry.bind("<Return>", self.on_send_message)
-        send_button = ttk.Button(input_frame, text="Send", command=self.on_send_message)
-        send_button.pack(side="right")
-        
-    def configure_gemini(self):
-        api_key = self.gemini_api_key.get()
-        if not api_key:
-            messagebox.showerror("Error", "Please enter a Google API Key.")
-            return
-        
-        self.log("Configuring Gemini API...")
-        model, error = backend.initialize_gemini_model(api_key)
-        
-        if error:
-            self.gemini_model = None
-            self.ai_status_label.config(text="Status: Configuration Failed", foreground="red")
-            error_message = f"Could not configure the Gemini API.\nCheck project settings (API enabled, billing, etc.).\n\nError: {error}"
-            self.log(f"ERROR: {error_message}")
-            messagebox.showerror("Configuration Failed", error_message)
-        else:
-            self.gemini_model = model
-            self.ai_status_label.config(text="Status: Ready", foreground="green")
-            self.log("✅ Gemini API configured successfully.")
-            self.settings['gemini_api_key'] = api_key
-            save_settings(self.settings)
-            self.log("API Key has been securely saved to settings.json.")
-
-    def on_send_message(self, event=None):
-        if not self.gemini_model: messagebox.showwarning("Warning", "Please set API key first."); return
-        user_prompt = self.user_input_entry.get().strip()
-        if not user_prompt: return
-        self._update_chat_window(f"You: {user_prompt}")
-        self.user_input_entry.delete(0, tk.END)
-        self.ai_status_label.config(text="Status: AI is thinking...")
-        self.run_in_thread(self.get_and_display_ai_response, user_prompt)
-        
-    def get_and_display_ai_response(self, prompt):
-        ai_response = backend.ask_ai(self.gemini_model, prompt)
-        self.after(0, self._update_chat_window, f"AI: {ai_response}")
-        self.after(0, self.ai_status_label.config, {"text": "Status: Ready"})
-
-    def _update_chat_window(self, message):
-        self.chat_display.config(state=tk.NORMAL)
-        self.chat_display.insert(tk.END, message + "\n\n")
-        self.chat_display.see(tk.END)
-        self.chat_display.config(state=tk.DISABLED)
+        title_map = {
+            "Success": self.t("success_title"),
+            "Error": self.t("error_title"),
+            "Complete": self.t("complete_title"),
+        }
+        translated_title = title_map.get(title, title)
+        self.after(0, messagebox.showinfo, translated_title, message)
 
     def create_file_image_tab(self):
         tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="File & Image Tools")
-        file_ops_frame = ttk.LabelFrame(tab, text="1. Copy/Move Files by List")
+        self.notebook.add(tab, text=self.t("tab_file_image"))
+        self.add_translation_target(lambda text, nb=self.notebook, frame=tab: nb.tab(frame, text=text), "tab_file_image")
+
+        file_ops_frame = ttk.LabelFrame(tab, text=self.t("section_copy_move"))
         file_ops_frame.pack(fill="x", padx=10, pady=10)
+        self.add_translation_target(lambda text, widget=file_ops_frame: widget.config(text=text), "section_copy_move")
+
         self.source_folder = tk.StringVar(value=self.settings.get("source_folder", ""))
         self.target_folder = tk.StringVar(value=self.settings.get("target_folder", ""))
         self.numbers_file = tk.StringVar()
-        ttk.Label(file_ops_frame, text="Source Folder:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+
+        source_label = ttk.Label(file_ops_frame, text=self.t("label_source_folder"))
+        source_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.add_translation_target(lambda text, widget=source_label: widget.config(text=text), "label_source_folder")
+
         ttk.Entry(file_ops_frame, textvariable=self.source_folder, width=60).grid(row=0, column=1, padx=5, pady=5)
-        ttk.Button(file_ops_frame, text="Browse...", command=lambda: self.source_folder.set(filedialog.askdirectory())).grid(row=0, column=2, padx=5, pady=5)
-        ttk.Label(file_ops_frame, text="Target Folder:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        browse_src_btn = ttk.Button(
+            file_ops_frame,
+            text=self.t("btn_browse"),
+            command=lambda: self.source_folder.set(filedialog.askdirectory()),
+        )
+        browse_src_btn.grid(row=0, column=2, padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=browse_src_btn: widget.config(text=text), "btn_browse")
+
+        target_label = ttk.Label(file_ops_frame, text=self.t("label_target_folder"))
+        target_label.grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.add_translation_target(lambda text, widget=target_label: widget.config(text=text), "label_target_folder")
+
         ttk.Entry(file_ops_frame, textvariable=self.target_folder, width=60).grid(row=1, column=1, padx=5, pady=5)
-        ttk.Button(file_ops_frame, text="Browse...", command=lambda: self.target_folder.set(filedialog.askdirectory())).grid(row=1, column=2, padx=5, pady=5)
-        ttk.Label(file_ops_frame, text="Numbers File (List):").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        browse_tgt_btn = ttk.Button(
+            file_ops_frame,
+            text=self.t("btn_browse"),
+            command=lambda: self.target_folder.set(filedialog.askdirectory()),
+        )
+        browse_tgt_btn.grid(row=1, column=2, padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=browse_tgt_btn: widget.config(text=text), "btn_browse")
+
+        numbers_label = ttk.Label(file_ops_frame, text=self.t("label_numbers_file"))
+        numbers_label.grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        self.add_translation_target(lambda text, widget=numbers_label: widget.config(text=text), "label_numbers_file")
+
         ttk.Entry(file_ops_frame, textvariable=self.numbers_file, width=60).grid(row=2, column=1, padx=5, pady=5)
-        ttk.Button(file_ops_frame, text="Browse...", command=lambda: self.numbers_file.set(filedialog.askopenfilename())).grid(row=2, column=2, padx=5, pady=5)
+        browse_numbers_btn = ttk.Button(
+            file_ops_frame,
+            text=self.t("btn_browse"),
+            command=lambda: self.numbers_file.set(filedialog.askopenfilename()),
+        )
+        browse_numbers_btn.grid(row=2, column=2, padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=browse_numbers_btn: widget.config(text=text), "btn_browse")
+
         btn_frame = ttk.Frame(file_ops_frame)
         btn_frame.grid(row=3, column=1, pady=10)
-        ttk.Button(btn_frame, text="Copy Files", command=lambda: self.start_process_files("copy")).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Move Files", command=lambda: self.start_process_files("move")).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Save Settings", command=self.save_folder_settings).pack(side="left", padx=5)
-        heic_frame = ttk.LabelFrame(tab, text="2. Convert HEIC to JPG")
+
+        copy_btn = ttk.Button(btn_frame, text=self.t("btn_copy_files"), command=lambda: self.start_process_files("copy"))
+        copy_btn.pack(side="left", padx=5)
+        self.add_translation_target(lambda text, widget=copy_btn: widget.config(text=text), "btn_copy_files")
+
+        move_btn = ttk.Button(btn_frame, text=self.t("btn_move_files"), command=lambda: self.start_process_files("move"))
+        move_btn.pack(side="left", padx=5)
+        self.add_translation_target(lambda text, widget=move_btn: widget.config(text=text), "btn_move_files")
+
+        save_btn = ttk.Button(btn_frame, text=self.t("btn_save_settings"), command=self.save_folder_settings)
+        save_btn.pack(side="left", padx=5)
+        self.add_translation_target(lambda text, widget=save_btn: widget.config(text=text), "btn_save_settings")
+
+        heic_frame = ttk.LabelFrame(tab, text=self.t("section_heic"))
         heic_frame.pack(fill="x", padx=10, pady=10)
+        self.add_translation_target(lambda text, widget=heic_frame: widget.config(text=text), "section_heic")
+
+        heic_label = ttk.Label(heic_frame, text=self.t("label_heic_folder"))
+        heic_label.pack(side="left", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=heic_label: widget.config(text=text), "label_heic_folder")
+
         self.heic_folder = tk.StringVar()
-        ttk.Label(heic_frame, text="Folder with HEIC files:").pack(side="left", padx=5, pady=5)
         ttk.Entry(heic_frame, textvariable=self.heic_folder, width=60).pack(side="left", padx=5, pady=5, expand=True, fill="x")
-        ttk.Button(heic_frame, text="Browse...", command=lambda: self.heic_folder.set(filedialog.askdirectory())).pack(side="left", padx=5, pady=5)
-        ttk.Button(heic_frame, text="Convert", command=self.start_heic_conversion).pack(side="left", padx=5, pady=5)
-        resize_frame = ttk.LabelFrame(tab, text="3. Batch Image Resizer")
+        browse_heic_btn = ttk.Button(
+            heic_frame,
+            text=self.t("btn_browse"),
+            command=lambda: self.heic_folder.set(filedialog.askdirectory()),
+        )
+        browse_heic_btn.pack(side="left", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=browse_heic_btn: widget.config(text=text), "btn_browse")
+
+        convert_btn = ttk.Button(heic_frame, text=self.t("btn_convert"), command=self.start_heic_conversion)
+        convert_btn.pack(side="left", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=convert_btn: widget.config(text=text), "btn_convert")
+
+        resize_frame = ttk.LabelFrame(tab, text=self.t("section_resize"))
         resize_frame.pack(fill="x", padx=10, pady=10)
+        self.add_translation_target(lambda text, widget=resize_frame: widget.config(text=text), "section_resize")
+
         self.resize_folder = tk.StringVar()
         self.quality = tk.StringVar(value="75")
         self.resize_mode = tk.StringVar(value="width")
         self.max_width = tk.StringVar(value="1920")
         self.resize_percentage = tk.StringVar(value="50")
-        ttk.Label(resize_frame, text="Image Folder:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+
+        image_folder_label = ttk.Label(resize_frame, text=self.t("label_image_folder"))
+        image_folder_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.add_translation_target(lambda text, widget=image_folder_label: widget.config(text=text), "label_image_folder")
+
         ttk.Entry(resize_frame, textvariable=self.resize_folder, width=60).grid(row=0, column=1, columnspan=3, padx=5, pady=5, sticky="ew")
-        ttk.Button(resize_frame, text="Browse...", command=lambda: self.resize_folder.set(filedialog.askdirectory())).grid(row=0, column=4, padx=5, pady=5)
-        ttk.Label(resize_frame, text="Resize Mode:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        browse_resize_btn = ttk.Button(
+            resize_frame,
+            text=self.t("btn_browse"),
+            command=lambda: self.resize_folder.set(filedialog.askdirectory()),
+        )
+        browse_resize_btn.grid(row=0, column=4, padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=browse_resize_btn: widget.config(text=text), "btn_browse")
+
+        resize_mode_label = ttk.Label(resize_frame, text=self.t("label_resize_mode"))
+        resize_mode_label.grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.add_translation_target(lambda text, widget=resize_mode_label: widget.config(text=text), "label_resize_mode")
+
         radio_frame = ttk.Frame(resize_frame)
         radio_frame.grid(row=1, column=1, columnspan=3, sticky="w")
-        ttk.Radiobutton(radio_frame, text="By Width", variable=self.resize_mode, value="width", command=self.toggle_resize_mode).pack(side="left")
-        ttk.Radiobutton(radio_frame, text="By Percentage", variable=self.resize_mode, value="percentage", command=self.toggle_resize_mode).pack(side="left", padx=10)
-        ttk.Label(resize_frame, text="Max Width:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+
+        width_radio = ttk.Radiobutton(radio_frame, text=self.t("radio_by_width"), variable=self.resize_mode, value="width", command=self.toggle_resize_mode)
+        width_radio.pack(side="left")
+        self.add_translation_target(lambda text, widget=width_radio: widget.config(text=text), "radio_by_width")
+
+        percentage_radio = ttk.Radiobutton(radio_frame, text=self.t("radio_by_percentage"), variable=self.resize_mode, value="percentage", command=self.toggle_resize_mode)
+        percentage_radio.pack(side="left", padx=10)
+        self.add_translation_target(lambda text, widget=percentage_radio: widget.config(text=text), "radio_by_percentage")
+
+        max_width_label = ttk.Label(resize_frame, text=self.t("label_max_width"))
+        max_width_label.grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        self.add_translation_target(lambda text, widget=max_width_label: widget.config(text=text), "label_max_width")
+
         self.width_entry = ttk.Entry(resize_frame, textvariable=self.max_width, width=10)
         self.width_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")
-        ttk.Label(resize_frame, text="Percentage (%):").grid(row=2, column=2, padx=5, pady=5, sticky="e")
+
+        percentage_label = ttk.Label(resize_frame, text=self.t("label_percentage"))
+        percentage_label.grid(row=2, column=2, padx=5, pady=5, sticky="e")
+        self.add_translation_target(lambda text, widget=percentage_label: widget.config(text=text), "label_percentage")
+
         self.percentage_entry = ttk.Entry(resize_frame, textvariable=self.resize_percentage, width=10)
         self.percentage_entry.grid(row=2, column=3, padx=5, pady=5, sticky="w")
-        ttk.Label(resize_frame, text="JPEG Quality (1-95):").grid(row=3, column=0, padx=5, pady=5, sticky="w")
+
+        quality_label = ttk.Label(resize_frame, text=self.t("label_quality"))
+        quality_label.grid(row=3, column=0, padx=5, pady=5, sticky="w")
+        self.add_translation_target(lambda text, widget=quality_label: widget.config(text=text), "label_quality")
+
         ttk.Entry(resize_frame, textvariable=self.quality, width=10).grid(row=3, column=1, padx=5, pady=5, sticky="w")
-        ttk.Button(resize_frame, text="Resize & Compress", command=self.start_resize_task).grid(row=4, column=1, columnspan=2, pady=10)
+
+        resize_btn = ttk.Button(resize_frame, text=self.t("btn_resize"), command=self.start_resize_task)
+        resize_btn.grid(row=4, column=1, columnspan=2, pady=10)
+        self.add_translation_target(lambda text, widget=resize_btn: widget.config(text=text), "btn_resize")
+
         self.toggle_resize_mode()
 
     def toggle_resize_mode(self):
         if self.resize_mode.get() == "width":
-            self.width_entry.config(state="normal"); self.percentage_entry.config(state="disabled")
+            self.width_entry.config(state="normal")
+            self.percentage_entry.config(state="disabled")
         else:
-            self.width_entry.config(state="disabled"); self.percentage_entry.config(state="normal")
+            self.width_entry.config(state="disabled")
+            self.percentage_entry.config(state="normal")
 
     def create_data_calc_tab(self):
         tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="Data & Calculation")
-        format_frame = ttk.LabelFrame(tab, text="4. Format Numbers from File")
+        self.notebook.add(tab, text=self.t("tab_data_calc"))
+        self.add_translation_target(lambda text, nb=self.notebook, frame=tab: nb.tab(frame, text=text), "tab_data_calc")
+
+        format_frame = ttk.LabelFrame(tab, text=self.t("section_format_numbers"))
         format_frame.pack(fill="x", padx=10, pady=10)
+        self.add_translation_target(lambda text, widget=format_frame: widget.config(text=text), "section_format_numbers")
+
         self.format_file = tk.StringVar()
-        ttk.Label(format_frame, text="Excel/CSV/TXT File:").pack(side="left", padx=5, pady=5)
+
+        format_label = ttk.Label(format_frame, text=self.t("label_format_file"))
+        format_label.pack(side="left", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=format_label: widget.config(text=text), "label_format_file")
+
         ttk.Entry(format_frame, textvariable=self.format_file, width=60).pack(side="left", padx=5, pady=5, expand=True, fill="x")
-        ttk.Button(format_frame, text="Browse...", command=lambda: self.format_file.set(filedialog.askopenfilename())).pack(side="left", padx=5, pady=5)
-        ttk.Button(format_frame, text="Format", command=self.start_format_numbers).pack(side="left", padx=5, pady=5)
-        single_rug_frame = ttk.LabelFrame(tab, text="5. Rug Size Calculator (Single)")
+        format_browse_btn = ttk.Button(
+            format_frame,
+            text=self.t("btn_browse"),
+            command=lambda: self.format_file.set(filedialog.askopenfilename()),
+        )
+        format_browse_btn.pack(side="left", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=format_browse_btn: widget.config(text=text), "btn_browse")
+
+        format_btn = ttk.Button(format_frame, text=self.t("btn_format"), command=self.start_format_numbers)
+        format_btn.pack(side="left", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=format_btn: widget.config(text=text), "btn_format")
+
+        single_rug_frame = ttk.LabelFrame(tab, text=self.t("section_rug_single"))
         single_rug_frame.pack(fill="x", padx=10, pady=10)
+        self.add_translation_target(lambda text, widget=single_rug_frame: widget.config(text=text), "section_rug_single")
+
         self.rug_dim_input = tk.StringVar()
         self.rug_result_label = tk.StringVar()
-        ttk.Label(single_rug_frame, text="Dimension (e.g., 5'2\" x 8'):").pack(side="left", padx=5, pady=5)
+
+        rug_label = ttk.Label(single_rug_frame, text=self.t("label_rug_dimension"))
+        rug_label.pack(side="left", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=rug_label: widget.config(text=text), "label_rug_dimension")
+
         ttk.Entry(single_rug_frame, textvariable=self.rug_dim_input, width=20).pack(side="left", padx=5, pady=5)
-        ttk.Button(single_rug_frame, text="Calculate", command=self.calculate_single_rug).pack(side="left", padx=5, pady=5)
-        ttk.Label(single_rug_frame, textvariable=self.rug_result_label, font=("Helvetica", 10, "bold")).pack(side="left", padx=15, pady=5)
-        bulk_rug_frame = ttk.LabelFrame(tab, text="6. BULK Process Rug Sizes from File")
+        rug_btn = ttk.Button(single_rug_frame, text=self.t("btn_calculate"), command=self.calculate_single_rug)
+        rug_btn.pack(side="left", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=rug_btn: widget.config(text=text), "btn_calculate")
+
+        rug_result_display = ttk.Label(single_rug_frame, textvariable=self.rug_result_label, font=("Helvetica", 10, "bold"))
+        rug_result_display.pack(side="left", padx=15, pady=5)
+
+        bulk_rug_frame = ttk.LabelFrame(tab, text=self.t("section_rug_bulk"))
         bulk_rug_frame.pack(fill="x", padx=10, pady=10)
+        self.add_translation_target(lambda text, widget=bulk_rug_frame: widget.config(text=text), "section_rug_bulk")
+
         self.bulk_rug_file = tk.StringVar()
         self.bulk_rug_col = tk.StringVar(value="Size")
-        ttk.Label(bulk_rug_frame, text="Excel/CSV File:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+
+        bulk_file_label = ttk.Label(bulk_rug_frame, text=self.t("label_bulk_file"))
+        bulk_file_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.add_translation_target(lambda text, widget=bulk_file_label: widget.config(text=text), "label_bulk_file")
+
         ttk.Entry(bulk_rug_frame, textvariable=self.bulk_rug_file, width=50).grid(row=0, column=1, padx=5, pady=5)
-        ttk.Button(bulk_rug_frame, text="Browse...", command=lambda: self.bulk_rug_file.set(filedialog.askopenfilename())).grid(row=0, column=2, padx=5, pady=5)
-        ttk.Label(bulk_rug_frame, text="Column Name/Letter:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        bulk_browse_btn = ttk.Button(
+            bulk_rug_frame,
+            text=self.t("btn_browse"),
+            command=lambda: self.bulk_rug_file.set(filedialog.askopenfilename()),
+        )
+        bulk_browse_btn.grid(row=0, column=2, padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=bulk_browse_btn: widget.config(text=text), "btn_browse")
+
+        bulk_column_label = ttk.Label(bulk_rug_frame, text=self.t("label_bulk_column"))
+        bulk_column_label.grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.add_translation_target(lambda text, widget=bulk_column_label: widget.config(text=text), "label_bulk_column")
+
         ttk.Entry(bulk_rug_frame, textvariable=self.bulk_rug_col, width=20).grid(row=1, column=1, padx=5, pady=5, sticky="w")
-        ttk.Button(bulk_rug_frame, text="Process File", command=self.start_bulk_rug_sizer).grid(row=1, column=2, padx=5, pady=5)
-        unit_frame = ttk.LabelFrame(tab, text="7. Unit Converter")
+        bulk_process_btn = ttk.Button(bulk_rug_frame, text=self.t("btn_process_file"), command=self.start_bulk_rug_sizer)
+        bulk_process_btn.grid(row=1, column=2, padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=bulk_process_btn: widget.config(text=text), "btn_process_file")
+
+        unit_frame = ttk.LabelFrame(tab, text=self.t("section_unit_converter"))
         unit_frame.pack(fill="x", padx=10, pady=10)
+        self.add_translation_target(lambda text, widget=unit_frame: widget.config(text=text), "section_unit_converter")
+
         self.unit_input = tk.StringVar(value="182 cm to ft")
         self.unit_result_label = tk.StringVar()
-        ttk.Label(unit_frame, text="Conversion:").pack(side="left", padx=5, pady=5)
+
+        unit_label = ttk.Label(unit_frame, text=self.t("label_conversion"))
+        unit_label.pack(side="left", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=unit_label: widget.config(text=text), "label_conversion")
+
         ttk.Entry(unit_frame, textvariable=self.unit_input, width=20).pack(side="left", padx=5, pady=5)
-        ttk.Button(unit_frame, text="Convert", command=self.convert_units).pack(side="left", padx=5, pady=5)
-        ttk.Label(unit_frame, textvariable=self.unit_result_label, font=("Helvetica", 10, "bold")).pack(side="left", padx=15, pady=5)
-        image_link_frame = ttk.LabelFrame(tab, text="8. Match Image Links")
+        unit_btn = ttk.Button(unit_frame, text=self.t("btn_convert_units"), command=self.convert_units)
+        unit_btn.pack(side="left", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=unit_btn: widget.config(text=text), "btn_convert_units")
+
+        unit_result_display = ttk.Label(unit_frame, textvariable=self.unit_result_label, font=("Helvetica", 10, "bold"))
+        unit_result_display.pack(side="left", padx=15, pady=5)
+
+        image_link_frame = ttk.LabelFrame(tab, text=self.t("section_match_links"))
         image_link_frame.pack(fill="x", padx=10, pady=10)
+        self.add_translation_target(lambda text, widget=image_link_frame: widget.config(text=text), "section_match_links")
+
         self.input_excel_file = tk.StringVar()
         self.image_links_file = tk.StringVar(value="image link shopify.csv")
         self.key_column = tk.StringVar(value="A")
-        ttk.Label(image_link_frame, text="Source Excel/CSV File:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+
+        source_excel_label = ttk.Label(image_link_frame, text=self.t("label_source_excel"))
+        source_excel_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.add_translation_target(lambda text, widget=source_excel_label: widget.config(text=text), "label_source_excel")
+
         ttk.Entry(image_link_frame, textvariable=self.input_excel_file, width=50).grid(row=0, column=1, padx=5, pady=5)
-        ttk.Button(image_link_frame, text="Browse...", command=lambda: self.input_excel_file.set(filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls"), ("CSV files", "*.csv")]))).grid(row=0, column=2, padx=5, pady=5)
-        ttk.Label(image_link_frame, text="Image Links File (CSV):").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        source_excel_btn = ttk.Button(
+            image_link_frame,
+            text=self.t("btn_browse"),
+            command=lambda: self.input_excel_file.set(filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls"), ("CSV files", "*.csv")])),
+        )
+        source_excel_btn.grid(row=0, column=2, padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=source_excel_btn: widget.config(text=text), "btn_browse")
+
+        image_links_label = ttk.Label(image_link_frame, text=self.t("label_image_links"))
+        image_links_label.grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.add_translation_target(lambda text, widget=image_links_label: widget.config(text=text), "label_image_links")
+
         ttk.Entry(image_link_frame, textvariable=self.image_links_file, width=50).grid(row=1, column=1, padx=5, pady=5)
-        ttk.Button(image_link_frame, text="Browse...", command=lambda: self.image_links_file.set(filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")]))).grid(row=1, column=2, padx=5, pady=5)
-        ttk.Label(image_link_frame, text="Key Column Name/Letter:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        image_links_btn = ttk.Button(
+            image_link_frame,
+            text=self.t("btn_browse"),
+            command=lambda: self.image_links_file.set(filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])),
+        )
+        image_links_btn.grid(row=1, column=2, padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=image_links_btn: widget.config(text=text), "btn_browse")
+
+        key_column_label = ttk.Label(image_link_frame, text=self.t("label_key_column"))
+        key_column_label.grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        self.add_translation_target(lambda text, widget=key_column_label: widget.config(text=text), "label_key_column")
+
         ttk.Entry(image_link_frame, textvariable=self.key_column, width=10).grid(row=2, column=1, padx=5, pady=5, sticky="w")
-        ttk.Button(image_link_frame, text="Match and Add Links", command=self.start_add_image_links).grid(row=3, column=1, pady=10)
+        match_links_btn = ttk.Button(image_link_frame, text=self.t("btn_match_links"), command=self.start_add_image_links)
+        match_links_btn.grid(row=3, column=1, pady=10)
+        self.add_translation_target(lambda text, widget=match_links_btn: widget.config(text=text), "btn_match_links")
 
     def create_code_gen_tab(self):
         tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="Code Generators")
+        self.notebook.add(tab, text=self.t("tab_code_gen"))
+        self.add_translation_target(lambda text, nb=self.notebook, frame=tab: nb.tab(frame, text=text), "tab_code_gen")
+
         def toggle_dymo_options(output_var, combobox, entry):
-            if output_var.get() == "Dymo": combobox.config(state="readonly"); entry.config(state="normal")
-            else: combobox.config(state="disabled"); entry.config(state="disabled")
-        qr_frame = ttk.LabelFrame(tab, text="8. QR Code Generator")
+            if output_var.get() == "Dymo":
+                combobox.config(state="readonly")
+                entry.config(state="normal")
+            else:
+                combobox.config(state="disabled")
+                entry.config(state="disabled")
+
+        qr_frame = ttk.LabelFrame(tab, text=self.t("section_qr"))
         qr_frame.pack(fill="x", padx=10, pady=10)
-        self.qr_data = tk.StringVar(); self.qr_filename = tk.StringVar(value="qrcode.png")
-        self.qr_output_type = tk.StringVar(value="PNG"); self.qr_dymo_size = tk.StringVar(value=list(DYMO_LABELS.keys())[0])
+        self.add_translation_target(lambda text, widget=qr_frame: widget.config(text=text), "section_qr")
+
+        self.qr_data = tk.StringVar()
+        self.qr_filename = tk.StringVar(value="qrcode.png")
+        self.qr_output_type = tk.StringVar(value="PNG")
+        self.qr_dymo_size = tk.StringVar(value=list(DYMO_LABELS.keys())[0])
         self.qr_bottom_text = tk.StringVar()
-        ttk.Label(qr_frame, text="Data/URL:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+
+        qr_data_label = ttk.Label(qr_frame, text=self.t("label_data_url"))
+        qr_data_label.grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=qr_data_label: widget.config(text=text), "label_data_url")
+
         ttk.Entry(qr_frame, textvariable=self.qr_data, width=60).grid(row=0, column=1, columnspan=3, padx=5, pady=5)
-        ttk.Label(qr_frame, text="Output Type:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
-        qr_radio_frame = ttk.Frame(qr_frame); qr_radio_frame.grid(row=1, column=1, columnspan=3, sticky="w")
+
+        output_type_label = ttk.Label(qr_frame, text=self.t("label_output_type"))
+        output_type_label.grid(row=1, column=0, sticky="w", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=output_type_label: widget.config(text=text), "label_output_type")
+
+        qr_radio_frame = ttk.Frame(qr_frame)
+        qr_radio_frame.grid(row=1, column=1, columnspan=3, sticky="w")
+
         qr_dymo_combo = ttk.Combobox(qr_frame, textvariable=self.qr_dymo_size, values=list(DYMO_LABELS.keys()), state="disabled", width=30)
         qr_bottom_entry = ttk.Entry(qr_frame, textvariable=self.qr_bottom_text, state="disabled", width=32)
-        ttk.Radiobutton(qr_radio_frame, text="Standard PNG", variable=self.qr_output_type, value="PNG", command=lambda: toggle_dymo_options(self.qr_output_type, qr_dymo_combo, qr_bottom_entry)).pack(side="left", padx=5)
-        ttk.Radiobutton(qr_radio_frame, text="Dymo Label", variable=self.qr_output_type, value="Dymo", command=lambda: toggle_dymo_options(self.qr_output_type, qr_dymo_combo, qr_bottom_entry)).pack(side="left", padx=5)
-        ttk.Label(qr_frame, text="Dymo Size:").grid(row=2, column=0, sticky="w", padx=5, pady=5)
+
+        qr_png_radio = ttk.Radiobutton(
+            qr_radio_frame,
+            text=self.t("radio_png"),
+            variable=self.qr_output_type,
+            value="PNG",
+            command=lambda: toggle_dymo_options(self.qr_output_type, qr_dymo_combo, qr_bottom_entry),
+        )
+        qr_png_radio.pack(side="left", padx=5)
+        self.add_translation_target(lambda text, widget=qr_png_radio: widget.config(text=text), "radio_png")
+
+        qr_dymo_radio = ttk.Radiobutton(
+            qr_radio_frame,
+            text=self.t("radio_dymo"),
+            variable=self.qr_output_type,
+            value="Dymo",
+            command=lambda: toggle_dymo_options(self.qr_output_type, qr_dymo_combo, qr_bottom_entry),
+        )
+        qr_dymo_radio.pack(side="left", padx=5)
+        self.add_translation_target(lambda text, widget=qr_dymo_radio: widget.config(text=text), "radio_dymo")
+
+        dymo_size_label = ttk.Label(qr_frame, text=self.t("label_dymo_size"))
+        dymo_size_label.grid(row=2, column=0, sticky="w", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=dymo_size_label: widget.config(text=text), "label_dymo_size")
+
         qr_dymo_combo.grid(row=2, column=1, padx=5, pady=5, sticky="w")
-        ttk.Label(qr_frame, text="Bottom Text:").grid(row=2, column=2, sticky="e", padx=5, pady=5)
+
+        bottom_text_label = ttk.Label(qr_frame, text=self.t("label_bottom_text"))
+        bottom_text_label.grid(row=2, column=2, sticky="e", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=bottom_text_label: widget.config(text=text), "label_bottom_text")
+
         qr_bottom_entry.grid(row=2, column=3, padx=5, pady=5, sticky="w")
-        ttk.Label(qr_frame, text="Filename:").grid(row=3, column=0, sticky="w", padx=5, pady=5)
+
+        filename_label = ttk.Label(qr_frame, text=self.t("label_filename"))
+        filename_label.grid(row=3, column=0, sticky="w", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=filename_label: widget.config(text=text), "label_filename")
+
         ttk.Entry(qr_frame, textvariable=self.qr_filename, width=60).grid(row=3, column=1, columnspan=3, padx=5, pady=5)
-        ttk.Button(qr_frame, text="Generate QR Code", command=self.start_generate_qr).grid(row=4, column=1, columnspan=2, pady=10)
-        bc_frame = ttk.LabelFrame(tab, text="9. Barcode Generator")
+
+        qr_generate_btn = ttk.Button(qr_frame, text=self.t("btn_generate_qr"), command=self.start_generate_qr)
+        qr_generate_btn.grid(row=4, column=1, columnspan=2, pady=10)
+        self.add_translation_target(lambda text, widget=qr_generate_btn: widget.config(text=text), "btn_generate_qr")
+
+        bc_frame = ttk.LabelFrame(tab, text=self.t("section_barcode"))
         bc_frame.pack(fill="x", padx=10, pady=10)
-        self.bc_data = tk.StringVar(); self.bc_filename = tk.StringVar(value="barcode.png")
-        self.bc_type = tk.StringVar(value='code128'); self.bc_output_type = tk.StringVar(value="PNG")
-        self.bc_dymo_size = tk.StringVar(value=list(DYMO_LABELS.keys())[0]); self.bc_bottom_text = tk.StringVar()
-        ttk.Label(bc_frame, text="Data:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=bc_frame: widget.config(text=text), "section_barcode")
+
+        self.bc_data = tk.StringVar()
+        self.bc_filename = tk.StringVar(value="barcode.png")
+        self.bc_type = tk.StringVar(value='code128')
+        self.bc_output_type = tk.StringVar(value="PNG")
+        self.bc_dymo_size = tk.StringVar(value=list(DYMO_LABELS.keys())[0])
+        self.bc_bottom_text = tk.StringVar()
+
+        bc_data_label = ttk.Label(bc_frame, text=self.t("label_barcode_data"))
+        bc_data_label.grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=bc_data_label: widget.config(text=text), "label_barcode_data")
+
         ttk.Entry(bc_frame, textvariable=self.bc_data, width=40).grid(row=0, column=1, padx=5, pady=5, sticky="w")
-        ttk.Label(bc_frame, text="Format:").grid(row=0, column=2, sticky="e", padx=5, pady=5)
+
+        bc_format_label = ttk.Label(bc_frame, text=self.t("label_format"))
+        bc_format_label.grid(row=0, column=2, sticky="e", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=bc_format_label: widget.config(text=text), "label_format")
+
         ttk.Combobox(bc_frame, textvariable=self.bc_type, values=['code39', 'code128', 'ean13', 'upca'], state="readonly", width=15).grid(row=0, column=3, padx=5, pady=5, sticky="w")
-        ttk.Label(bc_frame, text="Output Type:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
-        bc_radio_frame = ttk.Frame(bc_frame); bc_radio_frame.grid(row=1, column=1, columnspan=3, sticky="w")
+
+        bc_output_label = ttk.Label(bc_frame, text=self.t("label_output_type"))
+        bc_output_label.grid(row=1, column=0, sticky="w", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=bc_output_label: widget.config(text=text), "label_output_type")
+
+        bc_radio_frame = ttk.Frame(bc_frame)
+        bc_radio_frame.grid(row=1, column=1, columnspan=3, sticky="w")
+
         bc_dymo_combo = ttk.Combobox(bc_frame, textvariable=self.bc_dymo_size, values=list(DYMO_LABELS.keys()), state="disabled", width=30)
         bc_bottom_entry = ttk.Entry(bc_frame, textvariable=self.bc_bottom_text, state="disabled", width=32)
-        ttk.Radiobutton(bc_radio_frame, text="Standard PNG", variable=self.bc_output_type, value="PNG", command=lambda: toggle_dymo_options(self.bc_output_type, bc_dymo_combo, bc_bottom_entry)).pack(side="left", padx=5)
-        ttk.Radiobutton(bc_radio_frame, text="Dymo Label", variable=self.bc_output_type, value="Dymo", command=lambda: toggle_dymo_options(self.bc_output_type, bc_dymo_combo, bc_bottom_entry)).pack(side="left", padx=5)
-        ttk.Label(bc_frame, text="Dymo Size:").grid(row=2, column=0, sticky="w", padx=5, pady=5)
+
+        bc_png_radio = ttk.Radiobutton(
+            bc_radio_frame,
+            text=self.t("radio_png"),
+            variable=self.bc_output_type,
+            value="PNG",
+            command=lambda: toggle_dymo_options(self.bc_output_type, bc_dymo_combo, bc_bottom_entry),
+        )
+        bc_png_radio.pack(side="left", padx=5)
+        self.add_translation_target(lambda text, widget=bc_png_radio: widget.config(text=text), "radio_png")
+
+        bc_dymo_radio = ttk.Radiobutton(
+            bc_radio_frame,
+            text=self.t("radio_dymo"),
+            variable=self.bc_output_type,
+            value="Dymo",
+            command=lambda: toggle_dymo_options(self.bc_output_type, bc_dymo_combo, bc_bottom_entry),
+        )
+        bc_dymo_radio.pack(side="left", padx=5)
+        self.add_translation_target(lambda text, widget=bc_dymo_radio: widget.config(text=text), "radio_dymo")
+
+        bc_dymo_label = ttk.Label(bc_frame, text=self.t("label_dymo_size"))
+        bc_dymo_label.grid(row=2, column=0, sticky="w", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=bc_dymo_label: widget.config(text=text), "label_dymo_size")
+
         bc_dymo_combo.grid(row=2, column=1, padx=5, pady=5, sticky="w")
-        ttk.Label(bc_frame, text="Bottom Text:").grid(row=2, column=2, sticky="e", padx=5, pady=5)
+
+        bc_bottom_label = ttk.Label(bc_frame, text=self.t("label_bottom_text"))
+        bc_bottom_label.grid(row=2, column=2, sticky="e", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=bc_bottom_label: widget.config(text=text), "label_bottom_text")
+
         bc_bottom_entry.grid(row=2, column=3, padx=5, pady=5, sticky="w")
-        ttk.Label(bc_frame, text="Filename:").grid(row=3, column=0, sticky="w", padx=5, pady=5)
+
+        bc_filename_label = ttk.Label(bc_frame, text=self.t("label_filename"))
+        bc_filename_label.grid(row=3, column=0, sticky="w", padx=5, pady=5)
+        self.add_translation_target(lambda text, widget=bc_filename_label: widget.config(text=text), "label_filename")
+
         ttk.Entry(bc_frame, textvariable=self.bc_filename, width=60).grid(row=3, column=1, columnspan=3, padx=5, pady=5)
-        ttk.Button(bc_frame, text="Generate Barcode", command=self.start_generate_barcode).grid(row=4, column=1, columnspan=2, pady=10)
+
+        bc_generate_btn = ttk.Button(bc_frame, text=self.t("btn_generate_barcode"), command=self.start_generate_barcode)
+        bc_generate_btn.grid(row=4, column=1, columnspan=2, pady=10)
+        self.add_translation_target(lambda text, widget=bc_generate_btn: widget.config(text=text), "btn_generate_barcode")
 
     def create_about_tab(self):
         tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="Help & About")
-        top_frame = ttk.Frame(tab); top_frame.pack(fill="x", padx=10, pady=5)
-        ttk.Button(top_frame, text="Check for Updates", command=lambda: self.run_in_thread(check_for_updates, self, self.log, __version__, silent=False)).pack(side="left")
-        help_text_area = ScrolledText(tab, wrap=tk.WORD, padx=10, pady=10, font=("Helvetica", 10))
-        help_text_area.pack(fill="both", expand=True)
-        help_content = f"""
-Combined Utility Tool - v{__version__}
-This application combines common file, image, and data processing tasks into a single interface.
---- FEATURES ---
-✨ AI Assistant:
-   A chat interface powered by Google Gemini. Configure it with your own API key to ask questions or get help.
-1. Copy/Move Files by List:
-   Finds and copies or moves image files based on a list in an Excel or text file.
-2. Convert HEIC to JPG:
-   Converts Apple's HEIC format images to the universal JPG format.
-3. Batch Image Resizer:
-   Resizes images by a fixed width or by a percentage of the original dimensions.
-4. Format Numbers from File:
-   Formats items from a file's first column into a single, comma-separated line.
-5. Rug Size Calculator (Single):
-   Calculates dimensions in inches and square feet from a text entry (e.g., "5'2\\" x 8'").
-6. BULK Process Rug Sizes from File:
-   Processes a column of dimensions in an Excel/CSV file, adding calculated width, height, and area.
-7. Unit Converter:
-   Quickly converts between units like cm, m, ft, and inches.
-8. Match Image Links:
-   Matches image links from a separate file to a key column in an Excel/CSV file and adds them as new columns.
----------------------------------
-Created by Hakan Akaslan
-"""
-        help_text_area.insert(tk.END, help_content)
-        help_text_area.config(state=tk.DISABLED)
+        self.notebook.add(tab, text=self.t("tab_about"))
+        self.add_translation_target(lambda text, nb=self.notebook, frame=tab: nb.tab(frame, text=text), "tab_about")
+
+        top_frame = ttk.Frame(tab)
+        top_frame.pack(fill="x", padx=10, pady=5)
+
+        update_btn = ttk.Button(top_frame, text=self.t("btn_check_updates"), command=lambda: self.run_in_thread(check_for_updates, self, self.log, __version__, silent=False))
+        update_btn.pack(side="left")
+        self.add_translation_target(lambda text, widget=update_btn: widget.config(text=text), "btn_check_updates")
+
+        self.help_text_area = ScrolledText(tab, wrap=tk.WORD, padx=10, pady=10, font=("Helvetica", 10))
+        self.help_text_area.pack(fill="both", expand=True)
+        self.help_text_area.insert(tk.END, self.t("help_content", version=__version__))
+        self.help_text_area.config(state=tk.DISABLED)
 
     def save_folder_settings(self):
-        src = self.source_folder.get(); tgt = self.target_folder.get()
-        if not src or not tgt: messagebox.showwarning("Warning", "Source and Target folders cannot be empty."); return
-        self.settings['source_folder'] = src; self.settings['target_folder'] = tgt
+        src = self.source_folder.get()
+        tgt = self.target_folder.get()
+        if not src or not tgt:
+            messagebox.showwarning(self.t("warning_title"), self.t("settings_empty"))
+            return
+        self.settings['source_folder'] = src
+        self.settings['target_folder'] = tgt
         save_settings(self.settings)
-        self.log("✅ Settings saved to settings.json")
-        messagebox.showinfo("Success", "Folder settings have been saved.")
+        self.log(self.t("log_settings_saved"))
+        messagebox.showinfo(self.t("success_title"), self.t("settings_saved_popup"))
 
     def start_process_files(self, action):
-        src = self.source_folder.get(); tgt = self.target_folder.get(); nums_f = self.numbers_file.get()
-        if not all([src, tgt, nums_f]): messagebox.showerror("Error", "Please specify Source, Target, and Numbers File."); return
+        src = self.source_folder.get()
+        tgt = self.target_folder.get()
+        nums_f = self.numbers_file.get()
+        if not all([src, tgt, nums_f]):
+            messagebox.showerror(self.t("error_title"), self.t("missing_required_fields"))
+            return
         self.run_in_thread(backend.process_files_task, src, tgt, nums_f, action, self.log, self.task_completion_popup)
 
     def start_heic_conversion(self):
         folder = self.heic_folder.get()
-        if not folder or not os.path.isdir(folder): messagebox.showerror("Error", "Please select a valid folder."); return
+        if not folder or not os.path.isdir(folder):
+            messagebox.showerror(self.t("error_title"), self.t("invalid_folder"))
+            return
         self.run_in_thread(backend.convert_heic_task, folder, self.log, self.task_completion_popup)
 
     def start_resize_task(self):
         src_folder = self.resize_folder.get()
-        if not src_folder or not os.path.isdir(src_folder): messagebox.showerror("Error", "Please select a valid image folder."); return
+        if not src_folder or not os.path.isdir(src_folder):
+            messagebox.showerror(self.t("error_title"), self.t("invalid_folder"))
+            return
         mode = self.resize_mode.get()
         try:
             value = int(self.max_width.get()) if mode == 'width' else int(self.resize_percentage.get())
             quality = int(self.quality.get())
-            if not (value > 0 and 1 <= quality <= 95): raise ValueError
+            if not (value > 0 and 1 <= quality <= 95):
+                raise ValueError
         except ValueError:
-            messagebox.showerror("Error", "Resize values and quality must be valid numbers."); return
+            messagebox.showerror(self.t("error_title"), self.t("resize_value_error"))
+            return
         self.run_in_thread(backend.resize_images_task, src_folder, mode, value, quality, self.log, self.task_completion_popup)
 
     def start_format_numbers(self):
         file_path = self.format_file.get()
-        if not file_path: messagebox.showerror("Error", "Please select a file."); return
+        if not file_path:
+            messagebox.showerror(self.t("error_title"), self.t("select_file"))
+            return
         err, success_msg = backend.format_numbers_task(file_path)
         if err:
-            self.log(f"Error: {err}"); messagebox.showerror("Error", err)
+            self.log(f"Error: {err}")
+            messagebox.showerror(self.t("error_title"), err)
         else:
-            self.log(success_msg); messagebox.showinfo("Success", success_msg)
+            self.log(success_msg)
+            messagebox.showinfo(self.t("success_title"), success_msg)
 
     def calculate_single_rug(self):
         dim_str = self.rug_dim_input.get()
-        if not dim_str: self.rug_result_label.set("Please enter a dimension."); return
-        w, h = backend.size_to_inches_wh(dim_str); s = backend.calculate_sqft(dim_str)
-        if w is not None: self.rug_result_label.set(f"W: {w} in | H: {h} in | Area: {s} sqft")
-        else: self.rug_result_label.set("Invalid Format")
+        if not dim_str:
+            self.rug_result_label.set(self.t("rug_enter_dimension"))
+            return
+        w, h = backend.size_to_inches_wh(dim_str)
+        s = backend.calculate_sqft(dim_str)
+        if w is not None and h is not None and s is not None:
+            self.rug_result_label.set(self.t("rug_result", width=w, height=h, area=s))
+        else:
+            self.rug_result_label.set(self.t("rug_invalid"))
 
     def start_bulk_rug_sizer(self):
-        path = self.bulk_rug_file.get(); col = self.bulk_rug_col.get()
-        if not path or not col: messagebox.showerror("Error", "Please select a file and specify a column."); return
+        path = self.bulk_rug_file.get()
+        col = self.bulk_rug_col.get()
+        if not path or not col:
+            messagebox.showerror(self.t("error_title"), self.t("missing_file_and_column"))
+            return
         self.run_in_thread(backend.bulk_rug_sizer_task, path, col, self.log, self.task_completion_popup)
 
     def convert_units(self):
         input_str = self.unit_input.get()
         result_str = backend.convert_units_logic(input_str)
         self.unit_result_label.set(result_str)
-        
+
     def start_add_image_links(self):
         input_path = self.input_excel_file.get()
         links_path = self.image_links_file.get()
         key_col = self.key_column.get()
         if not all([input_path, links_path, key_col]):
-            messagebox.showerror("Error", "Please fill in all file paths and the column name.")
+            messagebox.showerror(self.t("error_title"), self.t("missing_inputs"))
             return
         self.run_in_thread(
             backend.add_image_links_task,
@@ -404,24 +930,40 @@ Created by Hakan Akaslan
             links_path,
             key_col,
             self.log,
-            self.task_completion_popup
+            self.task_completion_popup,
         )
-    
+
     def start_generate_qr(self):
-        data = self.qr_data.get(); fname = self.qr_filename.get()
-        if not data or not fname: messagebox.showerror("Error", "Data and filename are required."); return
+        data = self.qr_data.get()
+        fname = self.qr_filename.get()
+        if not data or not fname:
+            messagebox.showerror(self.t("error_title"), self.t("data_filename_required"))
+            return
         dymo_info = DYMO_LABELS[self.qr_dymo_size.get()] if self.qr_output_type.get() == "Dymo" else None
         log_msg, success_msg = backend.generate_qr_task(data, fname, self.qr_output_type.get(), dymo_info, self.qr_bottom_text.get())
         self.log(log_msg)
-        if success_msg: self.task_completion_popup("Success", success_msg)
-        else: messagebox.showerror("Error", log_msg)
+        if success_msg:
+            self.task_completion_popup("Success", success_msg)
+        else:
+            messagebox.showerror(self.t("error_title"), log_msg)
 
     def start_generate_barcode(self):
-        data = self.bc_data.get(); fname = self.bc_filename.get()
-        if not data or not fname: messagebox.showerror("Error", "Data and filename are required."); return
+        data = self.bc_data.get()
+        fname = self.bc_filename.get()
+        if not data or not fname:
+            messagebox.showerror(self.t("error_title"), self.t("data_filename_required"))
+            return
         dymo_info = DYMO_LABELS[self.bc_dymo_size.get()] if self.bc_output_type.get() == "Dymo" else None
-        log_msg, success_msg = backend.generate_barcode_task(data, fname, self.bc_type.get(), self.bc_output_type.get(), dymo_info, self.bc_bottom_text.get() or data)
+        log_msg, success_msg = backend.generate_barcode_task(
+            data,
+            fname,
+            self.bc_type.get(),
+            self.bc_output_type.get(),
+            dymo_info,
+            self.bc_bottom_text.get() or data,
+        )
         self.log(log_msg)
-        if success_msg: self.task_completion_popup("Success", success_msg)
-
-        else: messagebox.showerror("Error", log_msg)
+        if success_msg:
+            self.task_completion_popup("Success", success_msg)
+        else:
+            messagebox.showerror(self.t("error_title"), log_msg)
