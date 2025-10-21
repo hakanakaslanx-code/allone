@@ -10,9 +10,6 @@ import qrcode
 import barcode
 from barcode.writer import ImageWriter
 
-os.environ['GRPC_DNS_RESOLVER'] = 'native'
-import google.generativeai as genai
-
 # This file contains no Tkinter code.
 
 # --- Helper Functions ---
@@ -116,23 +113,6 @@ def convert_units_logic(input_string):
     return f"--> {res}"
 
 # --- Task Functions ---
-
-def initialize_gemini_model(api_key):
-    """Configures the API and returns the model object or an error."""
-    try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        return model, None
-    except Exception as e:
-        return None, e
-
-def ask_ai(model, prompt):
-    """Sends a prompt to the configured Gemini model."""
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"Sorry, an error occurred: {e}"
 
 def process_files_task(src, tgt, nums_f, action, log_callback, completion_callback):
     """Finds and copies or moves files based on a list."""

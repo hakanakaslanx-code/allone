@@ -29,10 +29,6 @@ class ToolApp(tk.Tk):
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(pady=10, padx=10, fill="both", expand=True)
         
-        self.gemini_api_key = tk.StringVar(value=self.settings.get("gemini_api_key", ""))
-        self.gemini_model = None
-
-        self.create_ai_assistant_tab()
         self.create_file_image_tab()
         self.create_data_calc_tab()
         self.create_code_gen_tab()
@@ -45,9 +41,6 @@ class ToolApp(tk.Tk):
         
         self.run_in_thread(check_for_updates, self, self.log, __version__, silent=True)
         
-        if self.gemini_api_key.get():
-            self.configure_gemini()
-
     def log(self, message):
         if not isinstance(message, str):
             message = str(message)
@@ -71,73 +64,6 @@ class ToolApp(tk.Tk):
     def task_completion_popup(self, title, message):
         """Shows a messagebox popup from the main thread."""
         self.after(0, messagebox.showinfo, title, message)
-
-    def create_ai_assistant_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="✨ AI Assistant")
-        api_frame = ttk.LabelFrame(tab, text="Gemini API Configuration")
-        api_frame.pack(fill="x", padx=10, pady=5)
-        ttk.Label(api_frame, text="Google API Key:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        api_entry = ttk.Entry(api_frame, textvariable=self.gemini_api_key, width=50, show="*")
-        api_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        api_frame.grid_columnconfigure(1, weight=1)
-        ttk.Button(api_frame, text="Set & Save Key", command=self.configure_gemini).grid(row=0, column=2, padx=5, pady=5)
-        self.ai_status_label = ttk.Label(api_frame, text="Status: Not Configured", foreground="red")
-        self.ai_status_label.grid(row=0, column=3, padx=10, pady=5)
-        chat_frame = ttk.LabelFrame(tab, text="Chat")
-        chat_frame.pack(fill="both", expand=True, padx=10, pady=5)
-        self.chat_display = ScrolledText(chat_frame, wrap=tk.WORD, state=tk.DISABLED, font=("Helvetica", 10))
-        self.chat_display.pack(fill="both", expand=True, padx=5, pady=5)
-        input_frame = ttk.Frame(chat_frame)
-        input_frame.pack(fill="x", padx=5, pady=5)
-        self.user_input_entry = ttk.Entry(input_frame, font=("Helvetica", 10))
-        self.user_input_entry.pack(fill="x", expand=True, side="left", padx=(0, 5))
-        self.user_input_entry.bind("<Return>", self.on_send_message)
-        send_button = ttk.Button(input_frame, text="Send", command=self.on_send_message)
-        send_button.pack(side="right")
-        
-    def configure_gemini(self):
-        api_key = self.gemini_api_key.get()
-        if not api_key:
-            messagebox.showerror("Error", "Please enter a Google API Key.")
-            return
-        
-        self.log("Configuring Gemini API...")
-        model, error = backend.initialize_gemini_model(api_key)
-        
-        if error:
-            self.gemini_model = None
-            self.ai_status_label.config(text="Status: Configuration Failed", foreground="red")
-            error_message = f"Could not configure the Gemini API.\nCheck project settings (API enabled, billing, etc.).\n\nError: {error}"
-            self.log(f"ERROR: {error_message}")
-            messagebox.showerror("Configuration Failed", error_message)
-        else:
-            self.gemini_model = model
-            self.ai_status_label.config(text="Status: Ready", foreground="green")
-            self.log("✅ Gemini API configured successfully.")
-            self.settings['gemini_api_key'] = api_key
-            save_settings(self.settings)
-            self.log("API Key has been securely saved to settings.json.")
-
-    def on_send_message(self, event=None):
-        if not self.gemini_model: messagebox.showwarning("Warning", "Please set API key first."); return
-        user_prompt = self.user_input_entry.get().strip()
-        if not user_prompt: return
-        self._update_chat_window(f"You: {user_prompt}")
-        self.user_input_entry.delete(0, tk.END)
-        self.ai_status_label.config(text="Status: AI is thinking...")
-        self.run_in_thread(self.get_and_display_ai_response, user_prompt)
-        
-    def get_and_display_ai_response(self, prompt):
-        ai_response = backend.ask_ai(self.gemini_model, prompt)
-        self.after(0, self._update_chat_window, f"AI: {ai_response}")
-        self.after(0, self.ai_status_label.config, {"text": "Status: Ready"})
-
-    def _update_chat_window(self, message):
-        self.chat_display.config(state=tk.NORMAL)
-        self.chat_display.insert(tk.END, message + "\n\n")
-        self.chat_display.see(tk.END)
-        self.chat_display.config(state=tk.DISABLED)
 
     def create_file_image_tab(self):
         tab = ttk.Frame(self.notebook)
@@ -311,8 +237,6 @@ class ToolApp(tk.Tk):
 Combined Utility Tool - v{__version__}
 This application combines common file, image, and data processing tasks into a single interface.
 --- FEATURES ---
-✨ AI Assistant:
-   A chat interface powered by Google Gemini. Configure it with your own API key to ask questions or get help.
 1. Copy/Move Files by List:
    Finds and copies or moves image files based on a list in an Excel or text file.
 2. Convert HEIC to JPG:

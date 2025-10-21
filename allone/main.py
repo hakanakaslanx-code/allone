@@ -10,7 +10,7 @@ def install_and_check():
     required_packages = [
         'tqdm', 'openpyxl', 'Pillow', 'pillow-heif',
         'pandas', 'requests', 'xlrd', 'qrcode', 'python-barcode',
-        'google-generativeai', 'numpy'
+        'numpy'
     ]
     print("Checking for required libraries...")
     for package in required_packages:
