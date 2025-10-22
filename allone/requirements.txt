@@ -7,5 +7,4 @@ requests
 xlrd
 qrcode
 python-barcode
-google-generativeai
 numpy
