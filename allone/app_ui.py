@@ -68,7 +68,17 @@ class ToolApp(tk.Tk):
         self.log_area.config(state=tk.DISABLED)
 
         self.apply_language()
+        self.log_translation_issues()
+        self.log(self.t("welcome_log"))
+
+        self.run_in_thread(check_for_updates, self, self.log, __version__, silent=True)
+
+    def t(self, key, **kwargs):
+        return translate(self.language_var.get(), key, **kwargs)
+
+    def log_translation_issues(self):
         translation_issues = validate_translations()
+        messages = []
         for lang, data in translation_issues.items():
             parts = []
             if data["missing"]:
@@ -76,13 +86,15 @@ class ToolApp(tk.Tk):
             if data["extra"]:
                 parts.append(f"extra keys: {', '.join(data['extra'])}")
             if parts:
-                self.log(f"⚠️ Translation issue for '{lang}': {'; '.join(parts)}")
-        self.log(self.t("welcome_log"))
+                message = f"⚠️ Translation issue for '{lang}': {'; '.join(parts)}"
+                self.log(message)
+                messages.append(message)
 
-        self.run_in_thread(check_for_updates, self, self.log, __version__, silent=True)
-
-    def t(self, key, **kwargs):
-        return translate(self.language_var.get(), key, **kwargs)
+        if messages:
+            messagebox.showwarning(
+                title=self.t("warning_title"),
+                message="\n".join(messages),
+            )
 
     def add_translation_target(self, setter, key, fmt=None):
         self.translatables.append((setter, key, fmt))
