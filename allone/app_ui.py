@@ -8,7 +8,13 @@ import os
 from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
-from i18n import LANGUAGE_DISPLAY, display_for_language, sanitize_language, translate
+from i18n import (
+    LANGUAGE_DISPLAY,
+    display_for_language,
+    sanitize_language,
+    translate,
+    validate_translations,
+)
 
 __version__ = "3.4.4"
 
@@ -62,6 +68,15 @@ class ToolApp(tk.Tk):
         self.log_area.config(state=tk.DISABLED)
 
         self.apply_language()
+        translation_issues = validate_translations()
+        for lang, data in translation_issues.items():
+            parts = []
+            if data["missing"]:
+                parts.append(f"missing keys: {', '.join(data['missing'])}")
+            if data["extra"]:
+                parts.append(f"extra keys: {', '.join(data['extra'])}")
+            if parts:
+                self.log(f"⚠️ Translation issue for '{lang}': {'; '.join(parts)}")
         self.log(self.t("welcome_log"))
 
         self.run_in_thread(check_for_updates, self, self.log, __version__, silent=True)

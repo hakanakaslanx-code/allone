@@ -248,3 +248,34 @@ def translate(language_code: str, key: str, **kwargs) -> str:
     if kwargs:
         return template.format(**kwargs)
     return template
+
+
+def validate_translations(strict: bool = False) -> dict[str, dict[str, list[str]]]:
+    """Ensure each language mirrors the English translation keys.
+
+    Returns a mapping from language codes to any missing or extra keys. When
+    ``strict`` is True a descriptive ``KeyError`` is raised if mismatches are
+    detected so issues can be caught during development or testing.
+    """
+
+    base_keys = set(TEXTS["en"].keys())
+    issues: dict[str, dict[str, list[str]]] = {}
+
+    for lang, mapping in TEXTS.items():
+        missing = sorted(base_keys - mapping.keys())
+        extra = sorted(mapping.keys() - base_keys)
+        if missing or extra:
+            issues[lang] = {"missing": missing, "extra": extra}
+
+    if strict and issues:
+        lines = ["Translation dictionary mismatch detected:"]
+        for lang, data in issues.items():
+            parts = []
+            if data["missing"]:
+                parts.append(f"missing: {', '.join(data['missing'])}")
+            if data["extra"]:
+                parts.append(f"extra: {', '.join(data['extra'])}")
+            lines.append(f"  - {lang}: {'; '.join(parts)}")
+        raise KeyError("\n".join(lines))
+
+    return issues
