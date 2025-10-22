@@ -251,6 +251,9 @@ class ToolApp(tk.Tk):
 
         self.geometry("900x750")
 
+        self.setup_styles()
+        self.create_header()
+
         self.language_var = tk.StringVar(value=self.language)
 
         self.create_language_selector()
@@ -265,12 +268,135 @@ class ToolApp(tk.Tk):
 
         self.log_area = ScrolledText(self, height=12)
         self.log_area.pack(pady=10, padx=10, fill="both", expand=True)
-        self.log_area.config(state=tk.DISABLED)
+        self.log_area.config(
+            state=tk.DISABLED,
+            background="#0b1120",
+            foreground="#e2e8f0",
+            insertbackground="#e2e8f0",
+            font=("Cascadia Code", 10),
+            relief="flat",
+            borderwidth=0,
+        )
 
         self.refresh_translations()
         self.log(self.tr("Welcome to the Combined Utility Tool!"))
 
         self.run_in_thread(check_for_updates, self, self.log, __version__, silent=True)
+
+    def setup_styles(self):
+        """Configure a modern dark theme for the application widgets."""
+        self.configure(bg="#020617")
+
+        style = ttk.Style(self)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+
+        base_bg = "#020617"
+        card_bg = "#0b1120"
+        accent = "#2563eb"
+        accent_hover = "#1d4ed8"
+        text_primary = "#e2e8f0"
+        text_secondary = "#cbd5f5"
+
+        style.configure("TFrame", background=base_bg)
+        style.configure("Header.TFrame", background=base_bg)
+        style.configure("Card.TLabelframe", background=card_bg, borderwidth=0, padding=15)
+        style.configure(
+            "Card.TLabelframe.Label",
+            background=card_bg,
+            foreground=text_primary,
+            font=("Segoe UI Semibold", 11),
+        )
+        style.configure("TLabel", background=card_bg, foreground=text_secondary, font=("Segoe UI", 10))
+        style.configure(
+            "Primary.TLabel",
+            background=base_bg,
+            foreground=text_primary,
+            font=("Segoe UI Semibold", 18),
+        )
+        style.configure(
+            "Secondary.TLabel",
+            background=base_bg,
+            foreground="#64748b",
+            font=("Segoe UI", 11),
+        )
+        style.configure(
+            "TNotebook",
+            background=base_bg,
+            borderwidth=0,
+            tabmargins=(4, 2, 4, 0),
+        )
+        style.configure(
+            "TNotebook.Tab",
+            background=card_bg,
+            foreground=text_secondary,
+            padding=(16, 8),
+            font=("Segoe UI", 10),
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", accent), ("active", accent_hover)],
+            foreground=[("selected", "#ffffff"), ("active", "#ffffff")],
+        )
+        style.configure(
+            "TButton",
+            background=accent,
+            foreground="#ffffff",
+            font=("Segoe UI Semibold", 10),
+            padding=(14, 6),
+            borderwidth=0,
+        )
+        style.map(
+            "TButton",
+            background=[("active", accent_hover), ("disabled", "#1e293b")],
+            foreground=[("disabled", "#94a3b8")],
+        )
+        style.configure(
+            "TEntry",
+            fieldbackground="#111827",
+            foreground=text_primary,
+            insertcolor=text_primary,
+            padding=8,
+        )
+        style.configure(
+            "TLabelframe",
+            background=card_bg,
+            foreground=text_primary,
+        )
+        style.configure(
+            "TRadiobutton",
+            background=card_bg,
+            foreground=text_primary,
+            font=("Segoe UI", 10),
+        )
+        style.configure("Horizontal.TSeparator", background="#1f2937")
+
+        self.option_add("*TCombobox*Listbox.font", ("Segoe UI", 10))
+        self.option_add("*Font", ("Segoe UI", 10))
+        self.option_add("*Foreground", text_primary)
+
+    def create_header(self):
+        """Create a simple branded header for the application."""
+        header = ttk.Frame(self, style="Header.TFrame")
+        header.pack(fill="x", padx=10, pady=(10, 0))
+
+        title = ttk.Label(
+            header,
+            text=f"{self.tr('Combined Utility Tool')} v{__version__}",
+            style="Primary.TLabel",
+        )
+        title.pack(anchor="w")
+        self.header_title = title
+
+        subtitle = ttk.Label(
+            header,
+            text=self.tr("Welcome to the Combined Utility Tool!"),
+            style="Secondary.TLabel",
+        )
+        subtitle.pack(anchor="w", pady=(2, 0))
+        self.header_subtitle = subtitle
 
     def tr(self, text_key):
         """Translate a text key according to the selected language."""
@@ -295,6 +421,10 @@ class ToolApp(tk.Tk):
     def refresh_translations(self):
         """Refresh UI texts according to the currently selected language."""
         self.title(f"{self.tr('Combined Utility Tool')} v{__version__}")
+        if hasattr(self, "header_title"):
+            self.header_title.config(text=f"{self.tr('Combined Utility Tool')} v{__version__}")
+        if hasattr(self, "header_subtitle"):
+            self.header_subtitle.config(text=self.tr("Welcome to the Combined Utility Tool!"))
         for widget, attr, text_key in self.translatable_widgets:
             self._apply_translation(widget, attr, text_key)
         for tab, text_key in self.translatable_tabs:
@@ -326,7 +456,12 @@ class ToolApp(tk.Tk):
 
     def create_language_selector(self):
         """Create the language selection controls placed at the top."""
-        frame = ttk.LabelFrame(self, padding=(10, 5), text=self.tr("Language"))
+        frame = ttk.LabelFrame(
+            self,
+            padding=(16, 12),
+            text=self.tr("Language"),
+            style="Card.TLabelframe",
+        )
         frame.pack(fill="x", padx=10, pady=10)
         self.register_widget(frame, "Language")
 
@@ -337,7 +472,7 @@ class ToolApp(tk.Tk):
             variable=self.language_var,
             command=self.change_language,
         )
-        radio_en.pack(side="left", padx=5)
+        radio_en.pack(side="left", padx=8)
         self.register_widget(radio_en, "English")
 
         radio_tr = ttk.Radiobutton(
@@ -347,7 +482,7 @@ class ToolApp(tk.Tk):
             variable=self.language_var,
             command=self.change_language,
         )
-        radio_tr.pack(side="left", padx=5)
+        radio_tr.pack(side="left", padx=8)
         self.register_widget(radio_tr, "Turkish")
 
     def log(self, message):
