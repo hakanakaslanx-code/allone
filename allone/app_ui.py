@@ -271,8 +271,8 @@ class ToolApp(tk.Tk):
         self.log_area.config(
             state=tk.DISABLED,
             background="#0b1120",
-            foreground="#e2e8f0",
-            insertbackground="#e2e8f0",
+            foreground="#f1f5f9",
+            insertbackground="#f1f5f9",
             font=("Cascadia Code", 10),
             relief="flat",
             borderwidth=0,
@@ -285,7 +285,7 @@ class ToolApp(tk.Tk):
 
     def setup_styles(self):
         """Configure a modern dark theme for the application widgets."""
-        self.configure(bg="#020617")
+        self.configure(bg=base_bg)
 
         style = ttk.Style(self)
         try:
@@ -293,12 +293,13 @@ class ToolApp(tk.Tk):
         except tk.TclError:
             pass
 
-        base_bg = "#020617"
-        card_bg = "#0b1120"
-        accent = "#2563eb"
-        accent_hover = "#1d4ed8"
-        text_primary = "#e2e8f0"
+        base_bg = "#0b1120"
+        card_bg = "#111c2e"
+        accent = "#38bdf8"
+        accent_hover = "#0ea5e9"
+        text_primary = "#f1f5f9"
         text_secondary = "#cbd5f5"
+        text_muted = "#94a3b8"
 
         style.configure("TFrame", background=base_bg)
         style.configure("Header.TFrame", background=base_bg)
@@ -309,7 +310,12 @@ class ToolApp(tk.Tk):
             foreground=text_primary,
             font=("Segoe UI Semibold", 11),
         )
-        style.configure("TLabel", background=card_bg, foreground=text_secondary, font=("Segoe UI", 10))
+        style.configure(
+            "TLabel",
+            background=card_bg,
+            foreground=text_secondary,
+            font=("Segoe UI", 10),
+        )
         style.configure(
             "Primary.TLabel",
             background=base_bg,
@@ -319,7 +325,7 @@ class ToolApp(tk.Tk):
         style.configure(
             "Secondary.TLabel",
             background=base_bg,
-            foreground="#64748b",
+            foreground=text_muted,
             font=("Segoe UI", 11),
         )
         style.configure(
@@ -338,12 +344,12 @@ class ToolApp(tk.Tk):
         style.map(
             "TNotebook.Tab",
             background=[("selected", accent), ("active", accent_hover)],
-            foreground=[("selected", "#ffffff"), ("active", "#ffffff")],
+            foreground=[("selected", base_bg), ("active", base_bg)],
         )
         style.configure(
             "TButton",
             background=accent,
-            foreground="#ffffff",
+            foreground=base_bg,
             font=("Segoe UI Semibold", 10),
             padding=(14, 6),
             borderwidth=0,
@@ -351,7 +357,7 @@ class ToolApp(tk.Tk):
         style.map(
             "TButton",
             background=[("active", accent_hover), ("disabled", "#1e293b")],
-            foreground=[("disabled", "#94a3b8")],
+            foreground=[("disabled", text_muted)],
         )
         style.configure(
             "TEntry",
