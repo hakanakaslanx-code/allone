@@ -270,9 +270,10 @@ class ToolApp(tk.Tk):
         self.log_area.pack(pady=10, padx=10, fill="both", expand=True)
         self.log_area.config(
             state=tk.DISABLED,
-            background="#0b1120",
-            foreground="#f1f5f9",
-            insertbackground="#f1f5f9",
+            background=self.base_bg,
+            foreground=self.text_primary,
+            insertbackground=self.text_primary,
+            disabledforeground=self.text_secondary,
             font=("Cascadia Code", 10),
             relief="flat",
             borderwidth=0,
@@ -285,14 +286,6 @@ class ToolApp(tk.Tk):
 
     def setup_styles(self):
         """Configure a modern dark theme for the application widgets."""
-        self.configure(bg=base_bg)
-
-        style = ttk.Style(self)
-        try:
-            style.theme_use("clam")
-        except tk.TclError:
-            pass
-
         base_bg = "#0b1120"
         card_bg = "#111c2e"
         accent = "#38bdf8"
@@ -300,6 +293,22 @@ class ToolApp(tk.Tk):
         text_primary = "#f1f5f9"
         text_secondary = "#cbd5f5"
         text_muted = "#94a3b8"
+
+        self.base_bg = base_bg
+        self.card_bg = card_bg
+        self.accent = accent
+        self.accent_hover = accent_hover
+        self.text_primary = text_primary
+        self.text_secondary = text_secondary
+        self.text_muted = text_muted
+
+        self.configure(bg=base_bg)
+
+        style = ttk.Style(self)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
 
         style.configure("TFrame", background=base_bg)
         style.configure("Header.TFrame", background=base_bg)
@@ -938,6 +947,16 @@ class ToolApp(tk.Tk):
 
         self.help_text_area = ScrolledText(tab, wrap=tk.WORD, padx=10, pady=10, font=("Helvetica", 10))
         self.help_text_area.pack(fill="both", expand=True)
+        self.help_text_area.config(
+            background=self.card_bg,
+            foreground=self.text_primary,
+            insertbackground=self.text_primary,
+            disabledforeground=self.text_secondary,
+            disabledbackground=self.card_bg,
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=0,
+        )
         self.update_help_tab_content()
 
     def save_folder_settings(self):
