@@ -268,18 +268,7 @@ class ToolApp(tk.Tk):
 
         self.log_area = ScrolledText(self, height=12)
         self.log_area.pack(pady=10, padx=10, fill="both", expand=True)
-        self.log_area.config(
-            state=tk.DISABLED,
-            background="#101d33",
-            foreground="#e2e8f0",
-            insertbackground="#e2e8f0",
-            highlightthickness=1,
-            highlightbackground="#1f2f4d",
-            highlightcolor="#3c82ff",
-            font=("Cascadia Code", 10),
-            relief="flat",
-            borderwidth=0,
-        )
+        self.style_log_area(self.log_area)
 
         self.refresh_translations()
         self.log(self.tr("Welcome to the Combined Utility Tool!"))
@@ -288,7 +277,7 @@ class ToolApp(tk.Tk):
 
     def setup_styles(self):
         """Configure a modern dark theme for the application widgets."""
-        self.configure(bg="#0c1424")
+        self.configure(bg="#10172a")
 
         style = ttk.Style(self)
         try:
@@ -296,14 +285,14 @@ class ToolApp(tk.Tk):
         except tk.TclError:
             pass
 
-        base_bg = "#0c1424"
-        card_bg = "#12203a"
-        surface_bg = "#1b2b4b"
-        accent = "#3c82ff"
-        accent_hover = "#2c6de4"
-        text_primary = "#e2e8f0"
-        text_secondary = "#c7d2fe"
-        text_muted = "#94a3b8"
+        base_bg = "#10172a"
+        card_bg = "#17223b"
+        surface_bg = "#1f2f4d"
+        accent = "#4b8dff"
+        accent_hover = "#3c74df"
+        text_primary = "#f1f5ff"
+        text_secondary = "#c9d9ff"
+        text_muted = "#9fb3d9"
 
         style.configure("TFrame", background=base_bg)
         style.configure("Header.TFrame", background=base_bg)
@@ -403,7 +392,14 @@ class ToolApp(tk.Tk):
             "TRadiobutton",
             foreground=[("disabled", text_muted)],
         )
-        style.configure("Horizontal.TSeparator", background="#1f2937")
+        style.configure(
+            "TCheckbutton",
+            background=card_bg,
+            foreground=text_primary,
+            font=("Segoe UI", 10),
+        )
+        style.map("TCheckbutton", foreground=[("disabled", text_muted)])
+        style.configure("Horizontal.TSeparator", background="#243659")
 
         self.option_add("*TCombobox*Listbox.font", ("Segoe UI", 10))
         self.option_add("*TCombobox*Listbox.background", surface_bg)
@@ -413,6 +409,34 @@ class ToolApp(tk.Tk):
         self.option_add("*Font", ("Segoe UI", 10))
         self.option_add("*Foreground", text_primary)
         self.option_add("*Background", card_bg)
+
+        self._theme_colors = {
+            "base": base_bg,
+            "card": card_bg,
+            "surface": surface_bg,
+            "accent": accent,
+            "accent_hover": accent_hover,
+            "text": text_primary,
+            "muted": text_muted,
+        }
+
+    def style_log_area(self, widget):
+        """Apply consistent styling to the scrolling log output widget."""
+        colors = getattr(self, "_theme_colors", {})
+        widget.config(
+            state=tk.DISABLED,
+            background=colors.get("surface", "#1f2f4d"),
+            foreground=colors.get("text", "#f1f5ff"),
+            insertbackground=colors.get("text", "#f1f5ff"),
+            highlightthickness=1,
+            highlightbackground=colors.get("accent", "#4b8dff"),
+            highlightcolor=colors.get("accent", "#4b8dff"),
+            font=("Cascadia Code", 10),
+            relief="flat",
+            borderwidth=0,
+            padx=8,
+            pady=6,
+        )
 
     def create_header(self):
         """Create a simple branded header for the application."""
@@ -434,6 +458,7 @@ class ToolApp(tk.Tk):
         )
         subtitle.pack(anchor="w", pady=(2, 0))
         self.header_subtitle = subtitle
+        self.register_widget(self.header_subtitle, "Welcome to the Combined Utility Tool!")
 
     def tr(self, text_key):
         """Translate a text key according to the selected language."""
