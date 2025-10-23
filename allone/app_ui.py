@@ -953,9 +953,15 @@ class ToolApp(tk.Tk):
             insertbackground=self.theme_colors["text_primary"],
             highlightthickness=0,
             borderwidth=0,
-            disabledforeground=self.theme_colors["text_primary"],
-            disabledbackground=self.theme_colors["card_bg"],
         )
+        try:
+            self.help_text_area.configure(
+                disabledforeground=self.theme_colors["text_primary"],
+                disabledbackground=self.theme_colors["card_bg"],
+            )
+        except tk.TclError:
+            # Some Tk builds do not support disabled foreground/background options.
+            pass
         self.help_text_area.pack(fill="both", expand=True)
         self.update_help_tab_content()
 
