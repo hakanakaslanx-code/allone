@@ -293,6 +293,16 @@ class ToolApp(tk.Tk):
         text_secondary = "#cbd5f5"
         text_muted = "#94a3b8"
 
+        self.theme_colors = {
+            "base_bg": base_bg,
+            "card_bg": card_bg,
+            "accent": accent,
+            "accent_hover": accent_hover,
+            "text_primary": text_primary,
+            "text_secondary": text_secondary,
+            "text_muted": text_muted,
+        }
+
         self.configure(bg=base_bg)
 
         style = ttk.Style(self)
@@ -937,6 +947,15 @@ class ToolApp(tk.Tk):
         self.register_widget(update_button, "Check for Updates")
 
         self.help_text_area = ScrolledText(tab, wrap=tk.WORD, padx=10, pady=10, font=("Helvetica", 10))
+        self.help_text_area.configure(
+            background=self.theme_colors["card_bg"],
+            foreground=self.theme_colors["text_primary"],
+            insertbackground=self.theme_colors["text_primary"],
+            highlightthickness=0,
+            borderwidth=0,
+            disabledforeground=self.theme_colors["text_primary"],
+            disabledbackground=self.theme_colors["card_bg"],
+        )
         self.help_text_area.pack(fill="both", expand=True)
         self.update_help_tab_content()
 
