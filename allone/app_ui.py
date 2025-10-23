@@ -285,14 +285,6 @@ class ToolApp(tk.Tk):
 
     def setup_styles(self):
         """Configure a modern dark theme for the application widgets."""
-        self.configure(bg=base_bg)
-
-        style = ttk.Style(self)
-        try:
-            style.theme_use("clam")
-        except tk.TclError:
-            pass
-
         base_bg = "#0b1120"
         card_bg = "#111c2e"
         accent = "#38bdf8"
@@ -300,6 +292,14 @@ class ToolApp(tk.Tk):
         text_primary = "#f1f5f9"
         text_secondary = "#cbd5f5"
         text_muted = "#94a3b8"
+
+        self.configure(bg=base_bg)
+
+        style = ttk.Style(self)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
 
         style.configure("TFrame", background=base_bg)
         style.configure("Header.TFrame", background=base_bg)
