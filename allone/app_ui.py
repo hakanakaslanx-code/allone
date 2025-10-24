@@ -399,7 +399,7 @@ class ToolApp(tk.Tk):
         style.configure(
             "TLabel",
             background=card_bg,
-            foreground=text_secondary,
+            foreground=text_primary,
             font=("Segoe UI", 10),
         )
         style.configure(
@@ -423,7 +423,7 @@ class ToolApp(tk.Tk):
         style.configure(
             "TNotebook.Tab",
             background=card_bg,
-            foreground=text_secondary,
+            foreground=text_primary,
             padding=(16, 8),
             font=("Segoe UI", 10),
         )
@@ -1125,10 +1125,6 @@ class ToolApp(tk.Tk):
             ("rug_no", "Rug #:", self.rinven_rug_no),
         ]
 
-        # Store the Rinven field definitions so other tabs can reuse the layout
-        # information (e.g. for barcode configuration in the print server tab).
-        self.rinven_fields = fields
-
         for row, (field_key, label_key, var) in enumerate(fields):
             label = ttk.Label(frame, text=self.tr(label_key))
             label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
@@ -1142,6 +1138,40 @@ class ToolApp(tk.Tk):
             )
             combobox.grid(row=row, column=1, sticky="we", padx=6, pady=4)
             self.rinven_field_widgets[field_key] = combobox
+
+        row_offset = len(fields)
+
+        barcode_check = ttk.Checkbutton(
+            frame,
+            text=self.tr("Include Barcode"),
+            variable=self.rinven_include_barcode,
+            command=self.toggle_rinven_barcode,
+        )
+        barcode_check.grid(row=row_offset, column=0, columnspan=2, sticky="w", padx=6, pady=(12, 4))
+        self.register_widget(barcode_check, "Include Barcode")
+
+        barcode_label = ttk.Label(frame, text=self.tr("Barcode Data:"))
+        barcode_label.grid(row=row_offset + 1, column=0, sticky="e", padx=6, pady=4)
+        self.register_widget(barcode_label, "Barcode Data:")
+
+        self.rinven_barcode_entry = ttk.Entry(frame, textvariable=self.rinven_barcode_data, state="disabled")
+        self.rinven_barcode_entry.grid(row=row_offset + 1, column=1, sticky="we", padx=6, pady=4)
+
+        filename_label = ttk.Label(frame, text=self.tr("Filename:"))
+        filename_label.grid(row=row_offset + 2, column=0, sticky="e", padx=6, pady=4)
+        self.register_widget(filename_label, "Filename:")
+
+        ttk.Entry(frame, textvariable=self.rinven_filename).grid(
+            row=row_offset + 2, column=1, sticky="we", padx=6, pady=4
+        )
+
+        generate_button = ttk.Button(
+            frame,
+            text=self.tr("Generate Rinven Tag"),
+            command=self.start_generate_rinven_tag,
+        )
+        generate_button.grid(row=row_offset + 3, column=0, columnspan=2, pady=(12, 6))
+        self.register_widget(generate_button, "Generate Rinven Tag")
 
     def create_print_server_tab(self):
         tab = ttk.Frame(self.notebook)
@@ -1205,39 +1235,6 @@ class ToolApp(tk.Tk):
 
         self.update_print_server_command_label()
 
-        row_offset = len(getattr(self, "rinven_fields", []))
-
-        barcode_check = ttk.Checkbutton(
-            frame,
-            text=self.tr("Include Barcode"),
-            variable=self.rinven_include_barcode,
-            command=self.toggle_rinven_barcode,
-        )
-        barcode_check.grid(row=row_offset, column=0, columnspan=2, sticky="w", padx=6, pady=(12, 4))
-        self.register_widget(barcode_check, "Include Barcode")
-
-        barcode_label = ttk.Label(frame, text=self.tr("Barcode Data:"))
-        barcode_label.grid(row=row_offset + 1, column=0, sticky="e", padx=6, pady=4)
-        self.register_widget(barcode_label, "Barcode Data:")
-
-        self.rinven_barcode_entry = ttk.Entry(frame, textvariable=self.rinven_barcode_data, state="disabled")
-        self.rinven_barcode_entry.grid(row=row_offset + 1, column=1, sticky="we", padx=6, pady=4)
-
-        filename_label = ttk.Label(frame, text=self.tr("Filename:"))
-        filename_label.grid(row=row_offset + 2, column=0, sticky="e", padx=6, pady=4)
-        self.register_widget(filename_label, "Filename:")
-
-        ttk.Entry(frame, textvariable=self.rinven_filename).grid(
-            row=row_offset + 2, column=1, sticky="we", padx=6, pady=4
-        )
-
-        generate_button = ttk.Button(
-            frame,
-            text=self.tr("Generate Rinven Tag"),
-            command=self.start_generate_rinven_tag,
-        )
-        generate_button.grid(row=row_offset + 3, column=0, columnspan=2, pady=(12, 6))
-        self.register_widget(generate_button, "Generate Rinven Tag")
 
     def create_about_tab(self):
         tab = ttk.Frame(self.notebook)
