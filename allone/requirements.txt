@@ -4,6 +4,7 @@ Pillow
 pillow-heif
 pandas
 requests
+Flask
 xlrd
 qrcode
 python-barcode
