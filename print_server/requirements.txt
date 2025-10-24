@@ -1,0 +1,5 @@
+Flask>=2.3
+zeroconf>=0.39
+requests>=2.31
+pycups>=2.0.1; platform_system!="Windows"
+pywin32>=305; platform_system=="Windows"
