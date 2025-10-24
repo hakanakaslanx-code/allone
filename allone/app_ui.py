@@ -606,6 +606,11 @@ class ToolApp(tk.Tk):
             foreground=text_primary,
             background=card_bg,
         )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", "#111827"), ("disabled", "#1f2937")],
+            foreground=[("readonly", text_primary), ("disabled", text_muted)],
+        )
         style.configure(
             "Light.TCombobox",
             fieldbackground="#f8fafc",
@@ -614,8 +619,8 @@ class ToolApp(tk.Tk):
         )
         style.map(
             "Light.TCombobox",
-            fieldbackground=[("readonly", "#f8fafc"), ("disabled", "#1f2937")],
-            foreground=[("disabled", text_muted)],
+            fieldbackground=[("readonly", "#f8fafc"), ("disabled", "#e2e8f0")],
+            foreground=[("readonly", "#0f172a"), ("disabled", text_muted)],
         )
         style.configure(
             "TLabelframe",
@@ -628,11 +633,26 @@ class ToolApp(tk.Tk):
             foreground=text_primary,
             font=("Segoe UI", 10),
         )
+        style.map(
+            "TEntry",
+            fieldbackground=[("disabled", "#1f2937")],
+            foreground=[("disabled", text_muted)],
+        )
+        style.map(
+            "TCheckbutton",
+            background=[("active", card_bg)],
+            foreground=[("disabled", text_muted)],
+        )
         style.configure("Horizontal.TSeparator", background="#1f2937")
 
         self.option_add("*TCombobox*Listbox.font", ("Segoe UI", 10))
         self.option_add("*TCombobox*Listbox.foreground", "#000000")
         self.option_add("*TCombobox*Listbox.background", "#f8fafc")
+        self.option_add("*Background", base_bg)
+        self.option_add("*Entry.background", "#111827")
+        self.option_add("*Entry.foreground", text_primary)
+        self.option_add("*Listbox.background", "#f8fafc")
+        self.option_add("*Listbox.foreground", "#0f172a")
         self.option_add("*Font", ("Segoe UI", 10))
         self.option_add("*Foreground", text_primary)
 
