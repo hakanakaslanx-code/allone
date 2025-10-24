@@ -1125,6 +1125,10 @@ class ToolApp(tk.Tk):
             ("rug_no", "Rug #:", self.rinven_rug_no),
         ]
 
+        # Store the Rinven field definitions so other tabs can reuse the layout
+        # information (e.g. for barcode configuration in the print server tab).
+        self.rinven_fields = fields
+
         for row, (field_key, label_key, var) in enumerate(fields):
             label = ttk.Label(frame, text=self.tr(label_key))
             label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
@@ -1201,7 +1205,7 @@ class ToolApp(tk.Tk):
 
         self.update_print_server_command_label()
 
-        row_offset = len(fields)
+        row_offset = len(getattr(self, "rinven_fields", []))
 
         barcode_check = ttk.Checkbutton(
             frame,
