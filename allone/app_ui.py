@@ -677,9 +677,170 @@ class ToolApp(tk.Tk):
 
         self._refresh_language_options()
 
+    def create_file_image_tab(self):
+        """Build the File & Image Tools tab and associated state."""
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="")
+        self.register_tab(tab, "File & Image Tools")
+
+        # 1. Copy/Move Files by List
+        copy_frame = ttk.LabelFrame(tab, text=self.tr("1. Copy/Move Files by List"), style="Card.TLabelframe")
+        copy_frame.pack(fill="x", padx=10, pady=10)
+        copy_frame.grid_columnconfigure(1, weight=1)
+        self.register_widget(copy_frame, "1. Copy/Move Files by List")
+
+        self.source_folder = tk.StringVar(value=self.settings.get("source_folder", ""))
+        self.target_folder = tk.StringVar(value=self.settings.get("target_folder", ""))
+        self.numbers_file = tk.StringVar()
+
+        src_label = ttk.Label(copy_frame, text=self.tr("Source Folder:"))
+        src_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
+        self.register_widget(src_label, "Source Folder:")
+        ttk.Entry(copy_frame, textvariable=self.source_folder).grid(row=0, column=1, sticky="we", padx=6, pady=6)
+        src_browse = ttk.Button(copy_frame, text=self.tr("Browse..."), command=lambda: self.source_folder.set(filedialog.askdirectory()))
+        src_browse.grid(row=0, column=2, sticky="e", padx=6, pady=6)
+        self.register_widget(src_browse, "Browse...")
+
+        tgt_label = ttk.Label(copy_frame, text=self.tr("Target Folder:"))
+        tgt_label.grid(row=1, column=0, sticky="w", padx=6, pady=6)
+        self.register_widget(tgt_label, "Target Folder:")
+        ttk.Entry(copy_frame, textvariable=self.target_folder).grid(row=1, column=1, sticky="we", padx=6, pady=6)
+        tgt_browse = ttk.Button(copy_frame, text=self.tr("Browse..."), command=lambda: self.target_folder.set(filedialog.askdirectory()))
+        tgt_browse.grid(row=1, column=2, sticky="e", padx=6, pady=6)
+        self.register_widget(tgt_browse, "Browse...")
+
+        list_label = ttk.Label(copy_frame, text=self.tr("Numbers File (List):"))
+        list_label.grid(row=2, column=0, sticky="w", padx=6, pady=6)
+        self.register_widget(list_label, "Numbers File (List):")
+        ttk.Entry(copy_frame, textvariable=self.numbers_file).grid(row=2, column=1, sticky="we", padx=6, pady=6)
+        list_browse = ttk.Button(
+            copy_frame,
+            text=self.tr("Browse..."),
+            command=lambda: self.numbers_file.set(
+                filedialog.askopenfilename(
+                    filetypes=[
+                        ("Excel", "*.xlsx *.xls"),
+                        ("CSV/TXT", "*.csv *.txt"),
+                        ("All Files", "*.*"),
+                    ]
+                )
+            ),
+        )
+        list_browse.grid(row=2, column=2, sticky="e", padx=6, pady=6)
+        self.register_widget(list_browse, "Browse...")
+
+        button_frame = ttk.Frame(copy_frame)
+        button_frame.grid(row=3, column=0, columnspan=3, sticky="w", padx=6, pady=(4, 6))
+
+        copy_button = ttk.Button(button_frame, text=self.tr("Copy Files"), command=lambda: self.start_process_files("copy"))
+        copy_button.pack(side="left")
+        self.register_widget(copy_button, "Copy Files")
+
+        move_button = ttk.Button(button_frame, text=self.tr("Move Files"), command=lambda: self.start_process_files("move"))
+        move_button.pack(side="left", padx=(8, 0))
+        self.register_widget(move_button, "Move Files")
+
+        save_button = ttk.Button(button_frame, text=self.tr("Save Settings"), command=self.save_folder_settings)
+        save_button.pack(side="left", padx=(8, 0))
+        self.register_widget(save_button, "Save Settings")
+
+        # 2. Convert HEIC to JPG
+        heic_frame = ttk.LabelFrame(tab, text=self.tr("2. Convert HEIC to JPG"), style="Card.TLabelframe")
+        heic_frame.pack(fill="x", padx=10, pady=10)
+        heic_frame.grid_columnconfigure(1, weight=1)
+        self.register_widget(heic_frame, "2. Convert HEIC to JPG")
+
+        self.heic_folder = tk.StringVar()
+        heic_label = ttk.Label(heic_frame, text=self.tr("Folder with HEIC files:"))
+        heic_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
+        self.register_widget(heic_label, "Folder with HEIC files:")
+        ttk.Entry(heic_frame, textvariable=self.heic_folder).grid(row=0, column=1, sticky="we", padx=6, pady=6)
+        heic_browse = ttk.Button(heic_frame, text=self.tr("Browse..."), command=lambda: self.heic_folder.set(filedialog.askdirectory()))
+        heic_browse.grid(row=0, column=2, sticky="e", padx=6, pady=6)
+        self.register_widget(heic_browse, "Browse...")
+
+        heic_button = ttk.Button(heic_frame, text=self.tr("Convert"), command=self.start_heic_conversion)
+        heic_button.grid(row=1, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 6))
+        self.register_widget(heic_button, "Convert")
+
+        # 3. Batch Image Resizer
+        resize_frame = ttk.LabelFrame(tab, text=self.tr("3. Batch Image Resizer"), style="Card.TLabelframe")
+        resize_frame.pack(fill="x", padx=10, pady=10)
+        resize_frame.grid_columnconfigure(1, weight=1)
+        self.register_widget(resize_frame, "3. Batch Image Resizer")
+
+        self.resize_folder = tk.StringVar()
+        folder_label = ttk.Label(resize_frame, text=self.tr("Image Folder:"))
+        folder_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
+        self.register_widget(folder_label, "Image Folder:")
+        ttk.Entry(resize_frame, textvariable=self.resize_folder).grid(row=0, column=1, sticky="we", padx=6, pady=6)
+        folder_browse = ttk.Button(resize_frame, text=self.tr("Browse..."), command=lambda: self.resize_folder.set(filedialog.askdirectory()))
+        folder_browse.grid(row=0, column=2, sticky="e", padx=6, pady=6)
+        self.register_widget(folder_browse, "Browse...")
+
+        mode_label = ttk.Label(resize_frame, text=self.tr("Resize Mode:"))
+        mode_label.grid(row=1, column=0, sticky="w", padx=6, pady=(6, 2))
+        self.register_widget(mode_label, "Resize Mode:")
+
+        self.resize_mode = tk.StringVar(value="width")
+        mode_frame = ttk.Frame(resize_frame)
+        mode_frame.grid(row=1, column=1, columnspan=2, sticky="w", padx=6, pady=(6, 2))
+
+        width_radio = ttk.Radiobutton(mode_frame, text=self.tr("By Width"), value="width", variable=self.resize_mode, command=self._update_resize_inputs)
+        width_radio.pack(side="left")
+        self.register_widget(width_radio, "By Width", attr="text")
+
+        percent_radio = ttk.Radiobutton(mode_frame, text=self.tr("By Percentage"), value="percentage", variable=self.resize_mode, command=self._update_resize_inputs)
+        percent_radio.pack(side="left", padx=(10, 0))
+        self.register_widget(percent_radio, "By Percentage", attr="text")
+
+        self.max_width = tk.StringVar(value="1920")
+        self.resize_percentage = tk.StringVar(value="80")
+        self.quality = tk.StringVar(value="85")
+
+        width_label = ttk.Label(resize_frame, text=self.tr("Max Width:"))
+        width_label.grid(row=2, column=0, sticky="w", padx=6, pady=2)
+        self.register_widget(width_label, "Max Width:")
+        self.max_width_entry = ttk.Entry(resize_frame, textvariable=self.max_width, width=10)
+        self.max_width_entry.grid(row=2, column=1, sticky="w", padx=6, pady=2)
+
+        percent_label = ttk.Label(resize_frame, text=self.tr("Percentage (%):"))
+        percent_label.grid(row=3, column=0, sticky="w", padx=6, pady=2)
+        self.register_widget(percent_label, "Percentage (%):")
+        self.resize_percentage_entry = ttk.Entry(resize_frame, textvariable=self.resize_percentage, width=10)
+        self.resize_percentage_entry.grid(row=3, column=1, sticky="w", padx=6, pady=2)
+
+        quality_label = ttk.Label(resize_frame, text=self.tr("JPEG Quality (1-95):"))
+        quality_label.grid(row=4, column=0, sticky="w", padx=6, pady=2)
+        self.register_widget(quality_label, "JPEG Quality (1-95):")
+        ttk.Entry(resize_frame, textvariable=self.quality, width=10).grid(row=4, column=1, sticky="w", padx=6, pady=2)
+
+        resize_button = ttk.Button(resize_frame, text=self.tr("Resize & Compress"), command=self.start_resize_task)
+        resize_button.grid(row=5, column=0, columnspan=3, sticky="w", padx=6, pady=(6, 6))
+        self.register_widget(resize_button, "Resize & Compress")
+
+        self._update_resize_inputs()
+
     def tr(self, text_key):
         """Translate a text key according to the selected language."""
         return TRANSLATIONS.get(self.language, TRANSLATIONS["en"]).get(text_key, text_key)
+
+    def _update_resize_inputs(self):
+        """Enable the relevant resize input fields according to the selected mode."""
+        if not hasattr(self, "resize_mode"):
+            return
+        max_width_entry = getattr(self, "max_width_entry", None)
+        percentage_entry = getattr(self, "resize_percentage_entry", None)
+
+        if max_width_entry is None or percentage_entry is None:
+            return
+
+        if self.resize_mode.get() == "width":
+            max_width_entry.config(state="normal")
+            percentage_entry.config(state="disabled")
+        else:
+            max_width_entry.config(state="disabled")
+            percentage_entry.config(state="normal")
 
     def register_widget(self, widget, text_key, attr="text"):
         """Register a widget for translation updates."""
