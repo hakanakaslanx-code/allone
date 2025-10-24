@@ -5,6 +5,9 @@ from tkinter import ttk, filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
 import threading
 import os
+import subprocess
+import sys
+from pathlib import Path
 
 from settings_manager import load_settings, save_settings
 from updater import check_for_updates
@@ -89,6 +92,21 @@ TRANSLATIONS = {
         "Include Barcode": "Include Barcode",
         "Barcode Data:": "Barcode Data:",
         "Generate Rinven Tag": "Generate Rinven Tag",
+        "Print Server": "Print Server",
+        "PRINT_SERVER_DESCRIPTION": (
+            "Expose locally connected printers (such as the Dymo LabelWriter 450) "
+            "to other computers on your Wi-Fi/LAN through the bundled Flask service.\n"
+            "Enable sharing from another machine by calling the REST endpoints "
+            "with the bearer token you configure below."
+        ),
+        "Bearer Token:": "Bearer Token:",
+        "Listen Port:": "Listen Port:",
+        "Save Print Server Settings": "Save Print Server Settings",
+        "Open Print Server README": "Open Print Server README",
+        "Print server settings saved.": "Print server settings saved.",
+        "Please enter a valid port number.": "Please enter a valid port number.",
+        "Could not open the README file.": "Could not open the README file.",
+        "PRINT_SERVER_COMMAND_HINT": "Launch with: python server.py --port {port} --token {token}",
         "Please fill in all Rinven Tag fields.": "Please fill in all Rinven Tag fields.",
         "Barcode data is required when barcode is enabled.": "Barcode data is required when barcode is enabled.",
         "Filename is required.": "Filename is required.",
@@ -211,6 +229,21 @@ TRANSLATIONS = {
         "Include Barcode": "Barkodu Dahil Et",
         "Barcode Data:": "Barkod Verisi:",
         "Generate Rinven Tag": "Rinven Etiketi Oluştur",
+        "Print Server": "Yazıcı Sunucusu",
+        "PRINT_SERVER_DESCRIPTION": (
+            "USB ile bağlı yazıcıları (ör. Dymo LabelWriter 450) aynı Wi-Fi/LAN üzerindeki "
+            "diğer bilgisayarlarla paylaşmak için birlikte gelen Flask servisinden yararlanın.\n"
+            "Aşağıda belirlediğiniz jetonu kullanarak REST uç noktalarını çağırıp paylaşımı "
+            "diğer cihazlardan açabilirsiniz."
+        ),
+        "Bearer Token:": "Yetkilendirme Jetonu:",
+        "Listen Port:": "Dinleme Portu:",
+        "Save Print Server Settings": "Yazıcı Sunucusu Ayarlarını Kaydet",
+        "Open Print Server README": "Yazıcı Sunucusu README dosyasını Aç",
+        "Print server settings saved.": "Yazıcı sunucusu ayarları kaydedildi.",
+        "Please enter a valid port number.": "Lütfen geçerli bir port numarası girin.",
+        "Could not open the README file.": "README dosyası açılamadı.",
+        "PRINT_SERVER_COMMAND_HINT": "Çalıştırma komutu: python server.py --port {port} --token {token}",
         "Please fill in all Rinven Tag fields.": "Lütfen tüm Rinven Etiketi alanlarını doldurun.",
         "Barcode data is required when barcode is enabled.": "Barkod etkinleştirildiğinde barkod verisi gereklidir.",
         "Filename is required.": "Dosya adı gereklidir.",
@@ -275,6 +308,9 @@ class ToolApp(tk.Tk):
 
         self.settings = load_settings()
         self.settings.setdefault("rinven_history", {})
+        print_server_settings = self.settings.setdefault("print_server", {})
+        print_server_settings.setdefault("token", "change-me")
+        print_server_settings.setdefault("port", 5151)
         self.language = self.settings.get("language", "en")
         if self.language not in TRANSLATIONS:
             self.language = "en"
@@ -289,6 +325,11 @@ class ToolApp(tk.Tk):
 
         self.language_var = tk.StringVar(value=self.language)
 
+        self.print_server_token_var = tk.StringVar(value=str(print_server_settings.get("token", "change-me")))
+        self.print_server_port_var = tk.StringVar(value=str(print_server_settings.get("port", 5151)))
+        self.print_server_token_var.trace_add("write", self.update_print_server_command_label)
+        self.print_server_port_var.trace_add("write", self.update_print_server_command_label)
+
         self.create_language_selector()
 
         self.notebook = ttk.Notebook(self)
@@ -298,6 +339,7 @@ class ToolApp(tk.Tk):
         self.create_data_calc_tab()
         self.create_code_gen_tab()
         self.create_rinven_tag_tab()
+        self.create_print_server_tab()
         self.create_about_tab()
 
         self.log_area = ScrolledText(self, height=12)
@@ -417,6 +459,17 @@ class ToolApp(tk.Tk):
             background=card_bg,
         )
         style.configure(
+            "Light.TCombobox",
+            fieldbackground="#f8fafc",
+            foreground="#0f172a",
+            background=card_bg,
+        )
+        style.map(
+            "Light.TCombobox",
+            fieldbackground=[("readonly", "#f8fafc"), ("disabled", "#1f2937")],
+            foreground=[("disabled", text_muted)],
+        )
+        style.configure(
             "TLabelframe",
             background=card_bg,
             foreground=text_primary,
@@ -488,6 +541,7 @@ class ToolApp(tk.Tk):
         for tab, text_key in self.translatable_tabs:
             self.notebook.tab(tab, text=self.tr(text_key))
         self.update_help_tab_content()
+        self.update_print_server_command_label()
 
     def update_help_tab_content(self):
         if hasattr(self, "help_text_area"):
@@ -496,6 +550,63 @@ class ToolApp(tk.Tk):
             help_content = self.tr("ABOUT_CONTENT").format(version=__version__)
             self.help_text_area.insert(tk.END, help_content)
             self.help_text_area.config(state=tk.DISABLED)
+
+    def update_print_server_command_label(self, *args):
+        if hasattr(self, "print_server_command_label"):
+            port_value = self.print_server_port_var.get().strip()
+            token_value = self.print_server_token_var.get().strip()
+            port_value = port_value or "{port}"
+            token_value = token_value or "{token}"
+            text = self.tr("PRINT_SERVER_COMMAND_HINT").format(
+                port=port_value,
+                token=token_value,
+            )
+            self.print_server_command_label.config(text=text)
+
+    def save_print_server_settings(self):
+        token = self.print_server_token_var.get().strip()
+        port_value = self.print_server_port_var.get().strip()
+
+        try:
+            port = int(port_value)
+            if not (1 <= port <= 65535):
+                raise ValueError
+        except ValueError:
+            messagebox.showerror(self.tr("Error"), self.tr("Please enter a valid port number."))
+            return
+
+        if not token:
+            token = "change-me"
+            self.print_server_token_var.set(token)
+
+        print_server_settings = self.settings.setdefault("print_server", {})
+        print_server_settings["token"] = token
+        print_server_settings["port"] = port
+        save_settings(self.settings)
+
+        self.update_print_server_command_label()
+
+        success_msg = self.tr("Print server settings saved.")
+        self.log(success_msg)
+        messagebox.showinfo(self.tr("Success"), success_msg)
+
+    def open_print_server_readme(self):
+        readme_path = Path(__file__).resolve().parent.parent / "print_server" / "README.md"
+        if not readme_path.exists():
+            messagebox.showerror(self.tr("Error"), self.tr("Could not open the README file."))
+            return
+
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(readme_path)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.check_call(["open", str(readme_path)])
+            else:
+                subprocess.check_call(["xdg-open", str(readme_path)])
+        except Exception as exc:
+            err_msg = f"{self.tr('Could not open the README file.')}\n{exc}"
+            self.log(err_msg)
+            messagebox.showerror(self.tr("Error"), err_msg)
 
     def change_language(self):
         """Handle changes coming from the language selector."""
@@ -1019,9 +1130,76 @@ class ToolApp(tk.Tk):
             label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
             self.register_widget(label, label_key)
             history_values = self.settings.get("rinven_history", {}).get(field_key, [])
-            combobox = ttk.Combobox(frame, textvariable=var, values=history_values)
+            combobox = ttk.Combobox(
+                frame,
+                textvariable=var,
+                values=history_values,
+                style="Light.TCombobox",
+            )
             combobox.grid(row=row, column=1, sticky="we", padx=6, pady=4)
             self.rinven_field_widgets[field_key] = combobox
+
+    def create_print_server_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="")
+        self.register_tab(tab, "Print Server")
+
+        frame = ttk.LabelFrame(tab, text=self.tr("Print Server"), style="Card.TLabelframe")
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
+        self.register_widget(frame, "Print Server")
+
+        frame.grid_columnconfigure(1, weight=1)
+
+        description = ttk.Label(
+            frame,
+            text=self.tr("PRINT_SERVER_DESCRIPTION"),
+            wraplength=620,
+            justify="left",
+        )
+        description.grid(row=0, column=0, columnspan=2, sticky="w", padx=6, pady=(0, 12))
+        self.register_widget(description, "PRINT_SERVER_DESCRIPTION")
+
+        token_label = ttk.Label(frame, text=self.tr("Bearer Token:"))
+        token_label.grid(row=1, column=0, sticky="e", padx=6, pady=4)
+        self.register_widget(token_label, "Bearer Token:")
+
+        ttk.Entry(frame, textvariable=self.print_server_token_var).grid(
+            row=1, column=1, sticky="we", padx=6, pady=4
+        )
+
+        port_label = ttk.Label(frame, text=self.tr("Listen Port:"))
+        port_label.grid(row=2, column=0, sticky="e", padx=6, pady=4)
+        self.register_widget(port_label, "Listen Port:")
+
+        ttk.Entry(frame, textvariable=self.print_server_port_var).grid(
+            row=2, column=1, sticky="we", padx=6, pady=4
+        )
+
+        self.print_server_command_label = ttk.Label(
+            frame,
+            wraplength=620,
+            justify="left",
+            foreground=self.theme_colors["text_secondary"],
+        )
+        self.print_server_command_label.grid(row=3, column=0, columnspan=2, sticky="w", padx=6, pady=(4, 12))
+
+        save_button = ttk.Button(
+            frame,
+            text=self.tr("Save Print Server Settings"),
+            command=self.save_print_server_settings,
+        )
+        save_button.grid(row=4, column=0, columnspan=2, pady=(0, 8))
+        self.register_widget(save_button, "Save Print Server Settings")
+
+        open_button = ttk.Button(
+            frame,
+            text=self.tr("Open Print Server README"),
+            command=self.open_print_server_readme,
+        )
+        open_button.grid(row=5, column=0, columnspan=2)
+        self.register_widget(open_button, "Open Print Server README")
+
+        self.update_print_server_command_label()
 
         row_offset = len(fields)
 

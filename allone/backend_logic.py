@@ -346,6 +346,7 @@ def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
     width_px = int(width_in * DPI)
     height_px = int(height_in * DPI)
     padding = int(0.14 * DPI)
+    top_extra_padding = int(0.08 * DPI)
 
     try:
         canvas = Image.new("RGB", (width_px, height_px), "white")
@@ -373,7 +374,7 @@ def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
             size=text_font_size,
         )
 
-        current_y = padding
+        current_y = padding + top_extra_padding
 
         if include_barcode and barcode_data:
             BarcodeClass = barcode.get_barcode_class("code128")
