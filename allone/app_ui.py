@@ -5,14 +5,14 @@ from tkinter import ttk, filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
 import threading
 import os
-import subprocess
-import sys
 from pathlib import Path
 
+from functools import wraps
+from typing import Callable, Optional
+
 import requests
-
-
-printServerProcess = None
+from flask import Flask, jsonify, request
+from werkzeug.serving import make_server
 
 from settings_manager import load_settings, save_settings
 from updater import check_for_updates
@@ -111,7 +111,9 @@ TRANSLATIONS = {
         "Print server settings saved.": "Print server settings saved.",
         "Please enter a valid port number.": "Please enter a valid port number.",
         "Could not open the README file.": "Could not open the README file.",
-        "PRINT_SERVER_COMMAND_HINT": "python server.py --port {port} --token {token}",
+        "PRINT_SERVER_COMMAND_HINT": (
+            "curl -H 'Authorization: Bearer {token}' http://<host_ip>:{port}/status"
+        ),
         "PRINT_SERVER_STATUS_INITIAL": "Server Status: ⚪ Offline",
         "PRINT_SERVER_STATUS_CHECKING": "Server Status: ⏳ Checking...",
         "PRINT_SERVER_STATUS_ONLINE": "Server Status: 🟢 Online",
@@ -273,7 +275,9 @@ TRANSLATIONS = {
         "Print server settings saved.": "Yazıcı sunucusu ayarları kaydedildi.",
         "Please enter a valid port number.": "Lütfen geçerli bir port numarası girin.",
         "Could not open the README file.": "README dosyası açılamadı.",
-        "PRINT_SERVER_COMMAND_HINT": "python server.py --port {port} --token {token}",
+        "PRINT_SERVER_COMMAND_HINT": (
+            "curl -H 'Authorization: Bearer {token}' http://<sunucu_ip>:{port}/status"
+        ),
         "PRINT_SERVER_STATUS_INITIAL": "Sunucu Durumu: ⚪ Offline",
         "PRINT_SERVER_STATUS_CHECKING": "Sunucu Durumu: ⏳ Kontrol ediliyor...",
         "PRINT_SERVER_STATUS_ONLINE": "Sunucu Durumu: 🟢 Online",
@@ -355,6 +359,156 @@ DYMO_LABELS = {
 }
 
 
+class EmbeddedPrintServer:
+    """Embedded Flask server that can be controlled from the tkinter UI."""
+
+    def __init__(self, log_callback: Optional[Callable[[str], None]] = None):
+        # Threading primitives ensure that the GUI can safely query or mutate
+        # server state from multiple threads.
+        self._lock = threading.RLock()
+        self._server = None
+        self._thread: Optional[threading.Thread] = None
+        self._app: Optional[Flask] = None
+        self._shared = False
+        self._token: Optional[str] = None
+        self._port: Optional[int] = None
+        self._log_callback = log_callback
+
+    # ------------------------------------------------------------------
+    # Helper utilities
+    # ------------------------------------------------------------------
+    def _log(self, message: str) -> None:
+        if self._log_callback:
+            self._log_callback(message)
+
+    def _require_token(self, func):
+        """Decorator that ensures the Authorization bearer token is valid."""
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            header = request.headers.get("Authorization", "")
+            if not header.startswith("Bearer "):
+                return jsonify({"error": "Authorization header missing or invalid."}), 401
+
+            provided = header.split(" ", 1)[1].strip()
+            with self._lock:
+                expected = self._token
+
+            if not expected or provided != expected:
+                return jsonify({"error": "Invalid bearer token."}), 401
+
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    def _create_app(self) -> Flask:
+        """Build the Flask application with status and toggle endpoints."""
+
+        app = Flask("embedded_print_server")
+
+        @app.route("/status", methods=["GET"])
+        @self._require_token
+        def status():
+            with self._lock:
+                shared = self._shared
+            return jsonify({"shared": shared, "status": "ok"})
+
+        @app.route("/enable", methods=["POST", "GET"])
+        @self._require_token
+        def enable():
+            with self._lock:
+                self._shared = True
+                shared = self._shared
+            return jsonify({"shared": shared})
+
+        @app.route("/disable", methods=["POST", "GET"])
+        @self._require_token
+        def disable():
+            with self._lock:
+                self._shared = False
+                shared = self._shared
+            return jsonify({"shared": shared})
+
+        return app
+
+    def _serve(self) -> None:
+        """Run the Werkzeug server loop until it is shut down."""
+
+        try:
+            if self._server is not None:
+                self._server.serve_forever()
+        except Exception as exc:  # pragma: no cover - best effort logging
+            self._log(f"Print server encountered an error: {exc}")
+        finally:
+            # Ensure stale references are cleared when the thread exits.
+            self._finalize_stop()
+
+    def _finalize_stop(self) -> None:
+        with self._lock:
+            self._server = None
+            self._thread = None
+            self._app = None
+            self._token = None
+            self._port = None
+            self._shared = False
+
+    # ------------------------------------------------------------------
+    # Public API used by the GUI
+    # ------------------------------------------------------------------
+    def start(self, port: int, token: str) -> None:
+        """Start the Flask server on the given port with the provided token."""
+
+        with self._lock:
+            if self.is_running():
+                raise RuntimeError("Server is already running.")
+
+            self._token = token
+            self._port = port
+            self._shared = False
+            self._app = self._create_app()
+
+            try:
+                self._server = make_server("0.0.0.0", port, self._app)
+            except OSError:
+                # Reset state so the next attempt can succeed.
+                self._finalize_stop()
+                raise
+
+            self._thread = threading.Thread(
+                target=self._serve,
+                name="EmbeddedPrintServer",
+                daemon=True,
+            )
+            self._thread.start()
+
+    def stop(self, timeout: float = 5.0) -> None:
+        """Stop the server thread and wait for it to exit."""
+
+        with self._lock:
+            server = self._server
+            thread = self._thread
+
+        if server is None or thread is None:
+            return
+
+        try:
+            server.shutdown()
+        finally:
+            thread.join(timeout=timeout)
+            self._finalize_stop()
+
+    def is_running(self) -> bool:
+        with self._lock:
+            return bool(self._thread and self._thread.is_alive())
+
+    def is_shared(self) -> bool:
+        with self._lock:
+            return self._shared
+
+    def current_port(self) -> Optional[int]:
+        with self._lock:
+            return self._port
+
 class ToolApp(tk.Tk):
     """Main application window that builds the entire tkinter interface."""
 
@@ -393,6 +547,7 @@ class ToolApp(tk.Tk):
         self.security_note_visible = True
         self.active_print_server_port = None
         self.active_print_server_token = None
+        self.print_server_service = EmbeddedPrintServer(self.log)
 
         self.create_language_selector()
 
@@ -696,17 +851,18 @@ class ToolApp(tk.Tk):
             self.set_print_server_status("PRINT_SERVER_STATUS_OFFLINE")
             self.set_print_server_share(None)
 
-    def _cleanup_print_server_process(self):
-        global printServerProcess
-        if printServerProcess is not None and printServerProcess.poll() is not None:
-            printServerProcess = None
+    def _sync_print_server_state(self):
+        """Keep cached state in sync with the embedded server lifecycle."""
+
+        if self.print_server_service.is_running():
+            self.active_print_server_port = self.print_server_service.current_port()
+        else:
             self.active_print_server_port = None
             self.active_print_server_token = None
 
     def start_print_server(self):
-        global printServerProcess
-        self._cleanup_print_server_process()
-        if printServerProcess is not None:
+        self._sync_print_server_state()
+        if self.print_server_service.is_running():
             messagebox.showinfo(self.tr("Information"), self.tr("PRINT_SERVER_ALREADY_RUNNING"))
             return
 
@@ -725,15 +881,18 @@ class ToolApp(tk.Tk):
         if not self.print_server_token_var.get().strip():
             self.print_server_token_var.set(token)
 
-        server_path = Path(__file__).resolve().parent.parent / "print_server" / "server.py"
-        if not server_path.exists():
-            messagebox.showerror(self.tr("Error"), self.tr("PRINT_SERVER_SCRIPT_MISSING"))
-            return
-
-        command = [sys.executable, str(server_path), "--port", str(port), "--token", token]
-
         try:
-            process = subprocess.Popen(command, cwd=str(server_path.parent))
+            self.print_server_service.start(port, token)
+        except RuntimeError:
+            messagebox.showinfo(self.tr("Information"), self.tr("PRINT_SERVER_ALREADY_RUNNING"))
+            return
+        except OSError as exc:
+            error_message = f"{self.tr('PRINT_SERVER_START_FAILED')}\n{exc}"
+            self.log(error_message)
+            messagebox.showerror(self.tr("Error"), error_message)
+            self.set_print_server_status("PRINT_SERVER_STATUS_OFFLINE")
+            self.set_print_server_share(None)
+            return
         except Exception as exc:
             error_message = f"{self.tr('PRINT_SERVER_START_FAILED')}\n{exc}"
             self.log(error_message)
@@ -742,53 +901,38 @@ class ToolApp(tk.Tk):
             self.set_print_server_share(None)
             return
 
-        printServerProcess = process
         self.active_print_server_port = port
         self.active_print_server_token = token
-        self._apply_print_server_status(True, False)
-        success_message = f"{self.tr('PRINT_SERVER_STARTED')} (PID {process.pid})"
+        self._apply_print_server_status(True, self.print_server_service.is_shared())
+        success_message = f"{self.tr('PRINT_SERVER_STARTED')} (port {port})"
         self.log(success_message)
         messagebox.showinfo(self.tr("Information"), self.tr("PRINT_SERVER_STARTED"))
 
     def stop_print_server(self):
-        global printServerProcess
-        self._cleanup_print_server_process()
-        if printServerProcess is None:
+        self._sync_print_server_state()
+        if not self.print_server_service.is_running():
             messagebox.showinfo(self.tr("Information"), self.tr("PRINT_SERVER_NOT_RUNNING"))
             return
 
-        process = printServerProcess
         try:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
+            self.print_server_service.stop()
         except Exception as exc:
             self.log(f"{self.tr('Error')}: {exc}")
-        finally:
-            printServerProcess = None
-            self.active_print_server_port = None
-            self.active_print_server_token = None
+
+        self.active_print_server_port = None
+        self.active_print_server_token = None
 
         self._apply_print_server_status(False, None)
         self.log(self.tr("PRINT_SERVER_STOPPED"))
         messagebox.showinfo(self.tr("Information"), self.tr("PRINT_SERVER_STOPPED"))
 
     def on_close(self):
-        global printServerProcess
         try:
-            if printServerProcess is not None and printServerProcess.poll() is None:
+            if self.print_server_service.is_running():
                 try:
-                    printServerProcess.terminate()
-                    try:
-                        printServerProcess.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        printServerProcess.kill()
+                    self.print_server_service.stop()
                 except Exception as exc:
                     self.log(f"{self.tr('Error')}: {exc}")
-                finally:
-                    printServerProcess = None
             self.active_print_server_port = None
             self.active_print_server_token = None
         finally:
