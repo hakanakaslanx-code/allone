@@ -21,7 +21,7 @@ import socket
 import tempfile
 from abc import ABC, abstractmethod
 from functools import wraps
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from flask import Flask, jsonify, request
 from werkzeug.utils import secure_filename
@@ -127,12 +127,13 @@ logger = logging.getLogger("allonetools.print_server")
 
 SHARING_LOCK = threading.Lock()
 SHARING_ENABLED = False
-SERVICE_INFO: Optional[ServiceInfo] = None
+SERVICE_INFOS: Dict[str, ServiceInfo] = {}
 ZEROCONF: Optional[Zeroconf] = None
 BACKEND: Optional[PrinterBackend] = None
 BACKEND_ERROR: Optional[str] = None
 AUTH_TOKEN: Optional[str] = None
 SERVER_PORT: int = 5151
+HOSTNAME: str = socket.gethostname()
 
 
 def initialise_backend() -> None:
@@ -144,6 +145,39 @@ def initialise_backend() -> None:
         BACKEND = None
         BACKEND_ERROR = str(exc)
         logger.error("Unable to initialise printer backend: %s", exc)
+
+
+def make_network_printer_name(printer_name: str, hostname: Optional[str] = None) -> str:
+    host = (hostname or HOSTNAME).strip()
+    base = printer_name.strip()
+    if not host:
+        return base
+    suffix = f" - {host}"
+    if base.endswith(suffix):
+        return base
+    return f"{base}{suffix}"
+
+
+def split_network_printer_name(printer_name: str) -> Tuple[str, Optional[str]]:
+    parts = printer_name.rsplit(" - ", 1)
+    if len(parts) == 2:
+        base, host = parts
+        return base.strip(), host.strip() or None
+    return printer_name.strip(), None
+
+
+def decorate_printer_entry(entry: Dict[str, str]) -> Dict[str, str]:
+    # Copy entry to avoid mutating backend data
+    decorated = dict(entry)
+    raw_name_value = decorated.get("name") or decorated.get("info") or ""
+    if not isinstance(raw_name_value, str):
+        raw_name_value = str(raw_name_value)
+    raw_name = raw_name_value.strip()
+
+    decorated["raw_name"] = raw_name
+    decorated["hostname"] = HOSTNAME
+    decorated["name"] = make_network_printer_name(raw_name or "Unknown Printer")
+    return decorated
 
 
 def require_token(view_func):
@@ -187,7 +221,7 @@ def status() -> object:
             "sharing": SHARING_ENABLED,
             "backend_ready": BACKEND is not None,
             "backend_error": BACKEND_ERROR,
-            "zeroconf": SERVICE_INFO is not None,
+            "zeroconf": bool(SERVICE_INFOS),
         }
     )
 
@@ -204,7 +238,9 @@ def list_printers() -> object:
         logger.exception("Failed to list printers: %s", exc)
         return error_response(500, f"Failed to list printers: {exc}")
 
-    return jsonify({"printers": printers})
+    enriched = [decorate_printer_entry(printer) for printer in printers]
+
+    return jsonify({"printers": enriched})
 
 
 @app.route("/enable", methods=["POST"])
@@ -261,9 +297,11 @@ def print_endpoint() -> object:
     if not printer_name:
         return error_response(400, "printer_name is required.")
 
+    raw_printer_name, requested_host = split_network_printer_name(printer_name)
+
     try:
         temp_path = prepare_job_file()
-        BACKEND.print_job(printer_name, temp_path)
+        BACKEND.print_job(raw_printer_name, temp_path)
     except ValueError as exc:
         logger.warning("Invalid print payload: %s", exc)
         return error_response(400, str(exc))
@@ -277,8 +315,18 @@ def print_endpoint() -> object:
             except OSError:
                 logger.warning("Could not remove temporary file: %s", temp_path)
 
-    logger.info("Print job submitted to %s", printer_name)
-    return jsonify({"status": "printed", "printer_name": printer_name})
+    logger.info(
+        "Print job submitted to %s (requested via %s)",
+        raw_printer_name,
+        make_network_printer_name(raw_printer_name, requested_host or HOSTNAME),
+    )
+    return jsonify(
+        {
+            "status": "printed",
+            "printer_name": make_network_printer_name(raw_printer_name, requested_host or HOSTNAME),
+            "raw_printer_name": raw_printer_name,
+        }
+    )
 
 
 def prepare_job_file() -> str:
@@ -332,9 +380,13 @@ def is_local_network_ip(ip: str) -> bool:
 
 
 def register_service() -> None:
-    global SERVICE_INFO, ZEROCONF
+    global SERVICE_INFOS, ZEROCONF
 
-    if SERVICE_INFO is not None:
+    if SERVICE_INFOS:
+        return
+
+    if BACKEND is None:
+        logger.warning("Cannot register Zeroconf service without an initialised backend.")
         return
 
     ip_address = resolve_local_ip()
@@ -342,24 +394,73 @@ def register_service() -> None:
         logger.warning("Could not determine local IP for Zeroconf broadcast.")
         return
 
-    ZEROCONF = Zeroconf()
-    SERVICE_INFO = ServiceInfo(
-        type_="_printer._tcp.local.",
-        name="AllOneTools Print Server._printer._tcp.local.",
-        addresses=[socket.inet_aton(ip_address)],
-        port=SERVER_PORT,
-        properties={b"sharing": b"true"},
-        server="allonetools-print-server.local.",
-        weight=0,
-        priority=0,
-    )
+    try:
+        address_bytes = socket.inet_aton(ip_address)
+    except OSError as exc:
+        logger.warning("Invalid IP address for Zeroconf broadcast (%s): %s", ip_address, exc)
+        return
 
     try:
-        ZEROCONF.register_service(SERVICE_INFO, cooperating_responders=True)
-        logger.info("Zeroconf service registered on %s:%s", ip_address, SERVER_PORT)
-    except Exception as exc:  # pragma: no cover - zeroconf specifics
-        logger.warning("Failed to register Zeroconf service: %s", exc)
-        SERVICE_INFO = None
+        printers = BACKEND.list_printers()
+    except Exception as exc:  # pragma: no cover - backend specific
+        logger.warning("Failed to enumerate printers for Zeroconf: %s", exc)
+        printers = []
+
+    entries = [decorate_printer_entry(printer) for printer in printers]
+
+    if not entries:
+        # Advertise the server itself so discovery clients still learn about it.
+        entries = [
+            {
+                "name": make_network_printer_name("AllOneTools Print Server"),
+                "raw_name": "AllOneTools Print Server",
+                "hostname": HOSTNAME,
+            }
+        ]
+
+    ZEROCONF = Zeroconf()
+
+    for entry in entries:
+        service_name = f"{entry['name']}._printer._tcp.local."
+        try:
+            info = ServiceInfo(
+                type_="_printer._tcp.local.",
+                name=service_name,
+                addresses=[address_bytes],
+                port=SERVER_PORT,
+                properties={
+                    b"sharing": b"true",
+                    b"hostname": entry.get("hostname", HOSTNAME).encode("utf-8", "ignore"),
+                    b"raw_name": entry.get("raw_name", "").encode("utf-8", "ignore"),
+                },
+                server=f"{HOSTNAME}.local.",
+                weight=0,
+                priority=0,
+            )
+        except Exception as exc:  # pragma: no cover - data validation specifics
+            logger.warning("Failed to prepare Zeroconf service info for %s: %s", entry, exc)
+            continue
+
+        try:
+            ZEROCONF.register_service(info, cooperating_responders=True)
+            SERVICE_INFOS[entry["name"]] = info
+            logger.info(
+                "Zeroconf service registered for printer '%s' as '%s' on %s:%s",
+                entry.get("raw_name"),
+                entry["name"],
+                ip_address,
+                SERVER_PORT,
+            )
+        except Exception as exc:  # pragma: no cover - zeroconf specifics
+            logger.warning(
+                "Failed to register Zeroconf service for %s (%s): %s",
+                entry.get("raw_name"),
+                entry["name"],
+                exc,
+            )
+
+    if not SERVICE_INFOS:
+        # If registration failed for all entries, ensure the Zeroconf socket is closed.
         if ZEROCONF:
             try:
                 ZEROCONF.close()
@@ -369,20 +470,24 @@ def register_service() -> None:
 
 
 def unregister_service() -> None:
-    global SERVICE_INFO, ZEROCONF
-    if SERVICE_INFO and ZEROCONF:
-        try:
-            ZEROCONF.unregister_service(SERVICE_INFO)
-            logger.info("Zeroconf service unregistered")
-        except Exception as exc:  # pragma: no cover
-            logger.warning("Failed to unregister Zeroconf service: %s", exc)
-        finally:
+    global SERVICE_INFOS, ZEROCONF
+
+    if ZEROCONF and SERVICE_INFOS:
+        for name, info in list(SERVICE_INFOS.items()):
             try:
-                ZEROCONF.close()
-            except Exception:
-                pass
-            SERVICE_INFO = None
-            ZEROCONF = None
+                ZEROCONF.unregister_service(info)
+                logger.info("Zeroconf service unregistered for %s", name)
+            except Exception as exc:  # pragma: no cover
+                logger.warning("Failed to unregister Zeroconf service for %s: %s", name, exc)
+
+    if ZEROCONF:
+        try:
+            ZEROCONF.close()
+        except Exception:
+            pass
+        ZEROCONF = None
+
+    SERVICE_INFOS = {}
 
 
 def resolve_local_ip() -> Optional[str]:
