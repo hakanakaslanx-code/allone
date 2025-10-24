@@ -397,12 +397,16 @@ class ToolApp(tk.Tk):
         self.translatable_widgets = []
         self.translatable_tabs = []
 
+        self.language_options = {"en": "English", "tr": "Turkish"}
+        self.language_var = tk.StringVar(
+            value=self.tr(self.language_options.get(self.language, "English"))
+        )
+        self._updating_language_selector = False
+
         self.geometry("900x750")
 
         self.setup_styles()
         self.create_header()
-
-        self.language_var = tk.StringVar(value=self.language)
 
         self.shared_token_var = tk.StringVar(value=str(shared_settings.get("token", "change-me")))
         self.shared_port_var = tk.StringVar(value=str(shared_settings.get("port", 5151)))
@@ -653,6 +657,26 @@ class ToolApp(tk.Tk):
         subtitle.pack(anchor="w", pady=(2, 0))
         self.header_subtitle = subtitle
 
+    def create_language_selector(self):
+        """Create the language selection combobox and bind change events."""
+        container = ttk.Frame(self, style="Header.TFrame")
+        container.pack(anchor="ne", padx=10, pady=(0, 10))
+
+        label = ttk.Label(container, text=self.tr("Language"), style="Secondary.TLabel")
+        label.pack(side="left", padx=(0, 8))
+        self.register_widget(label, "Language")
+
+        self.language_selector = ttk.Combobox(
+            container,
+            textvariable=self.language_var,
+            state="readonly",
+            width=16,
+        )
+        self.language_selector.pack(side="left")
+        self.language_selector.bind("<<ComboboxSelected>>", self._on_language_change)
+
+        self._refresh_language_options()
+
     def tr(self, text_key):
         """Translate a text key according to the selected language."""
         return TRANSLATIONS.get(self.language, TRANSLATIONS["en"]).get(text_key, text_key)
@@ -689,6 +713,39 @@ class ToolApp(tk.Tk):
             self._apply_shared_status_translation()
         if hasattr(self, "shared_help_text"):
             self._update_shared_help_text(self.shared_status_host, self.shared_status_port)
+        self._refresh_language_options()
+
+    def _refresh_language_options(self):
+        """Update language combobox options according to current translations."""
+        if not hasattr(self, "language_selector"):
+            return
+        values = [self.tr(key) for key in self.language_options.values()]
+        self._updating_language_selector = True
+        self.language_selector.configure(values=values)
+        current_display = self.tr(self.language_options.get(self.language, "English"))
+        self.language_var.set(current_display)
+        self._updating_language_selector = False
+
+    def _on_language_change(self, event=None):
+        """Handle user selection of a different UI language."""
+        if self._updating_language_selector:
+            return
+        selected = self.language_var.get()
+        for code, key in self.language_options.items():
+            if selected == self.tr(key):
+                if code != self.language:
+                    self.language = code
+                    self.settings["language"] = code
+                    save_settings(self.settings)
+                    self.refresh_translations()
+                    self.log(
+                        self.tr("Language changed to {language}.").format(
+                            language=self.tr(key)
+                        )
+                    )
+                break
+        else:
+            self._refresh_language_options()
 
     def update_help_tab_content(self):
         if hasattr(self, "help_text_area"):
