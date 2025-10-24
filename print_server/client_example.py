@@ -51,7 +51,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Interact with the AllOneTools Print Server")
     parser.add_argument("--url", default="http://127.0.0.1:5151", help="Base URL of the print server")
     parser.add_argument("--token", required=True, help="Bearer token configured on the server")
-    parser.add_argument("--printer", help="Printer name to target when sending a job")
+    parser.add_argument(
+        "--printer",
+        help="Printer name to target when sending a job (use the value shown in /printers)",
+    )
     parser.add_argument("--file", type=Path, help="File to send to the printer")
     parser.add_argument(
         "--enable", action="store_true", help="Enable sharing before listing printers or printing"
@@ -79,7 +82,20 @@ def main() -> None:
             name = printer.get("name")
             comment = printer.get("comment") or printer.get("info") or ""
             location = printer.get("location", "")
-            extra = " - ".join(filter(None, [comment, location]))
+            raw_name = printer.get("raw_name") or ""
+            hostname = printer.get("hostname") or ""
+
+            details = []
+            if raw_name and raw_name != name:
+                details.append(f"raw={raw_name}")
+            if hostname:
+                details.append(f"host={hostname}")
+            if comment:
+                details.append(comment)
+            if location:
+                details.append(location)
+
+            extra = "; ".join(filter(None, details))
             print(f"  - {name}{' (' + extra + ')' if extra else ''}")
 
     if args.printer and args.file:

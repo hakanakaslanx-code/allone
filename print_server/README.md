@@ -3,8 +3,9 @@
 A lightweight Flask service that shares locally attached printers (including the
 USB Dymo LabelWriter 450) with other computers on the same Wi-Fi/LAN. The
 service exposes a secured REST API, enforces Bearer token authentication, and
-announces itself over Zeroconf as `AllOneTools Print Server` so that clients on
-the network can discover it automatically.
+announces each shared printer over Zeroconf using the pattern
+`{printer_name} - {hostname}` so that clients on the network can discover
+uniquely named devices automatically.
 
 ## Features
 
@@ -14,7 +15,8 @@ the network can discover it automatically.
   `pycups`.
 - Only accepts requests from private/loopback network addresses.
 - Mandatory `Authorization: Bearer <token>` header on every request.
-- Zeroconf/mDNS advertisement as `_printer._tcp.local.` when sharing is enabled.
+- Zeroconf/mDNS advertisement as `_printer._tcp.local.` with names formatted as
+  `{printer_name} - {hostname}` when sharing is enabled.
 - Detailed logging and descriptive error responses for easier troubleshooting.
 
 ## Installation
@@ -44,9 +46,12 @@ Server tab) and in API clients.
 
 ### Zeroconf advertisement
 
-The server advertises itself as `AllOneTools Print Server` under the
-`_printer._tcp.local.` service type whenever sharing is enabled. Clients can use
-mDNS browsers to discover the IP/port without manual configuration.
+The server advertises every locally attached printer using its real system
+name combined with the host computer name. For example, a Dymo printer on the
+machine `social` is announced as `Dymo LabelWriter 450 - social` under the
+`_printer._tcp.local.` service type. mDNS browsers and other discovery clients
+can enumerate these names to differentiate identical printer models connected to
+different machines on the same network.
 
 ## API overview
 
@@ -56,7 +61,7 @@ invoked from the same local network.
 | Method | Endpoint   | Description                                          |
 | ------ | ---------- | ---------------------------------------------------- |
 | GET    | `/status`  | Returns sharing state and backend availability.      |
-| GET    | `/printers` | Lists printers detected by the host system.         |
+| GET    | `/printers` | Lists printers detected by the host system with names including the host computer. |
 | POST   | `/enable`  | Enables sharing and registers the Zeroconf service.  |
 | POST   | `/disable` | Disables sharing and unregisters Zeroconf.           |
 | POST   | `/print`   | Sends a print job to `printer_name`.                 |
@@ -68,7 +73,7 @@ fields, or a JSON body:
 
 ```json
 {
-  "printer_name": "DYMO LabelWriter 450",
+  "printer_name": "DYMO LabelWriter 450 - social",
   "data_base64": "..."  // optional base64-encoded raw data
 }
 ```
@@ -84,7 +89,7 @@ enable sharing, list printers, and send a file:
 python client_example.py --url http://192.168.1.10:5151 --token YOUR_TOKEN --enable
 python client_example.py --url http://192.168.1.10:5151 --token YOUR_TOKEN
 python client_example.py --url http://192.168.1.10:5151 --token YOUR_TOKEN \
-    --printer "DYMO LabelWriter 450" --file sample_label.pdf
+    --printer "DYMO LabelWriter 450 - social" --file sample_label.pdf
 ```
 
 ## Troubleshooting
