@@ -445,6 +445,64 @@ class ToolApp(tk.Tk):
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
+    def log(self, message: str) -> None:
+        """Append a message to the on-screen log in a thread-safe way."""
+
+        if message is None:
+            return
+
+        def append() -> None:
+            text = str(message)
+            if hasattr(self, "log_area"):
+                self.log_area.config(state=tk.NORMAL)
+                self.log_area.insert(tk.END, text + "\n")
+                self.log_area.see(tk.END)
+                self.log_area.config(state=tk.DISABLED)
+            else:
+                print(text)
+
+        if threading.current_thread() is threading.main_thread():
+            append()
+        else:
+            self.after(0, append)
+
+    def run_in_thread(self, target: Callable, *args, daemon: bool = True, **kwargs) -> threading.Thread:
+        """Execute a callable in a background thread and report unexpected errors."""
+
+        def worker() -> None:
+            try:
+                target(*args, **kwargs)
+            except Exception as exc:  # pragma: no cover - defensive
+                def report() -> None:
+                    error_text = f"{self.tr('Error')}: {exc}"
+                    self.log(error_text)
+                    messagebox.showerror(self.tr("Error"), str(exc))
+
+                self.after(0, report)
+
+        thread = threading.Thread(target=worker, daemon=daemon)
+        thread.start()
+        return thread
+
+    def task_completion_popup(self, status: str, message: str) -> None:
+        """Display a completion dialog from background tasks on the main thread."""
+
+        def show_dialog() -> None:
+            normalized = (status or "").strip().lower()
+            title = self.tr(status) if status else ""
+            if normalized == "error":
+                messagebox.showerror(self.tr("Error"), message)
+            elif normalized == "warning":
+                messagebox.showwarning(self.tr("Warning"), message)
+            else:
+                dialog_title = title or self.tr("Information")
+                messagebox.showinfo(dialog_title, message)
+
+        if threading.current_thread() is threading.main_thread():
+            show_dialog()
+        else:
+            self.after(0, show_dialog)
+
     def setup_styles(self):
         """Configure a modern dark theme for the application widgets."""
         base_bg = "#0b1120"
