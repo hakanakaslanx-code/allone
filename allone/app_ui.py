@@ -411,6 +411,12 @@ class ToolApp(tk.Tk):
             padding=8,
         )
         style.configure(
+            "TCombobox",
+            fieldbackground="#111827",
+            foreground=text_primary,
+            background=card_bg,
+        )
+        style.configure(
             "TLabelframe",
             background=card_bg,
             foreground=text_primary,
@@ -424,6 +430,8 @@ class ToolApp(tk.Tk):
         style.configure("Horizontal.TSeparator", background="#1f2937")
 
         self.option_add("*TCombobox*Listbox.font", ("Segoe UI", 10))
+        self.option_add("*TCombobox*Listbox.foreground", "#000000")
+        self.option_add("*TCombobox*Listbox.background", "#f8fafc")
         self.option_add("*Font", ("Segoe UI", 10))
         self.option_add("*Foreground", text_primary)
 
