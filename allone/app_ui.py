@@ -9,6 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import requests
+
 from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
@@ -106,7 +108,22 @@ TRANSLATIONS = {
         "Print server settings saved.": "Print server settings saved.",
         "Please enter a valid port number.": "Please enter a valid port number.",
         "Could not open the README file.": "Could not open the README file.",
-        "PRINT_SERVER_COMMAND_HINT": "Launch with: python server.py --port {port} --token {token}",
+        "PRINT_SERVER_COMMAND_HINT": "python server.py --port {port} --token {token}",
+        "PRINT_SERVER_STATUS_INITIAL": "Server Status: 🔴 Not Running",
+        "PRINT_SERVER_STATUS_CHECKING": "Server Status: ⏳ Checking...",
+        "PRINT_SERVER_STATUS_RUNNING": "Server Status: 🟢 Running",
+        "PRINT_SERVER_STATUS_NOT_SHARED": "Server Status: 🔴 Not Running",
+        "PRINT_SERVER_STATUS_OFFLINE": "Server Status: 🔴 Offline",
+        "PRINT_SERVER_STATUS_INVALID_PORT": "Server Status: 🔴 Invalid Port",
+        "Check Status": "Check Status",
+        "Quick Start Command:": "Quick Start Command:",
+        "Copy Command": "Copy Command",
+        "PRINT_SERVER_SECURITY_NOTE": (
+            "This service is only for the same Wi-Fi / LAN. Do not expose this port to the internet."
+        ),
+        "Hide Security Note": "Hide Security Note",
+        "Show Security Note": "Show Security Note",
+        "PRINT_SERVER_COMMAND_COPIED": "Quick start command copied to clipboard.",
         "Please fill in all Rinven Tag fields.": "Please fill in all Rinven Tag fields.",
         "Barcode data is required when barcode is enabled.": "Barcode data is required when barcode is enabled.",
         "Filename is required.": "Filename is required.",
@@ -243,7 +260,22 @@ TRANSLATIONS = {
         "Print server settings saved.": "Yazıcı sunucusu ayarları kaydedildi.",
         "Please enter a valid port number.": "Lütfen geçerli bir port numarası girin.",
         "Could not open the README file.": "README dosyası açılamadı.",
-        "PRINT_SERVER_COMMAND_HINT": "Çalıştırma komutu: python server.py --port {port} --token {token}",
+        "PRINT_SERVER_COMMAND_HINT": "python server.py --port {port} --token {token}",
+        "PRINT_SERVER_STATUS_INITIAL": "Sunucu Durumu: 🔴 Çalışmıyor",
+        "PRINT_SERVER_STATUS_CHECKING": "Sunucu Durumu: ⏳ Kontrol ediliyor...",
+        "PRINT_SERVER_STATUS_RUNNING": "Sunucu Durumu: 🟢 Çalışıyor",
+        "PRINT_SERVER_STATUS_NOT_SHARED": "Sunucu Durumu: 🔴 Paylaşıma Açık Değil",
+        "PRINT_SERVER_STATUS_OFFLINE": "Sunucu Durumu: 🔴 Offline",
+        "PRINT_SERVER_STATUS_INVALID_PORT": "Sunucu Durumu: 🔴 Geçersiz Port",
+        "Check Status": "Durumu Kontrol Et",
+        "Quick Start Command:": "Hızlı Başlat Komutu:",
+        "Copy Command": "Komutu Kopyala",
+        "PRINT_SERVER_SECURITY_NOTE": (
+            "Bu servis yalnızca aynı Wi-Fi / LAN içindir. Bu portu internete açmayın."
+        ),
+        "Hide Security Note": "Güvenlik Notunu Gizle",
+        "Show Security Note": "Güvenlik Notunu Göster",
+        "PRINT_SERVER_COMMAND_COPIED": "Hızlı başlat komutu panoya kopyalandı.",
         "Please fill in all Rinven Tag fields.": "Lütfen tüm Rinven Etiketi alanlarını doldurun.",
         "Barcode data is required when barcode is enabled.": "Barkod etkinleştirildiğinde barkod verisi gereklidir.",
         "Filename is required.": "Dosya adı gereklidir.",
@@ -329,6 +361,11 @@ class ToolApp(tk.Tk):
         self.print_server_port_var = tk.StringVar(value=str(print_server_settings.get("port", 5151)))
         self.print_server_token_var.trace_add("write", self.update_print_server_command_label)
         self.print_server_port_var.trace_add("write", self.update_print_server_command_label)
+        self.quick_start_command_var = tk.StringVar()
+        self.print_server_status_var = tk.StringVar()
+        self.security_note_var = tk.StringVar()
+        self.print_server_status_key = "PRINT_SERVER_STATUS_INITIAL"
+        self.security_note_visible = True
 
         self.create_language_selector()
 
@@ -541,6 +578,12 @@ class ToolApp(tk.Tk):
         for tab, text_key in self.translatable_tabs:
             self.notebook.tab(tab, text=self.tr(text_key))
         self.update_help_tab_content()
+        if hasattr(self, "security_note_var"):
+            self.security_note_var.set(self.tr("PRINT_SERVER_SECURITY_NOTE"))
+        if hasattr(self, "security_toggle_button"):
+            self.update_security_toggle_text()
+        if hasattr(self, "print_server_status_var"):
+            self.set_print_server_status(self.print_server_status_key)
         self.update_print_server_command_label()
 
     def update_help_tab_content(self):
@@ -552,16 +595,86 @@ class ToolApp(tk.Tk):
             self.help_text_area.config(state=tk.DISABLED)
 
     def update_print_server_command_label(self, *args):
-        if hasattr(self, "print_server_command_label"):
-            port_value = self.print_server_port_var.get().strip()
-            token_value = self.print_server_token_var.get().strip()
-            port_value = port_value or "{port}"
-            token_value = token_value or "{token}"
-            text = self.tr("PRINT_SERVER_COMMAND_HINT").format(
+        if hasattr(self, "quick_start_command_var"):
+            port_value = self.print_server_port_var.get().strip() or "{port}"
+            token_value = self.print_server_token_var.get().strip() or "{token}"
+            command = self.tr("PRINT_SERVER_COMMAND_HINT").format(
                 port=port_value,
                 token=token_value,
             )
-            self.print_server_command_label.config(text=text)
+            self.quick_start_command_var.set(command)
+
+    def set_print_server_status(self, status_key):
+        self.print_server_status_key = status_key
+        if hasattr(self, "print_server_status_var"):
+            self.print_server_status_var.set(self.tr(status_key))
+
+    def check_print_server_status(self):
+        port_value = self.print_server_port_var.get().strip()
+        try:
+            port = int(port_value)
+            if not (1 <= port <= 65535):
+                raise ValueError
+        except ValueError:
+            self.set_print_server_status("PRINT_SERVER_STATUS_INVALID_PORT")
+            return
+
+        self.set_print_server_status("PRINT_SERVER_STATUS_CHECKING")
+        token = self.print_server_token_var.get().strip()
+        self.run_in_thread(self._fetch_print_server_status, port, token)
+
+    def _fetch_print_server_status(self, port, token):
+        url = f"http://127.0.0.1:{port}/status"
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        try:
+            response = requests.get(url, headers=headers, timeout=5)
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                except ValueError:
+                    data = {}
+
+                if data.get("shared"):
+                    self.after(0, lambda: self.set_print_server_status("PRINT_SERVER_STATUS_RUNNING"))
+                else:
+                    self.after(0, lambda: self.set_print_server_status("PRINT_SERVER_STATUS_NOT_SHARED"))
+            else:
+                self.after(0, lambda: self.set_print_server_status("PRINT_SERVER_STATUS_NOT_SHARED"))
+        except requests.RequestException:
+            self.after(0, lambda: self.set_print_server_status("PRINT_SERVER_STATUS_OFFLINE"))
+
+    def copy_quick_start_command(self):
+        if not hasattr(self, "quick_start_command_var"):
+            return
+
+        command = self.quick_start_command_var.get()
+        if not command:
+            return
+
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(command)
+        except tk.TclError:
+            pass
+
+        self.log(self.tr("PRINT_SERVER_COMMAND_COPIED"))
+
+    def toggle_security_note(self):
+        self.security_note_visible = not self.security_note_visible
+        if hasattr(self, "security_note_label"):
+            if self.security_note_visible:
+                self.security_note_label.grid()
+            else:
+                self.security_note_label.grid_remove()
+        self.update_security_toggle_text()
+
+    def update_security_toggle_text(self):
+        if hasattr(self, "security_toggle_button"):
+            text_key = "Hide Security Note" if self.security_note_visible else "Show Security Note"
+            self.security_toggle_button.config(text=self.tr(text_key))
 
     def save_print_server_settings(self):
         token = self.print_server_token_var.get().strip()
@@ -1209,20 +1322,71 @@ class ToolApp(tk.Tk):
             row=2, column=1, sticky="we", padx=6, pady=4
         )
 
-        self.print_server_command_label = ttk.Label(
+        status_frame = ttk.Frame(frame)
+        status_frame.grid(row=3, column=0, columnspan=2, sticky="we", padx=6, pady=(4, 6))
+        status_frame.grid_columnconfigure(0, weight=1)
+
+        status_label = ttk.Label(status_frame, textvariable=self.print_server_status_var)
+        status_label.grid(row=0, column=0, sticky="w")
+
+        self.check_status_button = ttk.Button(
+            status_frame,
+            text=self.tr("Check Status"),
+            command=self.check_print_server_status,
+        )
+        self.check_status_button.grid(row=0, column=1, sticky="e", padx=(8, 0))
+        self.register_widget(self.check_status_button, "Check Status")
+
+        quick_label = ttk.Label(frame, text=self.tr("Quick Start Command:"))
+        quick_label.grid(row=4, column=0, columnspan=2, sticky="w", padx=6, pady=(0, 4))
+        self.register_widget(quick_label, "Quick Start Command:")
+
+        command_frame = ttk.Frame(frame)
+        command_frame.grid(row=5, column=0, columnspan=2, sticky="we", padx=6, pady=(0, 8))
+        command_frame.grid_columnconfigure(0, weight=1)
+
+        command_entry = ttk.Entry(
+            command_frame,
+            textvariable=self.quick_start_command_var,
+            state="readonly",
+        )
+        command_entry.grid(row=0, column=0, sticky="we")
+
+        copy_button = ttk.Button(
+            command_frame,
+            text=self.tr("Copy Command"),
+            command=self.copy_quick_start_command,
+        )
+        copy_button.grid(row=0, column=1, sticky="e", padx=(8, 0))
+        self.register_widget(copy_button, "Copy Command")
+
+        self.security_note_var.set(self.tr("PRINT_SERVER_SECURITY_NOTE"))
+        self.security_note_label = ttk.Label(
             frame,
+            textvariable=self.security_note_var,
             wraplength=620,
             justify="left",
             foreground=self.theme_colors["text_secondary"],
         )
-        self.print_server_command_label.grid(row=3, column=0, columnspan=2, sticky="w", padx=6, pady=(4, 12))
+        try:
+            self.security_note_label.configure(font=("TkDefaultFont", 9))
+        except tk.TclError:
+            pass
+        self.security_note_label.grid(row=6, column=0, columnspan=2, sticky="w", padx=6, pady=(0, 4))
+
+        self.security_toggle_button = ttk.Button(
+            frame,
+            command=self.toggle_security_note,
+        )
+        self.security_toggle_button.grid(row=7, column=0, columnspan=2, sticky="w", padx=6, pady=(0, 12))
+        self.update_security_toggle_text()
 
         save_button = ttk.Button(
             frame,
             text=self.tr("Save Print Server Settings"),
             command=self.save_print_server_settings,
         )
-        save_button.grid(row=4, column=0, columnspan=2, pady=(0, 8))
+        save_button.grid(row=8, column=0, columnspan=2, pady=(0, 8))
         self.register_widget(save_button, "Save Print Server Settings")
 
         open_button = ttk.Button(
@@ -1230,10 +1394,11 @@ class ToolApp(tk.Tk):
             text=self.tr("Open Print Server README"),
             command=self.open_print_server_readme,
         )
-        open_button.grid(row=5, column=0, columnspan=2)
+        open_button.grid(row=9, column=0, columnspan=2)
         self.register_widget(open_button, "Open Print Server README")
 
         self.update_print_server_command_label()
+        self.set_print_server_status(self.print_server_status_key)
 
 
     def create_about_tab(self):
