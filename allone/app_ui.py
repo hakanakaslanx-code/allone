@@ -11,6 +11,9 @@ from pathlib import Path
 
 import requests
 
+
+printServerProcess = None
+
 from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
@@ -109,13 +112,22 @@ TRANSLATIONS = {
         "Please enter a valid port number.": "Please enter a valid port number.",
         "Could not open the README file.": "Could not open the README file.",
         "PRINT_SERVER_COMMAND_HINT": "python server.py --port {port} --token {token}",
-        "PRINT_SERVER_STATUS_INITIAL": "Server Status: 🔴 Not Running",
+        "PRINT_SERVER_STATUS_INITIAL": "Server Status: ⚪ Offline",
         "PRINT_SERVER_STATUS_CHECKING": "Server Status: ⏳ Checking...",
-        "PRINT_SERVER_STATUS_RUNNING": "Server Status: 🟢 Running",
-        "PRINT_SERVER_STATUS_NOT_SHARED": "Server Status: 🔴 Not Running",
-        "PRINT_SERVER_STATUS_OFFLINE": "Server Status: 🔴 Offline",
+        "PRINT_SERVER_STATUS_ONLINE": "Server Status: 🟢 Online",
+        "PRINT_SERVER_STATUS_OFFLINE": "Server Status: ⚪ Offline",
         "PRINT_SERVER_STATUS_INVALID_PORT": "Server Status: 🔴 Invalid Port",
+        "PRINT_SERVER_SHARE_ON": "Sharing Enabled",
+        "PRINT_SERVER_SHARE_OFF": "Sharing Disabled",
         "Check Status": "Check Status",
+        "Start Server": "Start Server",
+        "Stop Server": "Stop Server",
+        "PRINT_SERVER_ALREADY_RUNNING": "Server is already running.",
+        "PRINT_SERVER_NOT_RUNNING": "Server is already stopped.",
+        "PRINT_SERVER_START_FAILED": "Failed to start the server.",
+        "PRINT_SERVER_STARTED": "Print server started.",
+        "PRINT_SERVER_STOPPED": "Print server stopped.",
+        "PRINT_SERVER_SCRIPT_MISSING": "Print server script is missing.",
         "Quick Start Command:": "Quick Start Command:",
         "Copy Command": "Copy Command",
         "PRINT_SERVER_SECURITY_NOTE": (
@@ -129,6 +141,7 @@ TRANSLATIONS = {
         "Filename is required.": "Filename is required.",
         "Check for Updates": "Check for Updates",
         "Warning": "Warning",
+        "Information": "Information",
         "Source and Target folders cannot be empty.": "Source and Target folders cannot be empty.",
         "✅ Settings saved to settings.json": "✅ Settings saved to settings.json",
         "Success": "Success",
@@ -261,13 +274,22 @@ TRANSLATIONS = {
         "Please enter a valid port number.": "Lütfen geçerli bir port numarası girin.",
         "Could not open the README file.": "README dosyası açılamadı.",
         "PRINT_SERVER_COMMAND_HINT": "python server.py --port {port} --token {token}",
-        "PRINT_SERVER_STATUS_INITIAL": "Sunucu Durumu: 🔴 Çalışmıyor",
+        "PRINT_SERVER_STATUS_INITIAL": "Sunucu Durumu: ⚪ Offline",
         "PRINT_SERVER_STATUS_CHECKING": "Sunucu Durumu: ⏳ Kontrol ediliyor...",
-        "PRINT_SERVER_STATUS_RUNNING": "Sunucu Durumu: 🟢 Çalışıyor",
-        "PRINT_SERVER_STATUS_NOT_SHARED": "Sunucu Durumu: 🔴 Paylaşıma Açık Değil",
-        "PRINT_SERVER_STATUS_OFFLINE": "Sunucu Durumu: 🔴 Offline",
+        "PRINT_SERVER_STATUS_ONLINE": "Sunucu Durumu: 🟢 Online",
+        "PRINT_SERVER_STATUS_OFFLINE": "Sunucu Durumu: ⚪ Offline",
         "PRINT_SERVER_STATUS_INVALID_PORT": "Sunucu Durumu: 🔴 Geçersiz Port",
+        "PRINT_SERVER_SHARE_ON": "Paylaşım Açık",
+        "PRINT_SERVER_SHARE_OFF": "Paylaşım Kapalı",
         "Check Status": "Durumu Kontrol Et",
+        "Start Server": "Sunucuyu Başlat",
+        "Stop Server": "Sunucuyu Durdur",
+        "PRINT_SERVER_ALREADY_RUNNING": "Zaten çalışıyor.",
+        "PRINT_SERVER_NOT_RUNNING": "Zaten kapalı.",
+        "PRINT_SERVER_START_FAILED": "Sunucu başlatılamadı.",
+        "PRINT_SERVER_STARTED": "Yazıcı sunucusu başlatıldı.",
+        "PRINT_SERVER_STOPPED": "Yazıcı sunucusu durduruldu.",
+        "PRINT_SERVER_SCRIPT_MISSING": "Yazıcı sunucusu betiği bulunamadı.",
         "Quick Start Command:": "Hızlı Başlat Komutu:",
         "Copy Command": "Komutu Kopyala",
         "PRINT_SERVER_SECURITY_NOTE": (
@@ -281,6 +303,7 @@ TRANSLATIONS = {
         "Filename is required.": "Dosya adı gereklidir.",
         "Check for Updates": "Güncellemeleri Kontrol Et",
         "Warning": "Uyarı",
+        "Information": "Bilgi",
         "Source and Target folders cannot be empty.": "Kaynak ve hedef klasörler boş olamaz.",
         "✅ Settings saved to settings.json": "✅ Ayarlar settings.json dosyasına kaydedildi",
         "Success": "Başarılı",
@@ -363,9 +386,13 @@ class ToolApp(tk.Tk):
         self.print_server_port_var.trace_add("write", self.update_print_server_command_label)
         self.quick_start_command_var = tk.StringVar()
         self.print_server_status_var = tk.StringVar()
+        self.print_server_share_var = tk.StringVar(value="")
+        self.print_server_share_key = None
         self.security_note_var = tk.StringVar()
         self.print_server_status_key = "PRINT_SERVER_STATUS_INITIAL"
         self.security_note_visible = True
+        self.active_print_server_port = None
+        self.active_print_server_token = None
 
         self.create_language_selector()
 
@@ -395,6 +422,8 @@ class ToolApp(tk.Tk):
         self.log(self.tr("Welcome to the Combined Utility Tool!"))
 
         self.run_in_thread(check_for_updates, self, self.log, __version__, silent=True)
+
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def setup_styles(self):
         """Configure a modern dark theme for the application widgets."""
@@ -584,6 +613,8 @@ class ToolApp(tk.Tk):
             self.update_security_toggle_text()
         if hasattr(self, "print_server_status_var"):
             self.set_print_server_status(self.print_server_status_key)
+        if hasattr(self, "print_server_share_var"):
+            self.set_print_server_share(self.print_server_share_key)
         self.update_print_server_command_label()
 
     def update_help_tab_content(self):
@@ -609,6 +640,14 @@ class ToolApp(tk.Tk):
         if hasattr(self, "print_server_status_var"):
             self.print_server_status_var.set(self.tr(status_key))
 
+    def set_print_server_share(self, share_key=None):
+        self.print_server_share_key = share_key
+        if hasattr(self, "print_server_share_var"):
+            if share_key:
+                self.print_server_share_var.set(self.tr(share_key))
+            else:
+                self.print_server_share_var.set("")
+
     def check_print_server_status(self):
         port_value = self.print_server_port_var.get().strip()
         try:
@@ -617,9 +656,11 @@ class ToolApp(tk.Tk):
                 raise ValueError
         except ValueError:
             self.set_print_server_status("PRINT_SERVER_STATUS_INVALID_PORT")
+            self.set_print_server_share(None)
             return
 
         self.set_print_server_status("PRINT_SERVER_STATUS_CHECKING")
+        self.set_print_server_share(None)
         token = self.print_server_token_var.get().strip()
         self.run_in_thread(self._fetch_print_server_status, port, token)
 
@@ -637,14 +678,121 @@ class ToolApp(tk.Tk):
                 except ValueError:
                     data = {}
 
-                if data.get("shared"):
-                    self.after(0, lambda: self.set_print_server_status("PRINT_SERVER_STATUS_RUNNING"))
-                else:
-                    self.after(0, lambda: self.set_print_server_status("PRINT_SERVER_STATUS_NOT_SHARED"))
+                shared_value = data.get("shared")
+                self.after(0, lambda: self._apply_print_server_status(True, shared_value))
             else:
-                self.after(0, lambda: self.set_print_server_status("PRINT_SERVER_STATUS_NOT_SHARED"))
+                self.after(0, lambda: self._apply_print_server_status(False, None))
         except requests.RequestException:
-            self.after(0, lambda: self.set_print_server_status("PRINT_SERVER_STATUS_OFFLINE"))
+            self.after(0, lambda: self._apply_print_server_status(False, None))
+
+    def _apply_print_server_status(self, online, shared):
+        if online:
+            self.set_print_server_status("PRINT_SERVER_STATUS_ONLINE")
+            if shared is True:
+                self.set_print_server_share("PRINT_SERVER_SHARE_ON")
+            else:
+                self.set_print_server_share("PRINT_SERVER_SHARE_OFF")
+        else:
+            self.set_print_server_status("PRINT_SERVER_STATUS_OFFLINE")
+            self.set_print_server_share(None)
+
+    def _cleanup_print_server_process(self):
+        global printServerProcess
+        if printServerProcess is not None and printServerProcess.poll() is not None:
+            printServerProcess = None
+            self.active_print_server_port = None
+            self.active_print_server_token = None
+
+    def start_print_server(self):
+        global printServerProcess
+        self._cleanup_print_server_process()
+        if printServerProcess is not None:
+            messagebox.showinfo(self.tr("Information"), self.tr("PRINT_SERVER_ALREADY_RUNNING"))
+            return
+
+        port_value = self.print_server_port_var.get().strip()
+        try:
+            port = int(port_value)
+            if not (1 <= port <= 65535):
+                raise ValueError
+        except ValueError:
+            self.set_print_server_status("PRINT_SERVER_STATUS_INVALID_PORT")
+            self.set_print_server_share(None)
+            messagebox.showerror(self.tr("Error"), self.tr("Please enter a valid port number."))
+            return
+
+        token = self.print_server_token_var.get().strip() or "change-me"
+        if not self.print_server_token_var.get().strip():
+            self.print_server_token_var.set(token)
+
+        server_path = Path(__file__).resolve().parent.parent / "print_server" / "server.py"
+        if not server_path.exists():
+            messagebox.showerror(self.tr("Error"), self.tr("PRINT_SERVER_SCRIPT_MISSING"))
+            return
+
+        command = [sys.executable, str(server_path), "--port", str(port), "--token", token]
+
+        try:
+            process = subprocess.Popen(command, cwd=str(server_path.parent))
+        except Exception as exc:
+            error_message = f"{self.tr('PRINT_SERVER_START_FAILED')}\n{exc}"
+            self.log(error_message)
+            messagebox.showerror(self.tr("Error"), error_message)
+            self.set_print_server_status("PRINT_SERVER_STATUS_OFFLINE")
+            self.set_print_server_share(None)
+            return
+
+        printServerProcess = process
+        self.active_print_server_port = port
+        self.active_print_server_token = token
+        self._apply_print_server_status(True, False)
+        success_message = f"{self.tr('PRINT_SERVER_STARTED')} (PID {process.pid})"
+        self.log(success_message)
+        messagebox.showinfo(self.tr("Information"), self.tr("PRINT_SERVER_STARTED"))
+
+    def stop_print_server(self):
+        global printServerProcess
+        self._cleanup_print_server_process()
+        if printServerProcess is None:
+            messagebox.showinfo(self.tr("Information"), self.tr("PRINT_SERVER_NOT_RUNNING"))
+            return
+
+        process = printServerProcess
+        try:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+        except Exception as exc:
+            self.log(f"{self.tr('Error')}: {exc}")
+        finally:
+            printServerProcess = None
+            self.active_print_server_port = None
+            self.active_print_server_token = None
+
+        self._apply_print_server_status(False, None)
+        self.log(self.tr("PRINT_SERVER_STOPPED"))
+        messagebox.showinfo(self.tr("Information"), self.tr("PRINT_SERVER_STOPPED"))
+
+    def on_close(self):
+        global printServerProcess
+        try:
+            if printServerProcess is not None and printServerProcess.poll() is None:
+                try:
+                    printServerProcess.terminate()
+                    try:
+                        printServerProcess.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        printServerProcess.kill()
+                except Exception as exc:
+                    self.log(f"{self.tr('Error')}: {exc}")
+                finally:
+                    printServerProcess = None
+            self.active_print_server_port = None
+            self.active_print_server_token = None
+        finally:
+            self.destroy()
 
     def copy_quick_start_command(self):
         if not hasattr(self, "quick_start_command_var"):
@@ -1329,12 +1477,38 @@ class ToolApp(tk.Tk):
         status_label = ttk.Label(status_frame, textvariable=self.print_server_status_var)
         status_label.grid(row=0, column=0, sticky="w")
 
+        self.print_server_share_label = ttk.Label(
+            status_frame,
+            textvariable=self.print_server_share_var,
+            foreground=self.theme_colors["text_secondary"],
+        )
+        self.print_server_share_label.grid(row=1, column=0, sticky="w", pady=(2, 0))
+
+        button_frame = ttk.Frame(status_frame)
+        button_frame.grid(row=0, column=1, rowspan=2, sticky="e", padx=(8, 0))
+
+        self.start_server_button = ttk.Button(
+            button_frame,
+            text=self.tr("Start Server"),
+            command=self.start_print_server,
+        )
+        self.start_server_button.pack(side="left")
+        self.register_widget(self.start_server_button, "Start Server")
+
+        self.stop_server_button = ttk.Button(
+            button_frame,
+            text=self.tr("Stop Server"),
+            command=self.stop_print_server,
+        )
+        self.stop_server_button.pack(side="left", padx=(8, 0))
+        self.register_widget(self.stop_server_button, "Stop Server")
+
         self.check_status_button = ttk.Button(
             status_frame,
             text=self.tr("Check Status"),
             command=self.check_print_server_status,
         )
-        self.check_status_button.grid(row=0, column=1, sticky="e", padx=(8, 0))
+        self.check_status_button.grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
         self.register_widget(self.check_status_button, "Check Status")
 
         quick_label = ttk.Label(frame, text=self.tr("Quick Start Command:"))
