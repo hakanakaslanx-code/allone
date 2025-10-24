@@ -338,12 +338,12 @@ def _load_font(preferred_names, size):
 
 
 def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
-    """Creates a Rinven tag label sized for a Dymo 30256 Shipping label."""
+    """Creates a Rinven tag label sized for a Dymo 2" x 4" label."""
 
     DPI = 300
     width_px = int(4.0 * DPI)
-    height_px = int(2.3125 * DPI)
-    padding = int(0.18 * DPI)
+    height_px = int(2.0 * DPI)
+    padding = int(0.16 * DPI)
 
     try:
         canvas = Image.new("RGB", (width_px, height_px), "white")
@@ -374,14 +374,14 @@ def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
         if include_barcode and barcode_data:
             BarcodeClass = barcode.get_barcode_class("code128")
             barcode_img = BarcodeClass(barcode_data, writer=ImageWriter()).render(
-                writer_options={"module_height": int(0.8 * DPI), "quiet_zone": 6}
+                writer_options={"module_height": int(0.7 * DPI), "quiet_zone": 6}
             )
             max_barcode_width = width_px - (padding * 2)
-            max_barcode_height = int(height_px * 0.35)
+            max_barcode_height = int(height_px * 0.32)
             barcode_img.thumbnail((max_barcode_width, max_barcode_height), Image.Resampling.LANCZOS)
             barcode_x = (width_px - barcode_img.width) // 2
             canvas.paste(barcode_img, (barcode_x, current_y))
-            current_y += barcode_img.height + int(0.08 * DPI)
+            current_y += barcode_img.height + int(0.06 * DPI)
 
         collection_name = details.get("collection", "").strip()
         if collection_name:
@@ -416,7 +416,7 @@ def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
 
         colon_gap = int(0.04 * DPI)
         value_gap = int(0.08 * DPI)
-        line_height = int(0.19 * DPI)
+        line_height = int(0.18 * DPI)
 
         for label, value in fields:
             label_text = label
