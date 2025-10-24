@@ -11,14 +11,14 @@ from functools import wraps
 from typing import Callable, Optional
 
 import requests
-from flask import Flask, jsonify, request
-from werkzeug.serving import make_server
+
+from print_service import EmbeddedPrintServer, NetworkPrinterBrowser
 
 from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
 
-__version__ = "4.0.5"
+__version__ = "4.1.0"
 
 TRANSLATIONS = {
     "en": {
@@ -121,6 +121,9 @@ TRANSLATIONS = {
         "PRINT_SERVER_STATUS_INVALID_PORT": "Server Status: 🔴 Invalid Port",
         "PRINT_SERVER_SHARE_ON": "Sharing Enabled",
         "PRINT_SERVER_SHARE_OFF": "Sharing Disabled",
+        "Enable Sharing": "Enable Sharing",
+        "Disable Sharing": "Disable Sharing",
+        "Sharing request failed: {error}": "Sharing request failed: {error}",
         "Check Status": "Check Status",
         "Start Server": "Start Server",
         "Stop Server": "Stop Server",
@@ -161,6 +164,33 @@ TRANSLATIONS = {
         "Please fill in all file paths and the column name.": "Please fill in all file paths and the column name.",
         "Data and filename are required.": "Data and filename are required.",
         "Error: {message}": "Error: {message}",
+        "Network Printers": "Network Printers",
+        "NETWORK_PRINTERS_DESCRIPTION": (
+            "Discover printers shared over your LAN. Select a local or remote printer "
+            "and send files through the AllOne Tools print service."
+        ),
+        "Select Printer:": "Select Printer:",
+        "Refresh Local Printers": "Refresh Local Printers",
+        "Printer File:": "Printer File:",
+        "Browse File": "Browse File",
+        "Send Print Job": "Send Print Job",
+        "Discovered Network Printers": "Discovered Network Printers",
+        "Printer Name": "Printer Name",
+        "Host Computer": "Host Computer",
+        "IP Address": "IP Address",
+        "Port": "Port",
+        "Origin": "Origin",
+        "Local": "Local",
+        "Remote": "Remote",
+        "No printers available.": "No printers available.",
+        "Please select a printer.": "Please select a printer.",
+        "Please select a file to print.": "Please select a file to print.",
+        "PRINT_JOB_SENT": "Print job sent successfully.",
+        "PRINT_JOB_FAILED": "Failed to send print job: {error}",
+        "DISCOVERY_UNAVAILABLE": "Printer discovery service unavailable.",
+        "Printer backend unavailable.": "Printer backend unavailable.",
+        "Network printer discovery is not available on this platform.": "Network printer discovery is not available on this platform.",
+        "Select a file to send to the printer.": "Select a file to send to the printer.",
         "ABOUT_CONTENT": (
             "Combined Utility Tool - v{version}\n"
             "This application combines common file, image, and data processing tasks into a single interface.\n"
@@ -285,6 +315,9 @@ TRANSLATIONS = {
         "PRINT_SERVER_STATUS_INVALID_PORT": "Sunucu Durumu: 🔴 Geçersiz Port",
         "PRINT_SERVER_SHARE_ON": "Paylaşım Açık",
         "PRINT_SERVER_SHARE_OFF": "Paylaşım Kapalı",
+        "Enable Sharing": "Paylaşımı Aç",
+        "Disable Sharing": "Paylaşımı Kapat",
+        "Sharing request failed: {error}": "Paylaşım isteği başarısız: {error}",
         "Check Status": "Durumu Kontrol Et",
         "Start Server": "Sunucuyu Başlat",
         "Stop Server": "Sunucuyu Durdur",
@@ -314,6 +347,33 @@ TRANSLATIONS = {
         "Folder settings have been saved.": "Klasör ayarları kaydedildi.",
         "Error": "Hata",
         "Please specify Source, Target, and Numbers File.": "Lütfen Kaynak, Hedef ve Numara Dosyasını belirtin.",
+        "Network Printers": "Ağ Yazıcıları",
+        "NETWORK_PRINTERS_DESCRIPTION": (
+            "Yerel ağınızda paylaşılan yazıcıları keşfedin. Yerel veya uzak bir yazıcı "
+            "seçip AllOne Tools yazdırma servisi üzerinden dosya gönderin."
+        ),
+        "Select Printer:": "Yazıcı Seç:",
+        "Refresh Local Printers": "Yerel Yazıcıları Yenile",
+        "Printer File:": "Yazdırılacak Dosya:",
+        "Browse File": "Dosya Seç",
+        "Send Print Job": "Yazdırmayı Gönder",
+        "Discovered Network Printers": "Keşfedilen Ağ Yazıcıları",
+        "Printer Name": "Yazıcı Adı",
+        "Host Computer": "Bilgisayar",
+        "IP Address": "IP Adresi",
+        "Port": "Port",
+        "Origin": "Kaynak",
+        "Local": "Yerel",
+        "Remote": "Uzak",
+        "No printers available.": "Kullanılabilir yazıcı yok.",
+        "Please select a printer.": "Lütfen bir yazıcı seçin.",
+        "Please select a file to print.": "Lütfen yazdırılacak bir dosya seçin.",
+        "PRINT_JOB_SENT": "Yazdırma isteği gönderildi.",
+        "PRINT_JOB_FAILED": "Yazdırma isteği başarısız: {error}",
+        "DISCOVERY_UNAVAILABLE": "Yazıcı keşif servisi kullanılamıyor.",
+        "Printer backend unavailable.": "Yazıcı altyapısı kullanılamıyor.",
+        "Network printer discovery is not available on this platform.": "Bu platformda ağ yazıcı keşfi desteklenmiyor.",
+        "Select a file to send to the printer.": "Yazıcıya gönderilecek dosyayı seçin.",
         "Please select a valid folder.": "Lütfen geçerli bir klasör seçin.",
         "Please select a valid image folder.": "Lütfen geçerli bir görsel klasörü seçin.",
         "Resize values and quality must be valid numbers.": "Yeniden boyutlandırma değerleri ve kalite geçerli sayılar olmalıdır.",
@@ -359,156 +419,6 @@ DYMO_LABELS = {
 }
 
 
-class EmbeddedPrintServer:
-    """Embedded Flask server that can be controlled from the tkinter UI."""
-
-    def __init__(self, log_callback: Optional[Callable[[str], None]] = None):
-        # Threading primitives ensure that the GUI can safely query or mutate
-        # server state from multiple threads.
-        self._lock = threading.RLock()
-        self._server = None
-        self._thread: Optional[threading.Thread] = None
-        self._app: Optional[Flask] = None
-        self._shared = False
-        self._token: Optional[str] = None
-        self._port: Optional[int] = None
-        self._log_callback = log_callback
-
-    # ------------------------------------------------------------------
-    # Helper utilities
-    # ------------------------------------------------------------------
-    def _log(self, message: str) -> None:
-        if self._log_callback:
-            self._log_callback(message)
-
-    def _require_token(self, func):
-        """Decorator that ensures the Authorization bearer token is valid."""
-
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            header = request.headers.get("Authorization", "")
-            if not header.startswith("Bearer "):
-                return jsonify({"error": "Authorization header missing or invalid."}), 401
-
-            provided = header.split(" ", 1)[1].strip()
-            with self._lock:
-                expected = self._token
-
-            if not expected or provided != expected:
-                return jsonify({"error": "Invalid bearer token."}), 401
-
-            return func(*args, **kwargs)
-
-        return wrapper
-
-    def _create_app(self) -> Flask:
-        """Build the Flask application with status and toggle endpoints."""
-
-        app = Flask("embedded_print_server")
-
-        @app.route("/status", methods=["GET"])
-        @self._require_token
-        def status():
-            with self._lock:
-                shared = self._shared
-            return jsonify({"shared": shared, "status": "ok"})
-
-        @app.route("/enable", methods=["POST", "GET"])
-        @self._require_token
-        def enable():
-            with self._lock:
-                self._shared = True
-                shared = self._shared
-            return jsonify({"shared": shared})
-
-        @app.route("/disable", methods=["POST", "GET"])
-        @self._require_token
-        def disable():
-            with self._lock:
-                self._shared = False
-                shared = self._shared
-            return jsonify({"shared": shared})
-
-        return app
-
-    def _serve(self) -> None:
-        """Run the Werkzeug server loop until it is shut down."""
-
-        try:
-            if self._server is not None:
-                self._server.serve_forever()
-        except Exception as exc:  # pragma: no cover - best effort logging
-            self._log(f"Print server encountered an error: {exc}")
-        finally:
-            # Ensure stale references are cleared when the thread exits.
-            self._finalize_stop()
-
-    def _finalize_stop(self) -> None:
-        with self._lock:
-            self._server = None
-            self._thread = None
-            self._app = None
-            self._token = None
-            self._port = None
-            self._shared = False
-
-    # ------------------------------------------------------------------
-    # Public API used by the GUI
-    # ------------------------------------------------------------------
-    def start(self, port: int, token: str) -> None:
-        """Start the Flask server on the given port with the provided token."""
-
-        with self._lock:
-            if self.is_running():
-                raise RuntimeError("Server is already running.")
-
-            self._token = token
-            self._port = port
-            self._shared = False
-            self._app = self._create_app()
-
-            try:
-                self._server = make_server("0.0.0.0", port, self._app)
-            except OSError:
-                # Reset state so the next attempt can succeed.
-                self._finalize_stop()
-                raise
-
-            self._thread = threading.Thread(
-                target=self._serve,
-                name="EmbeddedPrintServer",
-                daemon=True,
-            )
-            self._thread.start()
-
-    def stop(self, timeout: float = 5.0) -> None:
-        """Stop the server thread and wait for it to exit."""
-
-        with self._lock:
-            server = self._server
-            thread = self._thread
-
-        if server is None or thread is None:
-            return
-
-        try:
-            server.shutdown()
-        finally:
-            thread.join(timeout=timeout)
-            self._finalize_stop()
-
-    def is_running(self) -> bool:
-        with self._lock:
-            return bool(self._thread and self._thread.is_alive())
-
-    def is_shared(self) -> bool:
-        with self._lock:
-            return self._shared
-
-    def current_port(self) -> Optional[int]:
-        with self._lock:
-            return self._port
-
 class ToolApp(tk.Tk):
     """Main application window that builds the entire tkinter interface."""
 
@@ -549,6 +459,21 @@ class ToolApp(tk.Tk):
         self.active_print_server_token = None
         self.print_server_service = EmbeddedPrintServer(self.log)
 
+        self.local_printers = {}
+        self.discovered_printers = {}
+        self.available_printers = {}
+        self.selected_printer_var = tk.StringVar()
+        self.print_job_file_var = tk.StringVar()
+        self.print_hint_var = tk.StringVar()
+        self.discovery_status_var = tk.StringVar()
+        self.printer_browser = NetworkPrinterBrowser(self.on_printer_discovery_update, self.log)
+        if not self.printer_browser.is_available():
+            self.discovery_status_var.set(
+                self.tr("Network printer discovery is not available on this platform.")
+            )
+        else:
+            self.discovery_status_var.set("")
+
         self.create_language_selector()
 
         self.notebook = ttk.Notebook(self)
@@ -559,6 +484,7 @@ class ToolApp(tk.Tk):
         self.create_code_gen_tab()
         self.create_rinven_tag_tab()
         self.create_print_server_tab()
+        self.create_network_printers_tab()
         self.create_about_tab()
 
         self.log_area = ScrolledText(self, height=12)
@@ -577,6 +503,8 @@ class ToolApp(tk.Tk):
         self.log(self.tr("Welcome to the Combined Utility Tool!"))
 
         self.run_in_thread(check_for_updates, self, self.log, __version__, silent=True)
+
+        self.refresh_local_printers()
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
@@ -771,6 +699,21 @@ class ToolApp(tk.Tk):
         if hasattr(self, "print_server_share_var"):
             self.set_print_server_share(self.print_server_share_key)
         self.update_print_server_command_label()
+        if hasattr(self, "network_printer_tree"):
+            self.update_network_tree_headings()
+        if hasattr(self, "print_hint_var"):
+            self._update_print_job_hint()
+        if hasattr(self, "discovery_status_var"):
+            if not (self.printer_browser and self.printer_browser.is_available()):
+                self.discovery_status_var.set(
+                    self.tr("Network printer discovery is not available on this platform.")
+                )
+            elif not self.discovered_printers:
+                self.discovery_status_var.set(self.tr("No printers available."))
+            else:
+                self.discovery_status_var.set("")
+        if hasattr(self, "network_printer_tree"):
+            self.populate_discovery_tree()
 
     def update_help_tab_content(self):
         if hasattr(self, "help_text_area"):
@@ -833,7 +776,7 @@ class ToolApp(tk.Tk):
                 except ValueError:
                     data = {}
 
-                shared_value = data.get("shared")
+                shared_value = data.get("sharing")
                 self.after(0, lambda: self._apply_print_server_status(True, shared_value))
             else:
                 self.after(0, lambda: self._apply_print_server_status(False, None))
@@ -847,6 +790,7 @@ class ToolApp(tk.Tk):
                 self.set_print_server_share("PRINT_SERVER_SHARE_ON")
             else:
                 self.set_print_server_share("PRINT_SERVER_SHARE_OFF")
+            self.refresh_local_printers()
         else:
             self.set_print_server_status("PRINT_SERVER_STATUS_OFFLINE")
             self.set_print_server_share(None)
@@ -935,6 +879,11 @@ class ToolApp(tk.Tk):
                     self.log(f"{self.tr('Error')}: {exc}")
             self.active_print_server_port = None
             self.active_print_server_token = None
+            if getattr(self, "printer_browser", None):
+                try:
+                    self.printer_browser.close()
+                except Exception:
+                    pass
         finally:
             self.destroy()
 
@@ -1655,6 +1604,25 @@ class ToolApp(tk.Tk):
         self.check_status_button.grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
         self.register_widget(self.check_status_button, "Check Status")
 
+        share_frame = ttk.Frame(status_frame)
+        share_frame.grid(row=3, column=0, columnspan=2, sticky="w", pady=(8, 0))
+
+        enable_share_button = ttk.Button(
+            share_frame,
+            text=self.tr("Enable Sharing"),
+            command=self.enable_print_sharing,
+        )
+        enable_share_button.pack(side="left")
+        self.register_widget(enable_share_button, "Enable Sharing")
+
+        disable_share_button = ttk.Button(
+            share_frame,
+            text=self.tr("Disable Sharing"),
+            command=self.disable_print_sharing,
+        )
+        disable_share_button.pack(side="left", padx=(8, 0))
+        self.register_widget(disable_share_button, "Disable Sharing")
+
         quick_label = ttk.Label(frame, text=self.tr("Quick Start Command:"))
         quick_label.grid(row=4, column=0, columnspan=2, sticky="w", padx=6, pady=(0, 4))
         self.register_widget(quick_label, "Quick Start Command:")
@@ -1718,6 +1686,401 @@ class ToolApp(tk.Tk):
         self.update_print_server_command_label()
         self.set_print_server_status(self.print_server_status_key)
 
+
+    def create_network_printers_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="")
+        self.register_tab(tab, "Network Printers")
+
+        frame = ttk.LabelFrame(tab, text=self.tr("Network Printers"), style="Card.TLabelframe")
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
+        frame.grid_columnconfigure(1, weight=1)
+        frame.grid_rowconfigure(6, weight=1)
+        self.register_widget(frame, "Network Printers")
+
+        description = ttk.Label(
+            frame,
+            text=self.tr("NETWORK_PRINTERS_DESCRIPTION"),
+            wraplength=620,
+            justify="left",
+        )
+        description.grid(row=0, column=0, columnspan=4, sticky="w", padx=6, pady=(0, 12))
+        self.register_widget(description, "NETWORK_PRINTERS_DESCRIPTION")
+
+        select_label = ttk.Label(frame, text=self.tr("Select Printer:"))
+        select_label.grid(row=1, column=0, sticky="w", padx=6, pady=(0, 6))
+        self.register_widget(select_label, "Select Printer:")
+
+        self.network_printer_combo = ttk.Combobox(
+            frame,
+            textvariable=self.selected_printer_var,
+            state="readonly",
+        )
+        self.network_printer_combo.grid(row=1, column=1, sticky="we", padx=6, pady=(0, 6))
+        self.network_printer_combo.bind("<<ComboboxSelected>>", lambda event: self._update_print_job_hint())
+
+        refresh_button = ttk.Button(
+            frame,
+            text=self.tr("Refresh Local Printers"),
+            command=self.refresh_local_printers,
+        )
+        refresh_button.grid(row=1, column=2, columnspan=2, sticky="e", padx=6, pady=(0, 6))
+        self.register_widget(refresh_button, "Refresh Local Printers")
+
+        file_label = ttk.Label(frame, text=self.tr("Printer File:"))
+        file_label.grid(row=2, column=0, sticky="w", padx=6, pady=(0, 6))
+        self.register_widget(file_label, "Printer File:")
+
+        file_entry = ttk.Entry(frame, textvariable=self.print_job_file_var)
+        file_entry.grid(row=2, column=1, sticky="we", padx=6, pady=(0, 6))
+
+        browse_button = ttk.Button(
+            frame,
+            text=self.tr("Browse File"),
+            command=self.browse_print_file,
+        )
+        browse_button.grid(row=2, column=2, columnspan=2, sticky="e", padx=6, pady=(0, 6))
+        self.register_widget(browse_button, "Browse File")
+
+        if not self.print_hint_var.get():
+            self.print_hint_var.set(self.tr("Select a file to send to the printer."))
+        hint_label = ttk.Label(
+            frame,
+            textvariable=self.print_hint_var,
+            wraplength=620,
+            justify="left",
+            foreground=self.theme_colors["text_secondary"],
+        )
+        hint_label.grid(row=3, column=0, columnspan=4, sticky="w", padx=6, pady=(0, 8))
+
+        send_button = ttk.Button(
+            frame,
+            text=self.tr("Send Print Job"),
+            command=self.send_print_job,
+        )
+        send_button.grid(row=4, column=0, columnspan=4, sticky="we", padx=6, pady=(0, 12))
+        self.register_widget(send_button, "Send Print Job")
+
+        discovered_label = ttk.Label(
+            frame,
+            text=self.tr("Discovered Network Printers"),
+        )
+        discovered_label.grid(row=5, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 6))
+        self.register_widget(discovered_label, "Discovered Network Printers")
+
+        columns = ("name", "host", "address", "port", "origin")
+        self.network_printer_tree = ttk.Treeview(
+            frame,
+            columns=columns,
+            show="headings",
+            height=6,
+        )
+        self.network_printer_tree.grid(row=6, column=0, columnspan=3, sticky="nsew", padx=6, pady=(0, 6))
+        self.update_network_tree_headings()
+
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=self.network_printer_tree.yview)
+        self.network_printer_tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar.grid(row=6, column=3, sticky="ns", pady=(0, 6))
+
+        discovery_status = ttk.Label(
+            frame,
+            textvariable=self.discovery_status_var,
+            wraplength=620,
+            justify="left",
+            foreground=self.theme_colors["text_secondary"],
+        )
+        discovery_status.grid(row=7, column=0, columnspan=4, sticky="w", padx=6, pady=(0, 6))
+        self.discovery_status_label = discovery_status
+
+        self.populate_discovery_tree()
+
+    def update_network_tree_headings(self):
+        if not hasattr(self, "network_printer_tree"):
+            return
+        headings = [
+            ("name", "Printer Name"),
+            ("host", "Host Computer"),
+            ("address", "IP Address"),
+            ("port", "Port"),
+            ("origin", "Origin"),
+        ]
+        for column, key in headings:
+            try:
+                self.network_printer_tree.heading(column, text=self.tr(key))
+            except tk.TclError:
+                continue
+            self.network_printer_tree.column(column, anchor="w")
+
+    def refresh_local_printers(self):
+        def worker():
+            printers = self.print_server_service.list_local_printers()
+            backend_ready, backend_error = self.print_server_service.backend_status()
+            self.after(0, lambda: self._update_local_printers(printers, backend_ready, backend_error))
+
+        self.run_in_thread(worker)
+
+    def _update_local_printers(self, printers, backend_ready, backend_error):
+        if not backend_ready and backend_error:
+            self.log(self.tr("Printer backend unavailable."))
+
+        self.local_printers = {}
+
+        if printers:
+            port = self.print_server_service.current_port() or self.active_print_server_port
+            if port is None:
+                try:
+                    port = int(self.print_server_port_var.get().strip())
+                except (ValueError, AttributeError):
+                    port = None
+
+            for entry in printers:
+                display_name = entry.get("name") or entry.get("raw_name")
+                if not display_name:
+                    continue
+                self.local_printers[display_name] = {
+                    "type": "local",
+                    "display": display_name,
+                    "raw_name": entry.get("raw_name", display_name),
+                    "hostname": entry.get("hostname", ""),
+                    "address": "127.0.0.1",
+                    "port": port,
+                }
+
+        self.update_printer_combo()
+
+    def on_printer_discovery_update(self, printers):
+        self.after(0, lambda: self._apply_discovered_printers(printers))
+
+    def _apply_discovered_printers(self, printers):
+        self.discovered_printers = {}
+        for printer in printers:
+            display_name = printer.name
+            self.discovered_printers[display_name] = {
+                "type": "remote",
+                "display": display_name,
+                "raw_name": printer.raw_name,
+                "hostname": printer.hostname,
+                "address": printer.address,
+                "port": printer.port,
+                "properties": printer.properties,
+            }
+
+        self.populate_discovery_tree()
+        self.update_printer_combo()
+
+    def populate_discovery_tree(self):
+        if not hasattr(self, "network_printer_tree"):
+            return
+
+        if not (self.printer_browser and self.printer_browser.is_available()):
+            self.discovery_status_var.set(
+                self.tr("Network printer discovery is not available on this platform.")
+            )
+            return
+
+        tree = self.network_printer_tree
+        for item in tree.get_children():
+            tree.delete(item)
+
+        entries = sorted(
+            self.discovered_printers.values(), key=lambda item: item["display"].lower()
+        )
+        for entry in entries:
+            tree.insert(
+                "",
+                "end",
+                values=(
+                    entry["display"],
+                    entry.get("hostname", ""),
+                    entry.get("address", ""),
+                    entry.get("port", ""),
+                    self.tr("Remote"),
+                ),
+            )
+
+        if entries:
+            self.discovery_status_var.set("")
+        else:
+            self.discovery_status_var.set(self.tr("No printers available."))
+
+    def update_printer_combo(self):
+        self.available_printers = {}
+        for mapping in (self.local_printers, self.discovered_printers):
+            for name, info in mapping.items():
+                self.available_printers[name] = info
+
+        values = sorted(self.available_printers.keys(), key=str.lower)
+        if hasattr(self, "network_printer_combo"):
+            self.network_printer_combo["values"] = values
+
+        current = self.selected_printer_var.get()
+        if current not in self.available_printers:
+            if values:
+                self.selected_printer_var.set(values[0])
+            else:
+                self.selected_printer_var.set("")
+
+        self._update_print_job_hint()
+
+    def _update_print_job_hint(self):
+        if not hasattr(self, "print_hint_var"):
+            return
+
+        selected = self.selected_printer_var.get()
+        info = self.available_printers.get(selected)
+        if not selected or not info:
+            self.print_hint_var.set(self.tr("Select a file to send to the printer."))
+            return
+
+        origin = self.tr("Local") if info["type"] == "local" else self.tr("Remote")
+        parts = [origin]
+        hostname = info.get("hostname")
+        if hostname:
+            parts.append(hostname)
+        if info["type"] == "remote" and info.get("address"):
+            parts.append(info["address"])
+        self.print_hint_var.set(" • ".join(parts))
+
+    def browse_print_file(self):
+        file_path = filedialog.askopenfilename(title=self.tr("Printer File:"))
+        if file_path:
+            self.print_job_file_var.set(file_path)
+
+    def send_print_job(self):
+        selected = self.selected_printer_var.get().strip()
+        printer_info = self.available_printers.get(selected)
+
+        if not printer_info:
+            messagebox.showwarning(self.tr("Warning"), self.tr("Please select a printer."))
+            return
+
+        file_path = self.print_job_file_var.get().strip()
+        if not file_path or not os.path.isfile(file_path):
+            messagebox.showwarning(self.tr("Warning"), self.tr("Please select a file to print."))
+            return
+
+        if printer_info["type"] == "local" and not self.print_server_service.is_running():
+            messagebox.showerror(self.tr("Error"), self.tr("PRINT_SERVER_NOT_RUNNING"))
+            return
+
+        token = self.print_server_token_var.get().strip()
+        self.run_in_thread(self._execute_print_job, printer_info, selected, file_path, token)
+
+    def _execute_print_job(self, printer_info, printer_name, file_path, token):
+        if printer_info["type"] == "local":
+            port = self.print_server_service.current_port() or self.active_print_server_port
+            if port is None:
+                try:
+                    port = int(self.print_server_port_var.get().strip())
+                except (ValueError, AttributeError):
+                    port = None
+            if port is None:
+                self.after(0, lambda: self._on_print_failure(self.tr("PRINT_SERVER_STATUS_INVALID_PORT")))
+                return
+            url = f"http://127.0.0.1:{port}/print"
+        else:
+            address = printer_info.get("address")
+            port = printer_info.get("port")
+            if not address or not port:
+                self.after(0, lambda: self._on_print_failure(self.tr("DISCOVERY_UNAVAILABLE")))
+                return
+            url = f"http://{address}:{port}/print"
+
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        try:
+            with open(file_path, "rb") as file_handle:
+                files = {
+                    "file": (
+                        os.path.basename(file_path),
+                        file_handle,
+                        "application/octet-stream",
+                    )
+                }
+                response = requests.post(
+                    url,
+                    headers=headers,
+                    data={"printer_name": printer_name},
+                    files=files,
+                    timeout=30,
+                )
+
+            if response.status_code == 200:
+                self.after(0, lambda: self._on_print_success(printer_name))
+            else:
+                try:
+                    payload = response.json()
+                    error_message = payload.get("error") or response.text
+                except ValueError:
+                    error_message = response.text
+                self.after(0, lambda: self._on_print_failure(error_message))
+        except Exception as exc:
+            self.after(0, lambda: self._on_print_failure(str(exc)))
+
+    def _on_print_success(self, printer_name):
+        message = self.tr("PRINT_JOB_SENT")
+        self.log(f"{message} -> {printer_name}")
+        messagebox.showinfo(self.tr("Success"), message)
+
+    def _on_print_failure(self, error):
+        message = self.tr("PRINT_JOB_FAILED").format(error=error)
+        self.log(message)
+        messagebox.showerror(self.tr("Error"), message)
+
+    def enable_print_sharing(self):
+        self._sync_print_server_state()
+        if not self.print_server_service.is_running():
+            messagebox.showerror(self.tr("Error"), self.tr("PRINT_SERVER_NOT_RUNNING"))
+            return
+        self.run_in_thread(self._post_share_request, "enable")
+
+    def disable_print_sharing(self):
+        self._sync_print_server_state()
+        if not self.print_server_service.is_running():
+            messagebox.showinfo(self.tr("Information"), self.tr("PRINT_SERVER_NOT_RUNNING"))
+            return
+        self.run_in_thread(self._post_share_request, "disable")
+
+    def _post_share_request(self, action):
+        port = self.print_server_service.current_port() or self.active_print_server_port
+        if port is None:
+            try:
+                port = int(self.print_server_port_var.get().strip())
+            except (ValueError, AttributeError):
+                port = None
+        if port is None:
+            self.after(0, lambda: self._share_request_failed(self.tr("PRINT_SERVER_STATUS_INVALID_PORT")))
+            return
+
+        token = self.print_server_token_var.get().strip()
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        url = f"http://127.0.0.1:{port}/{action}"
+
+        try:
+            response = requests.post(url, headers=headers, timeout=5)
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                except ValueError:
+                    data = {}
+                sharing = bool(data.get("sharing"))
+                self.after(0, lambda: self._apply_print_server_status(True, sharing))
+            else:
+                try:
+                    payload = response.json()
+                    error_message = payload.get("error") or response.text
+                except ValueError:
+                    error_message = response.text
+                self.after(0, lambda: self._share_request_failed(error_message))
+        except Exception as exc:
+            self.after(0, lambda: self._share_request_failed(str(exc)))
+
+    def _share_request_failed(self, error_message):
+        message = self.tr("Sharing request failed: {error}").format(error=error_message)
+        self.log(message)
+        messagebox.showerror(self.tr("Error"), message)
 
     def create_about_tab(self):
         tab = ttk.Frame(self.notebook)
