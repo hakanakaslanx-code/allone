@@ -274,6 +274,7 @@ class ToolApp(tk.Tk):
         super().__init__()
 
         self.settings = load_settings()
+        self.settings.setdefault("rinven_history", {})
         self.language = self.settings.get("language", "en")
         if self.language not in TRANSLATIONS:
             self.language = "en"
@@ -991,24 +992,28 @@ class ToolApp(tk.Tk):
         self.rinven_filename = tk.StringVar(value="rinven_tag.png")
         self.rinven_include_barcode = tk.BooleanVar(value=False)
 
+        self.rinven_field_widgets = {}
+
         fields = [
-            ("Collection Name:", self.rinven_collection),
-            ("Design:", self.rinven_design),
-            ("Color:", self.rinven_color),
-            ("Size:", self.rinven_size),
-            ("Origin:", self.rinven_origin),
-            ("Style:", self.rinven_style),
-            ("Content:", self.rinven_content),
-            ("Type:", self.rinven_type),
-            ("Rug #:", self.rinven_rug_no),
+            ("collection", "Collection Name:", self.rinven_collection),
+            ("design", "Design:", self.rinven_design),
+            ("color", "Color:", self.rinven_color),
+            ("size", "Size:", self.rinven_size),
+            ("origin", "Origin:", self.rinven_origin),
+            ("style", "Style:", self.rinven_style),
+            ("content", "Content:", self.rinven_content),
+            ("type", "Type:", self.rinven_type),
+            ("rug_no", "Rug #:", self.rinven_rug_no),
         ]
 
-        for row, (label_key, var) in enumerate(fields):
+        for row, (field_key, label_key, var) in enumerate(fields):
             label = ttk.Label(frame, text=self.tr(label_key))
             label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
             self.register_widget(label, label_key)
-            entry = ttk.Entry(frame, textvariable=var)
-            entry.grid(row=row, column=1, sticky="we", padx=6, pady=4)
+            history_values = self.settings.get("rinven_history", {}).get(field_key, [])
+            combobox = ttk.Combobox(frame, textvariable=var, values=history_values)
+            combobox.grid(row=row, column=1, sticky="we", padx=6, pady=4)
+            self.rinven_field_widgets[field_key] = combobox
 
         row_offset = len(fields)
 
@@ -1215,6 +1220,33 @@ class ToolApp(tk.Tk):
             self.rinven_barcode_entry.config(state="disabled")
             self.rinven_barcode_data.set("")
 
+    def update_rinven_history(self, details: dict):
+        history = self.settings.setdefault("rinven_history", {})
+        updated = False
+
+        for field_key, value in details.items():
+            if not value:
+                continue
+
+            stored_values = history.setdefault(field_key, [])
+
+            if value in stored_values:
+                if stored_values[0] != value:
+                    stored_values.remove(value)
+                    stored_values.insert(0, value)
+                    updated = True
+            else:
+                stored_values.insert(0, value)
+                updated = True
+
+            if len(stored_values) > 10:
+                del stored_values[10:]
+
+        if updated:
+            save_settings(self.settings)
+            for key, combobox in self.rinven_field_widgets.items():
+                combobox["values"] = history.get(key, [])
+
     def start_generate_rinven_tag(self):
         details = {
             "collection": self.rinven_collection.get().strip(),
@@ -1243,6 +1275,8 @@ class ToolApp(tk.Tk):
         if include_barcode and not barcode_value:
             messagebox.showerror(self.tr("Error"), self.tr("Barcode data is required when barcode is enabled."))
             return
+
+        self.update_rinven_history(details)
 
         log_msg, success_msg = backend.generate_rinven_tag_label(
             details,
