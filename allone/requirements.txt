@@ -9,3 +9,6 @@ xlrd
 qrcode
 python-barcode
 numpy
+zeroconf
+pywin32; platform_system == "Windows"
+pycups; platform_system != "Windows"
