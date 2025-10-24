@@ -327,6 +327,115 @@ def generate_barcode_task(data, fname, bc_format, output_type, dymo_size_info, b
     except Exception as e:
         return (f"Error generating barcode: {e}", None)
 
+
+def _load_font(preferred_names, size):
+    for name in preferred_names:
+        try:
+            return ImageFont.truetype(name, size=size)
+        except IOError:
+            continue
+    return ImageFont.load_default()
+
+
+def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
+    """Creates a Rinven tag label sized for a Dymo 30256 Shipping label."""
+
+    DPI = 300
+    width_px = int(4.0 * DPI)
+    height_px = int(2.3125 * DPI)
+    padding = int(0.18 * DPI)
+
+    try:
+        canvas = Image.new("RGB", (width_px, height_px), "white")
+        draw = ImageDraw.Draw(canvas)
+
+        title_font = _load_font(
+            [
+                "arialbd.ttf",
+                "Arial Bold.ttf",
+                "Helvetica-Bold.ttf",
+                "Verdana Bold.ttf",
+                "LiberationSans-Bold.ttf",
+            ],
+            size=int(0.22 * DPI),
+        )
+        text_font = _load_font(
+            [
+                "arial.ttf",
+                "Helvetica.ttf",
+                "Verdana.ttf",
+                "LiberationSans-Regular.ttf",
+            ],
+            size=int(0.16 * DPI),
+        )
+
+        current_y = padding
+
+        if include_barcode and barcode_data:
+            BarcodeClass = barcode.get_barcode_class("code128")
+            barcode_img = BarcodeClass(barcode_data, writer=ImageWriter()).render(
+                writer_options={"module_height": int(0.8 * DPI), "quiet_zone": 6}
+            )
+            max_barcode_width = width_px - (padding * 2)
+            max_barcode_height = int(height_px * 0.35)
+            barcode_img.thumbnail((max_barcode_width, max_barcode_height), Image.Resampling.LANCZOS)
+            barcode_x = (width_px - barcode_img.width) // 2
+            canvas.paste(barcode_img, (barcode_x, current_y))
+            current_y += barcode_img.height + int(0.08 * DPI)
+
+        collection_name = details.get("collection", "").strip()
+        if collection_name:
+            bbox = draw.textbbox((0, 0), collection_name, font=title_font)
+            title_w = bbox[2] - bbox[0]
+            title_h = bbox[3] - bbox[1]
+            title_x = (width_px - title_w) // 2
+            draw.text((title_x, current_y), collection_name, fill="black", font=title_font)
+            current_y += title_h + int(0.08 * DPI)
+
+        field_padding_top = max(current_y, padding)
+        current_y = field_padding_top
+
+        fields = [
+            ("Design", details.get("design", "")),
+            ("Color", details.get("color", "")),
+            ("Size", details.get("size", "")),
+            ("Origin", details.get("origin", "")),
+            ("Style", details.get("style", "")),
+            ("Content", details.get("content", "")),
+            ("Type", details.get("type", "")),
+            ("Rug #", details.get("rug_no", "")),
+        ]
+
+        labels = [label for label, _ in fields]
+        max_label_width = 0
+        for label in labels:
+            bbox = draw.textbbox((0, 0), label, font=text_font)
+            label_width = bbox[2] - bbox[0]
+            if label_width > max_label_width:
+                max_label_width = label_width
+
+        colon_gap = int(0.04 * DPI)
+        value_gap = int(0.08 * DPI)
+        line_height = int(0.19 * DPI)
+
+        for label, value in fields:
+            label_text = label
+            value_text = value.strip()
+            draw.text((padding, current_y), label_text, fill="black", font=text_font)
+            colon_x = padding + max_label_width + colon_gap
+            draw.text((colon_x, current_y), ":", fill="black", font=text_font)
+            value_x = colon_x + value_gap
+            draw.text((value_x, current_y), value_text, fill="black", font=text_font)
+            current_y += line_height
+
+        canvas.save(fname)
+        return (
+            f"✅ Rinven tag saved as '{fname}'",
+            f"Rinven tag saved to:\n{os.path.abspath(fname)}",
+        )
+    except Exception as exc:
+        return (f"Error generating Rinven tag: {exc}", None)
+
 def add_image_links_task(input_path, links_path, key_col, log_callback, completion_callback):
     log_callback("Starting process to add image links...")
     try:

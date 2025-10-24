@@ -76,6 +76,22 @@ TRANSLATIONS = {
         "Format:": "Format:",
         "Output Type:": "Output Type:",
         "Generate Barcode": "Generate Barcode",
+        "Rinven Tag": "Rinven Tag",
+        "Collection Name:": "Collection Name:",
+        "Design:": "Design:",
+        "Color:": "Color:",
+        "Size:": "Size:",
+        "Origin:": "Origin:",
+        "Style:": "Style:",
+        "Content:": "Content:",
+        "Type:": "Type:",
+        "Rug #:": "Rug #:",
+        "Include Barcode": "Include Barcode",
+        "Barcode Data:": "Barcode Data:",
+        "Generate Rinven Tag": "Generate Rinven Tag",
+        "Please fill in all Rinven Tag fields.": "Please fill in all Rinven Tag fields.",
+        "Barcode data is required when barcode is enabled.": "Barcode data is required when barcode is enabled.",
+        "Filename is required.": "Filename is required.",
         "Check for Updates": "Check for Updates",
         "Warning": "Warning",
         "Source and Target folders cannot be empty.": "Source and Target folders cannot be empty.",
@@ -182,6 +198,22 @@ TRANSLATIONS = {
         "Format:": "Format",
         "Output Type:": "Çıktı Türü",
         "Generate Barcode": "Barkod Oluştur",
+        "Rinven Tag": "Rinven Etiketi",
+        "Collection Name:": "Koleksiyon Adı:",
+        "Design:": "Desen:",
+        "Color:": "Renk:",
+        "Size:": "Boyut:",
+        "Origin:": "Menşei:",
+        "Style:": "Stil:",
+        "Content:": "İçerik:",
+        "Type:": "Tür:",
+        "Rug #:": "Halı No:",
+        "Include Barcode": "Barkodu Dahil Et",
+        "Barcode Data:": "Barkod Verisi:",
+        "Generate Rinven Tag": "Rinven Etiketi Oluştur",
+        "Please fill in all Rinven Tag fields.": "Lütfen tüm Rinven Etiketi alanlarını doldurun.",
+        "Barcode data is required when barcode is enabled.": "Barkod etkinleştirildiğinde barkod verisi gereklidir.",
+        "Filename is required.": "Dosya adı gereklidir.",
         "Check for Updates": "Güncellemeleri Kontrol Et",
         "Warning": "Uyarı",
         "Source and Target folders cannot be empty.": "Kaynak ve hedef klasörler boş olamaz.",
@@ -264,6 +296,7 @@ class ToolApp(tk.Tk):
         self.create_file_image_tab()
         self.create_data_calc_tab()
         self.create_code_gen_tab()
+        self.create_rinven_tag_tab()
         self.create_about_tab()
 
         self.log_area = ScrolledText(self, height=12)
@@ -934,6 +967,83 @@ class ToolApp(tk.Tk):
         bc_button.grid(row=4, column=1, columnspan=2, pady=10)
         self.register_widget(bc_button, "Generate Barcode")
 
+    def create_rinven_tag_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="")
+        self.register_tab(tab, "Rinven Tag")
+
+        frame = ttk.LabelFrame(tab, text=self.tr("Rinven Tag"), style="Card.TLabelframe")
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
+        self.register_widget(frame, "Rinven Tag")
+
+        frame.grid_columnconfigure(1, weight=1)
+
+        self.rinven_collection = tk.StringVar()
+        self.rinven_design = tk.StringVar()
+        self.rinven_color = tk.StringVar()
+        self.rinven_size = tk.StringVar()
+        self.rinven_origin = tk.StringVar()
+        self.rinven_style = tk.StringVar()
+        self.rinven_content = tk.StringVar()
+        self.rinven_type = tk.StringVar()
+        self.rinven_rug_no = tk.StringVar()
+        self.rinven_barcode_data = tk.StringVar()
+        self.rinven_filename = tk.StringVar(value="rinven_tag.png")
+        self.rinven_include_barcode = tk.BooleanVar(value=False)
+
+        fields = [
+            ("Collection Name:", self.rinven_collection),
+            ("Design:", self.rinven_design),
+            ("Color:", self.rinven_color),
+            ("Size:", self.rinven_size),
+            ("Origin:", self.rinven_origin),
+            ("Style:", self.rinven_style),
+            ("Content:", self.rinven_content),
+            ("Type:", self.rinven_type),
+            ("Rug #:", self.rinven_rug_no),
+        ]
+
+        for row, (label_key, var) in enumerate(fields):
+            label = ttk.Label(frame, text=self.tr(label_key))
+            label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
+            self.register_widget(label, label_key)
+            entry = ttk.Entry(frame, textvariable=var)
+            entry.grid(row=row, column=1, sticky="we", padx=6, pady=4)
+
+        row_offset = len(fields)
+
+        barcode_check = ttk.Checkbutton(
+            frame,
+            text=self.tr("Include Barcode"),
+            variable=self.rinven_include_barcode,
+            command=self.toggle_rinven_barcode,
+        )
+        barcode_check.grid(row=row_offset, column=0, columnspan=2, sticky="w", padx=6, pady=(12, 4))
+        self.register_widget(barcode_check, "Include Barcode")
+
+        barcode_label = ttk.Label(frame, text=self.tr("Barcode Data:"))
+        barcode_label.grid(row=row_offset + 1, column=0, sticky="e", padx=6, pady=4)
+        self.register_widget(barcode_label, "Barcode Data:")
+
+        self.rinven_barcode_entry = ttk.Entry(frame, textvariable=self.rinven_barcode_data, state="disabled")
+        self.rinven_barcode_entry.grid(row=row_offset + 1, column=1, sticky="we", padx=6, pady=4)
+
+        filename_label = ttk.Label(frame, text=self.tr("Filename:"))
+        filename_label.grid(row=row_offset + 2, column=0, sticky="e", padx=6, pady=4)
+        self.register_widget(filename_label, "Filename:")
+
+        ttk.Entry(frame, textvariable=self.rinven_filename).grid(
+            row=row_offset + 2, column=1, sticky="we", padx=6, pady=4
+        )
+
+        generate_button = ttk.Button(
+            frame,
+            text=self.tr("Generate Rinven Tag"),
+            command=self.start_generate_rinven_tag,
+        )
+        generate_button.grid(row=row_offset + 3, column=0, columnspan=2, pady=(12, 6))
+        self.register_widget(generate_button, "Generate Rinven Tag")
+
     def create_about_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="")
@@ -1091,6 +1201,54 @@ class ToolApp(tk.Tk):
             self.bc_output_type.get(),
             dymo_info,
             self.bc_bottom_text.get() or data,
+        )
+        self.log(log_msg)
+        if success_msg:
+            self.task_completion_popup("Success", success_msg)
+        else:
+            messagebox.showerror(self.tr("Error"), log_msg)
+
+    def toggle_rinven_barcode(self):
+        if self.rinven_include_barcode.get():
+            self.rinven_barcode_entry.config(state="normal")
+        else:
+            self.rinven_barcode_entry.config(state="disabled")
+            self.rinven_barcode_data.set("")
+
+    def start_generate_rinven_tag(self):
+        details = {
+            "collection": self.rinven_collection.get().strip(),
+            "design": self.rinven_design.get().strip(),
+            "color": self.rinven_color.get().strip(),
+            "size": self.rinven_size.get().strip(),
+            "origin": self.rinven_origin.get().strip(),
+            "style": self.rinven_style.get().strip(),
+            "content": self.rinven_content.get().strip(),
+            "type": self.rinven_type.get().strip(),
+            "rug_no": self.rinven_rug_no.get().strip(),
+        }
+
+        if not all(details.values()):
+            messagebox.showerror(self.tr("Error"), self.tr("Please fill in all Rinven Tag fields."))
+            return
+
+        filename = self.rinven_filename.get().strip()
+        if not filename:
+            messagebox.showerror(self.tr("Error"), self.tr("Filename is required."))
+            return
+
+        include_barcode = self.rinven_include_barcode.get()
+        barcode_value = self.rinven_barcode_data.get().strip()
+
+        if include_barcode and not barcode_value:
+            messagebox.showerror(self.tr("Error"), self.tr("Barcode data is required when barcode is enabled."))
+            return
+
+        log_msg, success_msg = backend.generate_rinven_tag_label(
+            details,
+            filename,
+            include_barcode,
+            barcode_value,
         )
         self.log(log_msg)
         if success_msg:
