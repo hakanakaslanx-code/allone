@@ -15,7 +15,7 @@ from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
 
-__version__ = "4.1.5"
+__version__ = "4.1.6"
 
 TRANSLATIONS = {
     "en": {
