@@ -403,7 +403,23 @@ class ToolApp(tk.Tk):
         )
         self._updating_language_selector = False
 
-        self.geometry("900x750")
+        # Adjust the default window size dynamically based on the available screen
+        # real estate so the interface remains usable on both small and large
+        # displays. We fall back to the previous 900x750 minimum for larger
+        # monitors while ensuring we do not exceed the screen bounds on compact
+        # setups where widgets might otherwise be clipped.
+        self.update_idletasks()
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        base_width, base_height = 900, 750
+        margin = 80  # Leave a small margin so the window isn't flush with edges.
+        min_width, min_height = 600, 500
+        available_width = min(screen_width, max(min_width, screen_width - margin))
+        available_height = min(screen_height, max(min_height, screen_height - margin))
+        target_width = min(max(base_width, int(screen_width * 0.9)), available_width)
+        target_height = min(max(base_height, int(screen_height * 0.9)), available_height)
+        self.geometry(f"{target_width}x{target_height}")
+        self.minsize(min(target_width, base_width), min(target_height, base_height))
 
         self.setup_styles()
         self.create_header()
