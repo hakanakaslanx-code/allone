@@ -15,6 +15,7 @@ from print_service import SharedLabelPrinterServer, resolve_local_ip
 from settings_manager import load_settings, save_settings
 from updater import check_for_updates
 import backend_logic as backend
+from wayfair_formatter import WayfairFormatter
 
 __version__ = "4.2.2"
 
@@ -495,6 +496,7 @@ PANEL_INFO = {
         "8. Match Image Links": "Attach hosted image URLs to product rows by matching a shared key column.",
         "8. QR Code Generator": "Generate QR codes for web links or label printers in just a few clicks.",
         "9. Barcode Generator": "Create printable barcodes in multiple formats, including DYMO labels.",
+        "Wayfair Export Formatter": "Prepare a Wayfair-ready Excel file by mapping columns and validating required fields.",
         "Rinven Tag": "Design branded Rinven tags with collection details and optional barcode.",
         "Shared Label Printer": "Share your local DYMO printer securely with other devices on the network.",
         "Help & About": "Review update status, helpful links and support information for the app.",
@@ -511,6 +513,7 @@ PANEL_INFO = {
         "8. Match Image Links": "Paylaşılan anahtar sütunu kullanarak ürün satırlarına görsel bağlantıları ekler.",
         "8. QR Code Generator": "Web bağlantıları veya etiket yazıcıları için birkaç tıklamayla QR kodu üretir.",
         "9. Barcode Generator": "PNG veya DYMO dahil birden çok formatta baskıya hazır barkod oluşturur.",
+        "Wayfair Export Formatter": "Wayfair'e uygun Excel çıktısını sütun eşleştirme ve doğrulama ile hazırlayın.",
         "Rinven Tag": "Koleksiyon bilgileri ve isteğe bağlı barkod içeren Rinven etiketleri tasarlar.",
         "Shared Label Printer": "Yerel DYMO yazıcınızı ağdaki diğer cihazlarla güvenle paylaşmanızı sağlar.",
         "Help & About": "Uygulama sürümünü, rehberleri ve destek bağlantılarını tek yerde gösterir.",
@@ -1946,8 +1949,16 @@ class ToolApp(tk.Tk):
             pady=(4, 0),
         )
 
+        wayfair_card = self.create_section_card(parent, "Wayfair Export Formatter")
+        wayfair_card.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
+        wayfair_frame = wayfair_card.body
+        wayfair_frame.columnconfigure(0, weight=1)
+
+        self.wayfair_formatter = WayfairFormatter(wayfair_frame)
+        self.wayfair_formatter.pack(fill="both", expand=True, padx=6, pady=6)
+
         rug_check_card = self.create_section_card(parent, "Rug No Checker")
-        rug_check_card.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
+        rug_check_card.grid(row=3, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
         rug_check_frame = rug_check_card.body
         rug_check_frame.columnconfigure(1, weight=1)
         rug_check_frame.rowconfigure(1, weight=1)
