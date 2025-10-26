@@ -17,6 +17,80 @@ import backend_logic as backend
 
 __version__ = "4.1.6"
 
+
+class CollapsiblePanel(tk.Frame):
+    """A custom collapsible panel with a header and toggle icon."""
+
+    def __init__(
+        self,
+        master,
+        *,
+        title: str,
+        colors: dict,
+        start_open: bool = False,
+    ) -> None:
+        super().__init__(master, bg=colors["panel_border"], bd=0, highlightthickness=1)
+        self.colors = colors
+        self.configure(highlightbackground=colors["panel_border"], highlightcolor=colors["panel_border"])
+
+        header_bg = colors["panel_header_bg"]
+        text_color = colors["text_primary"]
+
+        self.header = tk.Frame(self, bg=header_bg, bd=0)
+        self.header.pack(fill="x")
+        self.header.configure(cursor="hand2")
+
+        self.icon_label = tk.Label(
+            self.header,
+            text="[-]" if start_open else "[+]",
+            bg=header_bg,
+            fg=text_color,
+            font=("Segoe UI Semibold", 12),
+        )
+        self.icon_label.pack(side="left", padx=(12, 8), pady=8)
+        self.icon_label.configure(cursor="hand2")
+
+        self.title_label = tk.Label(
+            self.header,
+            text=title,
+            bg=header_bg,
+            fg=text_color,
+            font=("Segoe UI Semibold", 12),
+        )
+        self.title_label.pack(side="left", pady=8)
+        self.title_label.configure(cursor="hand2")
+
+        for widget in (self.header, self.icon_label, self.title_label):
+            widget.bind("<Button-1>", self.toggle)
+
+        self.content = ttk.Frame(self, style="PanelBody.TFrame", padding=15)
+        self._is_open = False
+        if start_open:
+            self.open()
+
+    def toggle(self, event=None) -> None:
+        if self._is_open:
+            self.close()
+        else:
+            self.open()
+
+    def open(self) -> None:
+        if self._is_open:
+            return
+        self.content.pack(fill="both", expand=True)
+        self._is_open = True
+        self.icon_label.configure(text="[-]")
+
+    def close(self) -> None:
+        if not self._is_open:
+            return
+        self.content.pack_forget()
+        self._is_open = False
+        self.icon_label.configure(text="[+]")
+
+    def set_title(self, title: str) -> None:
+        self.title_label.configure(text=title)
+
 TRANSLATIONS = {
     "en": {
         "Combined Utility Tool": "Combined Utility Tool",
@@ -400,7 +474,6 @@ class ToolApp(tk.Tk):
             self.language = "en"
 
         self.translatable_widgets = []
-        self.translatable_tabs = []
 
         self.language_options = {"en": "English", "tr": "Turkish"}
         self.language_var = tk.StringVar(
@@ -441,15 +514,43 @@ class ToolApp(tk.Tk):
 
         self.create_language_selector()
 
-        self.notebook = ttk.Notebook(self)
-        self.notebook.pack(pady=10, padx=10, fill="both", expand=True)
+        panel_container = ttk.Frame(self, style="TFrame")
+        panel_container.pack(pady=10, padx=10, fill="both", expand=True)
 
-        self.create_file_image_tab()
-        self.create_data_calc_tab()
-        self.create_code_gen_tab()
-        self.create_rinven_tag_tab()
-        self.create_shared_printer_tab()
-        self.create_about_tab()
+        self.panel_canvas = tk.Canvas(
+            panel_container,
+            bg=self.theme_colors["base_bg"],
+            highlightthickness=0,
+            borderwidth=0,
+        )
+        self.panel_canvas.pack(side="left", fill="both", expand=True)
+
+        self.panel_scrollbar = ttk.Scrollbar(panel_container, orient="vertical", command=self.panel_canvas.yview)
+        self.panel_scrollbar.pack(side="right", fill="y")
+        self.panel_canvas.configure(yscrollcommand=self.panel_scrollbar.set)
+
+        self.panels_frame = ttk.Frame(self.panel_canvas, style="TFrame")
+        self.panel_window = self.panel_canvas.create_window((0, 0), window=self.panels_frame, anchor="nw")
+
+        self.panels_frame.bind(
+            "<Configure>",
+            lambda event: self.panel_canvas.configure(scrollregion=self.panel_canvas.bbox("all")),
+        )
+        self.panel_canvas.bind(
+            "<Configure>",
+            lambda event: self.panel_canvas.itemconfigure(self.panel_window, width=event.width),
+        )
+
+        self.panel_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        self.panel_canvas.bind_all("<Button-4>", self._on_mousewheel)
+        self.panel_canvas.bind_all("<Button-5>", self._on_mousewheel)
+
+        self.create_file_image_panels()
+        self.create_data_calc_panels()
+        self.create_code_gen_panels()
+        self.create_rinven_tag_panel()
+        self.create_shared_printer_panel()
+        self.create_about_panel()
 
         self.log_area = ScrolledText(self, height=12)
         self.log_area.pack(pady=10, padx=10, fill="both", expand=True)
@@ -533,6 +634,8 @@ class ToolApp(tk.Tk):
         """Configure a modern dark theme for the application widgets."""
         base_bg = "#0b1120"
         card_bg = "#111c2e"
+        panel_header_bg = "#1a253a"
+        panel_border = "#1f2d47"
         accent = "#38bdf8"
         accent_hover = "#0ea5e9"
         text_primary = "#f1f5f9"
@@ -542,6 +645,8 @@ class ToolApp(tk.Tk):
         self.theme_colors = {
             "base_bg": base_bg,
             "card_bg": card_bg,
+            "panel_header_bg": panel_header_bg,
+            "panel_border": panel_border,
             "accent": accent,
             "accent_hover": accent_hover,
             "text_primary": text_primary,
@@ -560,6 +665,7 @@ class ToolApp(tk.Tk):
         style.configure("TFrame", background=base_bg)
         style.configure("Header.TFrame", background=base_bg)
         style.configure("Card.TLabelframe", background=card_bg, borderwidth=0, padding=15)
+        style.configure("PanelBody.TFrame", background=card_bg)
         style.configure(
             "Card.TLabelframe.Label",
             background=card_bg,
@@ -719,17 +825,34 @@ class ToolApp(tk.Tk):
 
         self._refresh_language_options()
 
-    def create_file_image_tab(self):
-        """Build the File & Image Tools tab and associated state."""
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="")
-        self.register_tab(tab, "File & Image Tools")
+    def create_collapsible_panel(self, title_key: str, start_open: bool = False) -> CollapsiblePanel:
+        panel = CollapsiblePanel(
+            self.panels_frame,
+            title=self.tr(title_key),
+            colors=self.theme_colors,
+            start_open=start_open,
+        )
+        panel.pack(fill="x", padx=4, pady=(0, 12))
+        self.register_widget(panel.title_label, title_key)
+        return panel
 
-        # 1. Copy/Move Files by List
-        copy_frame = ttk.LabelFrame(tab, text=self.tr("1. Copy/Move Files by List"), style="Card.TLabelframe")
-        copy_frame.pack(fill="x", padx=10, pady=10)
-        copy_frame.grid_columnconfigure(1, weight=1)
-        self.register_widget(copy_frame, "1. Copy/Move Files by List")
+    def _on_mousewheel(self, event) -> None:
+        if not hasattr(self, "panel_canvas"):
+            return
+        if getattr(event, "delta", 0):
+            direction = -1 if event.delta > 0 else 1
+            self.panel_canvas.yview_scroll(direction, "units")
+        elif getattr(event, "num", None) == 4:
+            self.panel_canvas.yview_scroll(-1, "units")
+        elif getattr(event, "num", None) == 5:
+            self.panel_canvas.yview_scroll(1, "units")
+
+    def create_file_image_panels(self):
+        """Build collapsible panels for file and image related tools."""
+
+        copy_panel = self.create_collapsible_panel("1. Copy/Move Files by List", start_open=True)
+        copy_frame = copy_panel.content
+        copy_frame.columnconfigure(1, weight=1)
 
         self.source_folder = tk.StringVar(value=self.settings.get("source_folder", ""))
         self.target_folder = tk.StringVar(value=self.settings.get("target_folder", ""))
@@ -739,7 +862,11 @@ class ToolApp(tk.Tk):
         src_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
         self.register_widget(src_label, "Source Folder:")
         ttk.Entry(copy_frame, textvariable=self.source_folder).grid(row=0, column=1, sticky="we", padx=6, pady=6)
-        src_browse = ttk.Button(copy_frame, text=self.tr("Browse..."), command=lambda: self.source_folder.set(filedialog.askdirectory()))
+        src_browse = ttk.Button(
+            copy_frame,
+            text=self.tr("Browse..."),
+            command=lambda: self.source_folder.set(filedialog.askdirectory()),
+        )
         src_browse.grid(row=0, column=2, sticky="e", padx=6, pady=6)
         self.register_widget(src_browse, "Browse...")
 
@@ -747,7 +874,11 @@ class ToolApp(tk.Tk):
         tgt_label.grid(row=1, column=0, sticky="w", padx=6, pady=6)
         self.register_widget(tgt_label, "Target Folder:")
         ttk.Entry(copy_frame, textvariable=self.target_folder).grid(row=1, column=1, sticky="we", padx=6, pady=6)
-        tgt_browse = ttk.Button(copy_frame, text=self.tr("Browse..."), command=lambda: self.target_folder.set(filedialog.askdirectory()))
+        tgt_browse = ttk.Button(
+            copy_frame,
+            text=self.tr("Browse..."),
+            command=lambda: self.target_folder.set(filedialog.askdirectory()),
+        )
         tgt_browse.grid(row=1, column=2, sticky="e", padx=6, pady=6)
         self.register_widget(tgt_browse, "Browse...")
 
@@ -771,7 +902,7 @@ class ToolApp(tk.Tk):
         list_browse.grid(row=2, column=2, sticky="e", padx=6, pady=6)
         self.register_widget(list_browse, "Browse...")
 
-        button_frame = ttk.Frame(copy_frame)
+        button_frame = ttk.Frame(copy_frame, style="PanelBody.TFrame")
         button_frame.grid(row=3, column=0, columnspan=3, sticky="w", padx=6, pady=(4, 6))
 
         copy_button = ttk.Button(button_frame, text=self.tr("Copy Files"), command=lambda: self.start_process_files("copy"))
@@ -786,18 +917,20 @@ class ToolApp(tk.Tk):
         save_button.pack(side="left", padx=(8, 0))
         self.register_widget(save_button, "Save Settings")
 
-        # 2. Convert HEIC to JPG
-        heic_frame = ttk.LabelFrame(tab, text=self.tr("2. Convert HEIC to JPG"), style="Card.TLabelframe")
-        heic_frame.pack(fill="x", padx=10, pady=10)
-        heic_frame.grid_columnconfigure(1, weight=1)
-        self.register_widget(heic_frame, "2. Convert HEIC to JPG")
+        heic_panel = self.create_collapsible_panel("2. Convert HEIC to JPG")
+        heic_frame = heic_panel.content
+        heic_frame.columnconfigure(1, weight=1)
 
         self.heic_folder = tk.StringVar()
         heic_label = ttk.Label(heic_frame, text=self.tr("Folder with HEIC files:"))
         heic_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
         self.register_widget(heic_label, "Folder with HEIC files:")
         ttk.Entry(heic_frame, textvariable=self.heic_folder).grid(row=0, column=1, sticky="we", padx=6, pady=6)
-        heic_browse = ttk.Button(heic_frame, text=self.tr("Browse..."), command=lambda: self.heic_folder.set(filedialog.askdirectory()))
+        heic_browse = ttk.Button(
+            heic_frame,
+            text=self.tr("Browse..."),
+            command=lambda: self.heic_folder.set(filedialog.askdirectory()),
+        )
         heic_browse.grid(row=0, column=2, sticky="e", padx=6, pady=6)
         self.register_widget(heic_browse, "Browse...")
 
@@ -805,18 +938,20 @@ class ToolApp(tk.Tk):
         heic_button.grid(row=1, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 6))
         self.register_widget(heic_button, "Convert")
 
-        # 3. Batch Image Resizer
-        resize_frame = ttk.LabelFrame(tab, text=self.tr("3. Batch Image Resizer"), style="Card.TLabelframe")
-        resize_frame.pack(fill="x", padx=10, pady=10)
-        resize_frame.grid_columnconfigure(1, weight=1)
-        self.register_widget(resize_frame, "3. Batch Image Resizer")
+        resize_panel = self.create_collapsible_panel("3. Batch Image Resizer")
+        resize_frame = resize_panel.content
+        resize_frame.columnconfigure(1, weight=1)
 
         self.resize_folder = tk.StringVar()
         folder_label = ttk.Label(resize_frame, text=self.tr("Image Folder:"))
         folder_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
         self.register_widget(folder_label, "Image Folder:")
         ttk.Entry(resize_frame, textvariable=self.resize_folder).grid(row=0, column=1, sticky="we", padx=6, pady=6)
-        folder_browse = ttk.Button(resize_frame, text=self.tr("Browse..."), command=lambda: self.resize_folder.set(filedialog.askdirectory()))
+        folder_browse = ttk.Button(
+            resize_frame,
+            text=self.tr("Browse..."),
+            command=lambda: self.resize_folder.set(filedialog.askdirectory()),
+        )
         folder_browse.grid(row=0, column=2, sticky="e", padx=6, pady=6)
         self.register_widget(folder_browse, "Browse...")
 
@@ -825,14 +960,26 @@ class ToolApp(tk.Tk):
         self.register_widget(mode_label, "Resize Mode:")
 
         self.resize_mode = tk.StringVar(value="width")
-        mode_frame = ttk.Frame(resize_frame)
+        mode_frame = ttk.Frame(resize_frame, style="PanelBody.TFrame")
         mode_frame.grid(row=1, column=1, columnspan=2, sticky="w", padx=6, pady=(6, 2))
 
-        width_radio = ttk.Radiobutton(mode_frame, text=self.tr("By Width"), value="width", variable=self.resize_mode, command=self._update_resize_inputs)
+        width_radio = ttk.Radiobutton(
+            mode_frame,
+            text=self.tr("By Width"),
+            value="width",
+            variable=self.resize_mode,
+            command=self._update_resize_inputs,
+        )
         width_radio.pack(side="left")
         self.register_widget(width_radio, "By Width", attr="text")
 
-        percent_radio = ttk.Radiobutton(mode_frame, text=self.tr("By Percentage"), value="percentage", variable=self.resize_mode, command=self._update_resize_inputs)
+        percent_radio = ttk.Radiobutton(
+            mode_frame,
+            text=self.tr("By Percentage"),
+            value="percentage",
+            variable=self.resize_mode,
+            command=self._update_resize_inputs,
+        )
         percent_radio.pack(side="left", padx=(10, 0))
         self.register_widget(percent_radio, "By Percentage", attr="text")
 
@@ -889,11 +1036,6 @@ class ToolApp(tk.Tk):
         self.translatable_widgets.append((widget, attr, text_key))
         self._apply_translation(widget, attr, text_key)
 
-    def register_tab(self, tab, text_key):
-        """Register a notebook tab for translation updates."""
-        self.translatable_tabs.append((tab, text_key))
-        self.notebook.tab(tab, text=self.tr(text_key))
-
     def _apply_translation(self, widget, attr, text_key):
         try:
             widget.configure(**{attr: self.tr(text_key)})
@@ -909,8 +1051,6 @@ class ToolApp(tk.Tk):
             self.header_subtitle.config(text=self.tr("Welcome to the Combined Utility Tool!"))
         for widget, attr, text_key in self.translatable_widgets:
             self._apply_translation(widget, attr, text_key)
-        for tab, text_key in self.translatable_tabs:
-            self.notebook.tab(tab, text=self.tr(text_key))
         self.update_help_tab_content()
         if hasattr(self, "shared_status_var"):
             self._apply_shared_status_translation()
@@ -1172,16 +1312,11 @@ class ToolApp(tk.Tk):
         self.log(message)
         messagebox.showerror(self.tr("Error"), message)
 
-    def create_shared_printer_tab(self):
+    def create_shared_printer_panel(self):
         """Paylaşılan yazıcı sekmesini oluşturur."""
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="")
-        self.register_tab(tab, "Shared Label Printer")
-
-        frame = ttk.LabelFrame(tab, text=self.tr("Shared Label Printer"), style="Card.TLabelframe")
-        frame.pack(fill="both", expand=True, padx=10, pady=10)
-        frame.grid_columnconfigure(1, weight=1)
-        self.register_widget(frame, "Shared Label Printer")
+        panel = self.create_collapsible_panel("Shared Label Printer")
+        frame = panel.content
+        frame.columnconfigure(1, weight=1)
 
         description = ttk.Label(
             frame,
@@ -1209,7 +1344,7 @@ class ToolApp(tk.Tk):
         status_label = ttk.Label(frame, textvariable=self.shared_status_var)
         status_label.grid(row=3, column=0, columnspan=2, sticky="w", padx=6, pady=(6, 6))
 
-        button_frame = ttk.Frame(frame)
+        button_frame = ttk.Frame(frame, style="PanelBody.TFrame")
         button_frame.grid(row=4, column=0, columnspan=2, sticky="w", padx=6, pady=(0, 6))
 
         start_button = ttk.Button(button_frame, text=self.tr("Start Sharing"), command=self.start_shared_printer)
@@ -1224,7 +1359,7 @@ class ToolApp(tk.Tk):
         check_button.pack(side="left", padx=(8, 0))
         self.register_widget(check_button, "Check Status")
 
-        help_frame = ttk.Frame(frame)
+        help_frame = ttk.Frame(frame, style="PanelBody.TFrame")
         help_frame.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=6, pady=(12, 6))
         help_frame.grid_columnconfigure(0, weight=1)
 
@@ -1264,14 +1399,9 @@ class ToolApp(tk.Tk):
         finally:
             self.destroy()
 
-    def create_data_calc_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="")
-        self.register_tab(tab, "Data & Calculation")
-
-        format_frame = ttk.LabelFrame(tab, text=self.tr("4. Format Numbers from File"))
-        self.register_widget(format_frame, "4. Format Numbers from File")
-        format_frame.pack(fill="x", padx=10, pady=10)
+    def create_data_calc_panels(self):
+        format_panel = self.create_collapsible_panel("4. Format Numbers from File")
+        format_frame = format_panel.content
 
         self.format_file = tk.StringVar()
         format_label = ttk.Label(format_frame, text=self.tr("Excel/CSV/TXT File:"))
@@ -1285,9 +1415,8 @@ class ToolApp(tk.Tk):
         format_button.pack(side="left", padx=5, pady=5)
         self.register_widget(format_button, "Format")
 
-        single_rug_frame = ttk.LabelFrame(tab, text=self.tr("5. Rug Size Calculator (Single)"))
-        self.register_widget(single_rug_frame, "5. Rug Size Calculator (Single)")
-        single_rug_frame.pack(fill="x", padx=10, pady=10)
+        single_rug_panel = self.create_collapsible_panel("5. Rug Size Calculator (Single)")
+        single_rug_frame = single_rug_panel.content
 
         self.rug_dim_input = tk.StringVar()
         self.rug_result_label = tk.StringVar()
@@ -1301,9 +1430,9 @@ class ToolApp(tk.Tk):
         self.register_widget(rug_button, "Calculate")
         ttk.Label(single_rug_frame, textvariable=self.rug_result_label, font=("Helvetica", 10, "bold")).pack(side="left", padx=15, pady=5)
 
-        bulk_rug_frame = ttk.LabelFrame(tab, text=self.tr("6. BULK Process Rug Sizes from File"))
-        self.register_widget(bulk_rug_frame, "6. BULK Process Rug Sizes from File")
-        bulk_rug_frame.pack(fill="x", padx=10, pady=10)
+        bulk_rug_panel = self.create_collapsible_panel("6. BULK Process Rug Sizes from File")
+        bulk_rug_frame = bulk_rug_panel.content
+        bulk_rug_frame.columnconfigure(1, weight=1)
 
         self.bulk_rug_file = tk.StringVar()
         self.bulk_rug_col = tk.StringVar(value="Size")
@@ -1324,9 +1453,8 @@ class ToolApp(tk.Tk):
         bulk_process.grid(row=1, column=2, padx=5, pady=5)
         self.register_widget(bulk_process, "Process File")
 
-        unit_frame = ttk.LabelFrame(tab, text=self.tr("7. Unit Converter"))
-        self.register_widget(unit_frame, "7. Unit Converter")
-        unit_frame.pack(fill="x", padx=10, pady=10)
+        unit_panel = self.create_collapsible_panel("7. Unit Converter")
+        unit_frame = unit_panel.content
 
         self.unit_input = tk.StringVar(value=self.tr("182 cm to ft"))
         self.unit_result_label = tk.StringVar()
@@ -1340,9 +1468,9 @@ class ToolApp(tk.Tk):
         self.register_widget(convert_button, "Convert")
         ttk.Label(unit_frame, textvariable=self.unit_result_label, font=("Helvetica", 10, "bold")).pack(side="left", padx=15, pady=5)
 
-        image_link_frame = ttk.LabelFrame(tab, text=self.tr("8. Match Image Links"))
-        self.register_widget(image_link_frame, "8. Match Image Links")
-        image_link_frame.pack(fill="x", padx=10, pady=10)
+        image_link_panel = self.create_collapsible_panel("8. Match Image Links")
+        image_link_frame = image_link_panel.content
+        image_link_frame.columnconfigure(1, weight=1)
 
         self.input_excel_file = tk.StringVar()
         self.image_links_file = tk.StringVar(value="image link shopify.csv")
@@ -1382,11 +1510,7 @@ class ToolApp(tk.Tk):
         match_button.grid(row=3, column=1, pady=10)
         self.register_widget(match_button, "Match and Add Links")
 
-    def create_code_gen_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="")
-        self.register_tab(tab, "Code Generators")
-
+    def create_code_gen_panels(self):
         def toggle_dymo_options(output_var, combobox, entry):
             if output_var.get() == "Dymo":
                 combobox.config(state="readonly")
@@ -1395,9 +1519,10 @@ class ToolApp(tk.Tk):
                 combobox.config(state="disabled")
                 entry.config(state="disabled")
 
-        qr_frame = ttk.LabelFrame(tab, text=self.tr("8. QR Code Generator"))
-        self.register_widget(qr_frame, "8. QR Code Generator")
-        qr_frame.pack(fill="x", padx=10, pady=10)
+        qr_panel = self.create_collapsible_panel("8. QR Code Generator")
+        qr_frame = qr_panel.content
+        qr_frame.columnconfigure(1, weight=1)
+        qr_frame.columnconfigure(3, weight=1)
 
         self.qr_data = tk.StringVar()
         self.qr_filename = tk.StringVar(value="qrcode.png")
@@ -1414,7 +1539,7 @@ class ToolApp(tk.Tk):
         qr_output_label.grid(row=1, column=0, sticky="w", padx=5, pady=5)
         self.register_widget(qr_output_label, "Output Type:")
 
-        qr_radio_frame = ttk.Frame(qr_frame)
+        qr_radio_frame = ttk.Frame(qr_frame, style="PanelBody.TFrame")
         qr_radio_frame.grid(row=1, column=1, columnspan=3, sticky="w")
 
         qr_dymo_combo = ttk.Combobox(qr_frame, textvariable=self.qr_dymo_size, values=list(DYMO_LABELS.keys()), state="disabled", width=30)
@@ -1459,9 +1584,10 @@ class ToolApp(tk.Tk):
         qr_button.grid(row=4, column=1, columnspan=2, pady=10)
         self.register_widget(qr_button, "Generate QR Code")
 
-        bc_frame = ttk.LabelFrame(tab, text=self.tr("9. Barcode Generator"))
-        self.register_widget(bc_frame, "9. Barcode Generator")
-        bc_frame.pack(fill="x", padx=10, pady=10)
+        bc_panel = self.create_collapsible_panel("9. Barcode Generator")
+        bc_frame = bc_panel.content
+        bc_frame.columnconfigure(1, weight=1)
+        bc_frame.columnconfigure(3, weight=1)
 
         self.bc_data = tk.StringVar()
         self.bc_filename = tk.StringVar(value="barcode.png")
@@ -1484,7 +1610,7 @@ class ToolApp(tk.Tk):
         bc_output_label.grid(row=1, column=0, sticky="w", padx=5, pady=5)
         self.register_widget(bc_output_label, "Output Type:")
 
-        bc_radio_frame = ttk.Frame(bc_frame)
+        bc_radio_frame = ttk.Frame(bc_frame, style="PanelBody.TFrame")
         bc_radio_frame.grid(row=1, column=1, columnspan=3, sticky="w")
 
         bc_dymo_combo = ttk.Combobox(bc_frame, textvariable=self.bc_dymo_size, values=list(DYMO_LABELS.keys()), state="disabled", width=30)
@@ -1529,16 +1655,10 @@ class ToolApp(tk.Tk):
         bc_button.grid(row=4, column=1, columnspan=2, pady=10)
         self.register_widget(bc_button, "Generate Barcode")
 
-    def create_rinven_tag_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="")
-        self.register_tab(tab, "Rinven Tag")
-
-        frame = ttk.LabelFrame(tab, text=self.tr("Rinven Tag"), style="Card.TLabelframe")
-        frame.pack(fill="both", expand=True, padx=10, pady=10)
-        self.register_widget(frame, "Rinven Tag")
-
-        frame.grid_columnconfigure(1, weight=1)
+    def create_rinven_tag_panel(self):
+        panel = self.create_collapsible_panel("Rinven Tag")
+        frame = panel.content
+        frame.columnconfigure(1, weight=1)
 
         self.rinven_collection = tk.StringVar()
         self.rinven_design = tk.StringVar()
@@ -1615,19 +1735,18 @@ class ToolApp(tk.Tk):
         generate_button.grid(row=row_offset + 3, column=0, columnspan=2, pady=(12, 6))
         self.register_widget(generate_button, "Generate Rinven Tag")
 
-    def create_about_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="")
-        self.register_tab(tab, "Help & About")
+    def create_about_panel(self):
+        panel = self.create_collapsible_panel("Help & About")
+        frame = panel.content
 
-        top_frame = ttk.Frame(tab)
-        top_frame.pack(fill="x", padx=10, pady=5)
+        top_frame = ttk.Frame(frame, style="PanelBody.TFrame")
+        top_frame.pack(fill="x", padx=0, pady=5)
 
         update_button = ttk.Button(top_frame, text=self.tr("Check for Updates"), command=lambda: self.run_in_thread(check_for_updates, self, self.log, __version__, silent=False))
         update_button.pack(side="left")
         self.register_widget(update_button, "Check for Updates")
 
-        self.help_text_area = ScrolledText(tab, wrap=tk.WORD, padx=10, pady=10, font=("Helvetica", 10))
+        self.help_text_area = ScrolledText(frame, wrap=tk.WORD, padx=10, pady=10, font=("Helvetica", 10))
         self.help_text_area.configure(
             background=self.theme_colors["card_bg"],
             foreground=self.theme_colors["text_primary"],
