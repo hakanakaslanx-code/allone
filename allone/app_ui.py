@@ -1,6 +1,7 @@
 """Main tkinter user interface for the desktop utility application."""
 
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import ttk, filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
 import threading
@@ -28,6 +29,13 @@ TRANSLATIONS = {
         "Language": "Language",
         "English": "English",
         "Turkish": "Turkish",
+        "Compact Mode": "Compact Mode",
+        "Zoom": "Zoom",
+        "Advanced Settings": "Advanced Settings",
+        "Show Sidebar": "Show Sidebar",
+        "Hide Sidebar": "Hide Sidebar",
+        "Sections": "Sections",
+        "Automatic compact mode enabled for small screens.": "Automatic compact mode enabled for small screens.",
         "Language changed to {language}.": "Language changed to {language}.",
         "1. Copy/Move Files by List": "1. Copy/Move Files by List",
         "Source Folder:": "Source Folder:",
@@ -228,6 +236,13 @@ TRANSLATIONS = {
         "Language": "Dil",
         "English": "İngilizce",
         "Turkish": "Türkçe",
+        "Compact Mode": "Kompakt Mod",
+        "Zoom": "Yakınlaştırma",
+        "Advanced Settings": "Gelişmiş Ayarlar",
+        "Show Sidebar": "Yan Paneli Göster",
+        "Hide Sidebar": "Yan Paneli Gizle",
+        "Sections": "Bölümler",
+        "Automatic compact mode enabled for small screens.": "Küçük ekranlar için otomatik kompakt mod etkinleştirildi.",
         "Language changed to {language}.": "Dil {language} olarak değiştirildi.",
         "1. Copy/Move Files by List": "1. Listeye Göre Dosya Kopyala/Taşı",
         "Source Folder:": "Kaynak Klasör:",
@@ -420,6 +435,53 @@ TRANSLATIONS = {
     },
 }
 
+
+class ScrollableTab(ttk.Frame):
+    """Wraps a frame within a canvas to provide per-tab scrolling."""
+
+    def __init__(self, parent: ttk.Notebook):
+        super().__init__(parent)
+
+        self.canvas = tk.Canvas(self, highlightthickness=0, borderwidth=0)
+        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+
+        self.interior = ttk.Frame(self.canvas, style="TFrame", padding=4)
+        self._window_id = self.canvas.create_window((0, 0), window=self.interior, anchor="nw")
+
+        self.interior.bind("<Configure>", self._on_frame_configure)
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+
+        self.interior.bind("<Enter>", self._bind_mousewheel)
+        self.interior.bind("<Leave>", self._unbind_mousewheel)
+
+    def _on_frame_configure(self, event: tk.Event) -> None:
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _on_canvas_configure(self, event: tk.Event) -> None:
+        self.canvas.itemconfigure(self._window_id, width=event.width)
+
+    def _on_mousewheel(self, event: tk.Event) -> str:
+        if getattr(event, "delta", 0):
+            direction = -1 if event.delta > 0 else 1
+        else:
+            direction = -1 if getattr(event, "num", 0) == 4 else 1
+        self.canvas.yview_scroll(direction, "units")
+        return "break"
+
+    def _bind_mousewheel(self, _event: tk.Event) -> None:
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        self.canvas.bind_all("<Button-4>", self._on_mousewheel)
+        self.canvas.bind_all("<Button-5>", self._on_mousewheel)
+
+    def _unbind_mousewheel(self, _event: tk.Event) -> None:
+        self.canvas.unbind_all("<MouseWheel>")
+        self.canvas.unbind_all("<Button-4>")
+        self.canvas.unbind_all("<Button-5>")
+
 PANEL_INFO = {
     "en": {
         "1. Copy/Move Files by List": "Quickly copy or move files referenced by a spreadsheet of item numbers.",
@@ -487,6 +549,8 @@ class ToolApp(tk.Tk):
         self.translatable_widgets = []
         self.section_descriptions = []
         self.notebook_tabs = []
+        self.sidebar_nav = []
+        self.advanced_cards = []
 
         self.language_options = {"en": "English", "tr": "Turkish"}
         self.language_var = tk.StringVar(
@@ -494,14 +558,30 @@ class ToolApp(tk.Tk):
         )
         self._updating_language_selector = False
 
-        # Adjust the default window size dynamically based on the available screen
-        # real estate so the interface remains usable on both small and large
-        # displays. We fall back to the previous 900x750 minimum for larger
-        # monitors while ensuring we do not exceed the screen bounds on compact
-        # setups where widgets might otherwise be clipped.
+        self.ui_preferences = self.settings.setdefault("ui_preferences", {})
+        self._base_named_font_sizes = {}
+        for name in (
+            "TkDefaultFont",
+            "TkTextFont",
+            "TkMenuFont",
+            "TkHeadingFont",
+            "TkCaptionFont",
+            "TkSmallCaptionFont",
+            "TkFixedFont",
+            "TkIconFont",
+            "TkTooltipFont",
+        ):
+            try:
+                font_obj = tkfont.nametofont(name)
+                self._base_named_font_sizes.setdefault(name, font_obj.cget("size"))
+            except tk.TclError:
+                continue
+
         self.update_idletasks()
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
+        self.small_screen = screen_width < 1366 or screen_height < 900
+
         base_width, base_height = 900, 750
         margin = 80  # Leave a small margin so the window isn't flush with edges.
         min_width, min_height = 600, 500
@@ -509,11 +589,39 @@ class ToolApp(tk.Tk):
         available_height = min(screen_height, max(min_height, screen_height - margin))
         target_width = min(max(base_width, int(screen_width * 0.9)), available_width)
         target_height = min(max(base_height, int(screen_height * 0.9)), available_height)
-        self.geometry(f"{target_width}x{target_height}")
+
+        stored_geometry = self.ui_preferences.get("window_geometry")
+        if stored_geometry:
+            try:
+                self.geometry(stored_geometry)
+            except tk.TclError:
+                self.geometry(f"{target_width}x{target_height}")
+        else:
+            self.geometry(f"{target_width}x{target_height}")
         self.minsize(min(target_width, base_width), min(target_height, base_height))
 
+        stored_compact = self.ui_preferences.get("compact_mode")
+        if stored_compact is None:
+            self.compact_mode = self.small_screen
+            self._auto_compact_message = self.compact_mode
+        else:
+            self.compact_mode = bool(stored_compact)
+            self._auto_compact_message = False
+
+        self._zoom_levels = ["80%", "100%", "120%"]
+        stored_zoom = self.ui_preferences.get("zoom_level", "100%")
+        if stored_zoom not in self._zoom_levels:
+            stored_zoom = "100%"
+        self.zoom_level = stored_zoom
+        self._zoom_factor = self._parse_zoom_level(self.zoom_level)
+        self.sidebar_collapsed = bool(self.ui_preferences.get("sidebar_collapsed", False))
+        self.show_advanced = bool(self.ui_preferences.get("show_advanced", True))
+
+        self._update_named_fonts()
         self.setup_styles()
         self.create_header()
+        self.create_view_toolbar()
+        self.create_language_selector()
 
         self.shared_token_var = tk.StringVar(value=str(shared_settings.get("token", "change-me")))
         self.shared_port_var = tk.StringVar(value=str(shared_settings.get("port", 5151)))
@@ -525,13 +633,33 @@ class ToolApp(tk.Tk):
         self.shared_status_lock = threading.RLock()
         self.shared_port_var.trace_add("write", lambda *args: self._update_shared_help_text())
 
-        self.create_language_selector()
+        self.main_body = ttk.Frame(self, style="TFrame")
+        self.main_body.pack(pady=(5, 12), padx=12, fill="both", expand=True)
+        self.main_body.columnconfigure(1, weight=1)
+        self.main_body.rowconfigure(0, weight=1)
 
-        content = ttk.Frame(self, style="TFrame")
-        content.pack(pady=(5, 12), padx=12, fill="both", expand=True)
+        self.sidebar_frame = ttk.Frame(self.main_body, style="Sidebar.TFrame", width=220)
+        self.sidebar_frame.grid(row=0, column=0, sticky="nsw", padx=(0, 12))
+        self.sidebar_frame.grid_propagate(False)
 
-        self.section_notebook = ttk.Notebook(content, style="TNotebook")
-        self.section_notebook.pack(fill="both", expand=True)
+        sidebar_header = ttk.Frame(self.sidebar_frame, style="SidebarHeader.TFrame")
+        sidebar_header.pack(fill="x", padx=8, pady=(8, 4))
+        sidebar_label = ttk.Label(sidebar_header, text=self.tr("Sections"), style="Secondary.TLabel")
+        sidebar_label.pack(anchor="w")
+        self.register_widget(sidebar_label, "Sections")
+        self.sidebar_header_label = sidebar_label
+
+        self.sidebar_button_area = ttk.Frame(self.sidebar_frame, style="Sidebar.TFrame")
+        self.sidebar_button_area.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+
+        self.content_frame = ttk.Frame(self.main_body, style="TFrame")
+        self.content_frame.grid(row=0, column=1, sticky="nsew")
+        self.content_frame.columnconfigure(0, weight=1)
+        self.content_frame.rowconfigure(0, weight=5)
+        self.content_frame.rowconfigure(1, weight=2)
+
+        self.section_notebook = ttk.Notebook(self.content_frame, style="TNotebook")
+        self.section_notebook.grid(row=0, column=0, sticky="nsew")
 
         self.section_frames = {}
         for title in (
@@ -542,12 +670,15 @@ class ToolApp(tk.Tk):
             "Shared Label Printer",
             "Help & About",
         ):
-            frame = ttk.Frame(self.section_notebook, style="TFrame")
-            frame.columnconfigure(0, weight=1)
-            frame.columnconfigure(1, weight=1)
-            self.section_notebook.add(frame, text=self.tr(title))
-            self.section_frames[title] = frame
-            self.notebook_tabs.append((frame, title))
+            tab = ScrollableTab(self.section_notebook)
+            tab.interior.columnconfigure(0, weight=1)
+            tab.interior.columnconfigure(1, weight=1)
+            self.section_notebook.add(tab, text=self.tr(title))
+            self.section_frames[title] = tab.interior
+            self.notebook_tabs.append((tab, title))
+            self._create_sidebar_button(title, tab)
+
+        self.section_notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
         self.rug_manual_history_entries = []
         self.rug_manual_last_result = None
@@ -560,25 +691,168 @@ class ToolApp(tk.Tk):
         self.create_shared_printer_panel(self.section_frames["Shared Label Printer"])
         self.create_about_panel(self.section_frames["Help & About"])
 
-        self.log_area = ScrolledText(self, height=12)
-        self.log_area.pack(pady=10, padx=10, fill="both", expand=True)
-        self.log_area.config(
-            state=tk.DISABLED,
-            background="#0b1120",
-            foreground="#f1f5f9",
-            insertbackground="#f1f5f9",
-            font=("Cascadia Code", 10),
-            relief="flat",
-            borderwidth=0,
-        )
+        self.log_area = ScrolledText(self.content_frame, height=8)
+        self.log_area.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+        self._apply_log_theme()
+
+        self._apply_sidebar_visibility(initial=True)
+        self._apply_advanced_visibility()
 
         self.refresh_translations()
         self.log(self.tr("Welcome to the Combined Utility Tool!"))
+        if self._auto_compact_message:
+            self.log(self.tr("Automatic compact mode enabled for small screens."))
+            self._auto_compact_message = False
 
         self.run_in_thread(check_for_updates, self, self.log, __version__, silent=True)
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.after(0, self._maybe_auto_start_shared_printer)
+
+    def _parse_zoom_level(self, value: str) -> float:
+        mapping = {"80%": 0.8, "100%": 1.0, "120%": 1.2}
+        return mapping.get(value, 1.0)
+
+    def _density_multiplier(self) -> float:
+        return 0.85 if self.compact_mode else 1.0
+
+    def _pad_value(self, base: int, minimum: int = 2) -> int:
+        return max(minimum, int(round(base * self._density_multiplier())))
+
+    def _scaled_size(self, base: int) -> int:
+        size = abs(base)
+        size = max(6, int(round(size * self._zoom_factor)))
+        if self.compact_mode:
+            size = max(6, int(round(size * 0.9)))
+        return size if base >= 0 else -size
+
+    def _font(self, family: str, base: int, weight: Optional[str] = None) -> tuple:
+        size = self._scaled_size(base)
+        if weight:
+            return (family, size, weight)
+        return (family, size)
+
+    def _update_named_fonts(self) -> None:
+        try:
+            self.tk.call("tk", "scaling", self._zoom_factor)
+        except tk.TclError:
+            pass
+        for name, base_size in self._base_named_font_sizes.items():
+            try:
+                font_obj = tkfont.nametofont(name)
+            except tk.TclError:
+                continue
+            scaled = self._scaled_size(base_size)
+            if base_size < 0:
+                font_obj.configure(size=-scaled)
+            else:
+                font_obj.configure(size=scaled)
+
+    def _apply_log_theme(self) -> None:
+        if not hasattr(self, "log_area"):
+            return
+        self.log_area.config(
+            state=tk.DISABLED,
+            background="#0b1120",
+            foreground="#f1f5f9",
+            insertbackground="#f1f5f9",
+            font=("Cascadia Code", self._scaled_size(10)),
+            relief="flat",
+            borderwidth=0,
+        )
+
+    def _create_sidebar_button(self, title: str, tab: ttk.Frame) -> None:
+        button = ttk.Button(
+            self.sidebar_button_area,
+            text=self.tr(title),
+            style="Sidebar.TButton",
+            command=lambda t=tab: self.section_notebook.select(t),
+        )
+        button.pack(fill="x", pady=(0, 4))
+        self.register_widget(button, title)
+        self.sidebar_nav.append((button, tab))
+
+    def _update_nav_highlight(self) -> None:
+        if not hasattr(self, "section_notebook"):
+            return
+        current = self.section_notebook.select()
+        for button, tab in self.sidebar_nav:
+            if str(tab) == current:
+                button.configure(style="SidebarSelected.TButton")
+            else:
+                button.configure(style="Sidebar.TButton")
+
+    def _on_tab_changed(self, _event=None) -> None:
+        self._update_nav_highlight()
+
+    def _apply_sidebar_visibility(self, initial: bool = False) -> None:
+        if self.sidebar_collapsed:
+            self.sidebar_frame.grid_remove()
+        else:
+            if initial:
+                self.sidebar_frame.grid()  # ensure geometry manager remembers placement
+            else:
+                self.sidebar_frame.grid()
+        self._update_sidebar_toggle_text()
+        self._update_nav_highlight()
+
+    def _update_sidebar_toggle_text(self) -> None:
+        if hasattr(self, "sidebar_toggle"):
+            key = "Show Sidebar" if self.sidebar_collapsed else "Hide Sidebar"
+            self.sidebar_toggle.configure(text=self.tr(key))
+
+    def _toggle_sidebar(self) -> None:
+        self.sidebar_collapsed = not self.sidebar_collapsed
+        self._apply_sidebar_visibility()
+        self._save_ui_preferences()
+
+    def _on_toggle_compact(self) -> None:
+        self.compact_mode = bool(self.compact_var.get())
+        self._update_named_fonts()
+        self.setup_styles()
+        self._apply_advanced_visibility()
+        self._save_ui_preferences()
+
+    def _on_zoom_change(self, _event=None) -> None:
+        value = self.zoom_var.get()
+        if value not in self._zoom_levels:
+            return
+        self.zoom_level = value
+        self._zoom_factor = self._parse_zoom_level(value)
+        self._update_named_fonts()
+        self.setup_styles()
+        self._apply_advanced_visibility()
+        self._save_ui_preferences()
+
+    def _on_toggle_advanced(self) -> None:
+        self.show_advanced = bool(self.advanced_var.get())
+        self._apply_advanced_visibility()
+        self._save_ui_preferences()
+
+    def _apply_advanced_visibility(self) -> None:
+        if hasattr(self, "advanced_var"):
+            self.advanced_var.set(bool(self.show_advanced))
+        for widget, grid_info in self.advanced_cards:
+            if self.show_advanced:
+                widget.grid(**grid_info)
+            else:
+                widget.grid_remove()
+
+    def _mark_advanced_card(self, widget: ttk.Widget) -> None:
+        info = widget.grid_info().copy()
+        info.pop("in", None)
+        self.advanced_cards.append((widget, info))
+
+    def _save_ui_preferences(self) -> None:
+        self.ui_preferences["compact_mode"] = bool(self.compact_mode)
+        self.ui_preferences["zoom_level"] = self.zoom_level
+        self.ui_preferences["sidebar_collapsed"] = bool(self.sidebar_collapsed)
+        self.ui_preferences["show_advanced"] = bool(self.show_advanced)
+        save_settings(self.settings)
+
+    def _persist_view_preferences(self) -> None:
+        self.ui_preferences["window_geometry"] = self.geometry()
+        self._save_ui_preferences()
 
     def log(self, message: str) -> None:
         """Append a message to the on-screen log in a thread-safe way."""
@@ -652,6 +926,7 @@ class ToolApp(tk.Tk):
         text_muted = "#94a3b8"
         tooltip_bg = "#111c2e"
         tooltip_fg = text_primary
+        sidebar_bg = "#081021"
 
         self.theme_colors = {
             "base_bg": base_bg,
@@ -678,38 +953,44 @@ class ToolApp(tk.Tk):
 
         style.configure("TFrame", background=base_bg)
         style.configure("Header.TFrame", background=base_bg)
-        style.configure("Card.TLabelframe", background=card_bg, borderwidth=0, padding=15)
+        style.configure(
+            "Card.TLabelframe",
+            background=card_bg,
+            borderwidth=0,
+            padding=self._pad_value(15, 6),
+        )
         style.configure("PanelBody.TFrame", background=card_bg)
         style.configure(
             "Card.TLabelframe.Label",
             background=card_bg,
             foreground=text_primary,
-            font=("Segoe UI Semibold", 11),
+            font=self._font("Segoe UI Semibold", 11),
         )
         style.configure(
             "TLabel",
             background=card_bg,
             foreground=text_primary,
-            font=("Segoe UI", 10),
+            font=self._font("Segoe UI", 10),
         )
         style.configure(
             "Description.TLabel",
             background=card_bg,
             foreground=text_muted,
-            font=("Segoe UI", 10),
+            font=self._font("Segoe UI", 10),
         )
         style.configure(
             "Primary.TLabel",
             background=base_bg,
             foreground=text_primary,
-            font=("Segoe UI Semibold", 18),
+            font=self._font("Segoe UI Semibold", 18),
         )
         style.configure(
             "Secondary.TLabel",
             background=base_bg,
             foreground=text_muted,
-            font=("Segoe UI", 11),
+            font=self._font("Segoe UI", 11),
         )
+        style.configure("Toolbar.TFrame", background=base_bg)
         style.configure(
             "TNotebook",
             background=base_bg,
@@ -720,8 +1001,8 @@ class ToolApp(tk.Tk):
             "TNotebook.Tab",
             background=card_bg,
             foreground=text_primary,
-            padding=(16, 8),
-            font=("Segoe UI", 10),
+            padding=(self._pad_value(16, 6), self._pad_value(8, 3)),
+            font=self._font("Segoe UI", 10),
         )
         style.map(
             "TNotebook.Tab",
@@ -732,8 +1013,8 @@ class ToolApp(tk.Tk):
             "TButton",
             background=accent,
             foreground=base_bg,
-            font=("Segoe UI Semibold", 10),
-            padding=(14, 6),
+            font=self._font("Segoe UI Semibold", 10),
+            padding=(self._pad_value(14, 6), self._pad_value(6, 3)),
             borderwidth=0,
         )
         style.map(
@@ -746,7 +1027,7 @@ class ToolApp(tk.Tk):
             fieldbackground="#111827",
             foreground=text_primary,
             insertcolor=text_primary,
-            padding=8,
+            padding=self._pad_value(8, 4),
         )
         style.configure(
             "TCombobox",
@@ -779,7 +1060,13 @@ class ToolApp(tk.Tk):
             "TRadiobutton",
             background=card_bg,
             foreground=text_primary,
-            font=("Segoe UI", 10),
+            font=self._font("Segoe UI", 10),
+        )
+        style.configure(
+            "TCheckbutton",
+            background=base_bg,
+            foreground=text_primary,
+            font=self._font("Segoe UI", 10),
         )
         style.map(
             "TEntry",
@@ -791,9 +1078,41 @@ class ToolApp(tk.Tk):
             background=[("active", card_bg)],
             foreground=[("disabled", text_muted)],
         )
+        style.configure(
+            "Sidebar.TFrame",
+            background=sidebar_bg,
+        )
+        style.configure(
+            "SidebarHeader.TFrame",
+            background=sidebar_bg,
+        )
+        sidebar_padding = (self._pad_value(12, 6), self._pad_value(6, 3))
+        style.configure(
+            "Sidebar.TButton",
+            background=card_bg,
+            foreground=text_primary,
+            font=self._font("Segoe UI", 10),
+            padding=sidebar_padding,
+        )
+        style.map(
+            "Sidebar.TButton",
+            background=[("active", panel_header_hover)],
+        )
+        style.configure(
+            "SidebarSelected.TButton",
+            background=accent,
+            foreground=base_bg,
+            font=self._font("Segoe UI Semibold", 10),
+            padding=sidebar_padding,
+        )
+        style.map(
+            "SidebarSelected.TButton",
+            background=[("active", accent_hover)],
+        )
         style.configure("Horizontal.TSeparator", background="#1f2937")
 
-        self.option_add("*TCombobox*Listbox.font", ("Segoe UI", 10))
+        option_font = self._font("Segoe UI", 10)
+        self.option_add("*TCombobox*Listbox.font", option_font)
         self.option_add("*TCombobox*Listbox.foreground", "#000000")
         self.option_add("*TCombobox*Listbox.background", "#f8fafc")
         self.option_add("*Background", base_bg)
@@ -801,8 +1120,14 @@ class ToolApp(tk.Tk):
         self.option_add("*Entry.foreground", text_primary)
         self.option_add("*Listbox.background", "#f8fafc")
         self.option_add("*Listbox.foreground", "#0f172a")
-        self.option_add("*Font", ("Segoe UI", 10))
+        self.option_add("*Font", option_font)
         self.option_add("*Foreground", text_primary)
+
+        self._apply_log_theme()
+        if hasattr(self, "help_text_area"):
+            self.help_text_area.configure(font=("Helvetica", self._scaled_size(10)))
+        self._update_nav_highlight()
+        self._update_sidebar_toggle_text()
 
     def create_header(self):
         """Create a simple branded header for the application."""
@@ -825,10 +1150,65 @@ class ToolApp(tk.Tk):
         subtitle.pack(anchor="w", pady=(2, 0))
         self.header_subtitle = subtitle
 
+    def create_view_toolbar(self):
+        toolbar = ttk.Frame(self, style="Toolbar.TFrame")
+        toolbar.pack(fill="x", padx=10, pady=(6, 4))
+        self.view_toolbar = toolbar
+
+        left = ttk.Frame(toolbar, style="Toolbar.TFrame")
+        left.pack(side="left", fill="x", expand=True)
+        right = ttk.Frame(toolbar, style="Toolbar.TFrame")
+        right.pack(side="right")
+        self.view_toolbar_left = left
+        self.view_toolbar_right = right
+
+        self.sidebar_toggle = ttk.Button(left, command=self._toggle_sidebar, style="TButton")
+        self.sidebar_toggle.pack(side="left")
+
+        self.compact_var = tk.BooleanVar(value=self.compact_mode)
+        compact_check = ttk.Checkbutton(
+            left,
+            text=self.tr("Compact Mode"),
+            variable=self.compact_var,
+            command=self._on_toggle_compact,
+        )
+        compact_check.pack(side="left", padx=(12, 0))
+        self.register_widget(compact_check, "Compact Mode")
+
+        zoom_label = ttk.Label(left, text=self.tr("Zoom"), style="Secondary.TLabel")
+        zoom_label.pack(side="left", padx=(12, 6))
+        self.register_widget(zoom_label, "Zoom")
+        self.zoom_label = zoom_label
+
+        self.zoom_var = tk.StringVar(value=self.zoom_level)
+        zoom_box = ttk.Combobox(
+            left,
+            textvariable=self.zoom_var,
+            values=self._zoom_levels,
+            state="readonly",
+            width=6,
+        )
+        zoom_box.pack(side="left")
+        zoom_box.bind("<<ComboboxSelected>>", self._on_zoom_change)
+        self.zoom_selector = zoom_box
+
+        self.advanced_var = tk.BooleanVar(value=self.show_advanced)
+        advanced_check = ttk.Checkbutton(
+            left,
+            text=self.tr("Advanced Settings"),
+            variable=self.advanced_var,
+            command=self._on_toggle_advanced,
+        )
+        advanced_check.pack(side="left", padx=(12, 0))
+        self.register_widget(advanced_check, "Advanced Settings")
+
+        self._update_sidebar_toggle_text()
+
     def create_language_selector(self):
         """Create the language selection combobox and bind change events."""
-        container = ttk.Frame(self, style="Header.TFrame")
-        container.pack(anchor="ne", padx=10, pady=(0, 10))
+        parent = getattr(self, "view_toolbar_right", self)
+        container = ttk.Frame(parent, style="Toolbar.TFrame")
+        container.pack(side="right")
 
         label = ttk.Label(container, text=self.tr("Language"), style="Secondary.TLabel")
         label.pack(side="left", padx=(0, 8))
@@ -838,7 +1218,7 @@ class ToolApp(tk.Tk):
             container,
             textvariable=self.language_var,
             state="readonly",
-            width=16,
+            width=14,
         )
         self.language_selector.pack(side="left")
         self.language_selector.bind("<<ComboboxSelected>>", self._on_language_change)
@@ -848,7 +1228,7 @@ class ToolApp(tk.Tk):
     def create_section_card(self, parent: ttk.Frame, title_key: str) -> ttk.Labelframe:
         """Create a labeled card container for a tool section."""
 
-        card = ttk.Labelframe(parent, text=self.tr(title_key), style="Card.TLabelframe", padding=16)
+        card = ttk.Labelframe(parent, text=self.tr(title_key), style="Card.TLabelframe")
         self.register_widget(card, title_key)
 
         info_text = self.tr_info(title_key)
@@ -1115,6 +1495,7 @@ class ToolApp(tk.Tk):
             self._update_manual_result_label()
         if hasattr(self, "rug_result_tree"):
             self._refresh_rug_comparison_display()
+        self._update_sidebar_toggle_text()
         self._refresh_language_options()
 
     def _refresh_language_options(self):
@@ -1376,6 +1757,7 @@ class ToolApp(tk.Tk):
         parent.columnconfigure(0, weight=1)
         card = self.create_section_card(parent, "Shared Label Printer")
         card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        self._mark_advanced_card(card)
         frame = card.body
         frame.columnconfigure(1, weight=1)
 
@@ -1453,6 +1835,10 @@ class ToolApp(tk.Tk):
     def on_close(self):
         """Uygulama kapanırken paylaşılan yazıcı sunucusunu durdurur."""
         try:
+            try:
+                self._persist_view_preferences()
+            except Exception:
+                pass
             if self.shared_printer_server.is_running():
                 try:
                     self.shared_printer_server.stop()
@@ -1741,6 +2127,7 @@ class ToolApp(tk.Tk):
 
         image_link_card = self.create_section_card(parent, "8. Match Image Links")
         image_link_card.grid(row=3, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
+        self._mark_advanced_card(image_link_card)
         image_link_frame = image_link_card.body
         image_link_frame.columnconfigure(1, weight=1)
 
@@ -1796,6 +2183,7 @@ class ToolApp(tk.Tk):
 
         qr_card = self.create_section_card(parent, "8. QR Code Generator")
         qr_card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        self._mark_advanced_card(qr_card)
         qr_frame = qr_card.body
         qr_frame.columnconfigure(1, weight=1)
         qr_frame.columnconfigure(3, weight=1)
@@ -1862,6 +2250,7 @@ class ToolApp(tk.Tk):
 
         bc_card = self.create_section_card(parent, "9. Barcode Generator")
         bc_card.grid(row=0, column=1, sticky="nsew", padx=8, pady=8)
+        self._mark_advanced_card(bc_card)
         bc_frame = bc_card.body
         bc_frame.columnconfigure(1, weight=1)
         bc_frame.columnconfigure(3, weight=1)
@@ -1936,6 +2325,7 @@ class ToolApp(tk.Tk):
         parent.columnconfigure(0, weight=1)
         card = self.create_section_card(parent, "Rinven Tag")
         card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        self._mark_advanced_card(card)
         frame = card.body
         frame.columnconfigure(1, weight=1)
 
@@ -2027,7 +2417,13 @@ class ToolApp(tk.Tk):
         update_button.pack(side="left")
         self.register_widget(update_button, "Check for Updates")
 
-        self.help_text_area = ScrolledText(frame, wrap=tk.WORD, padx=10, pady=10, font=("Helvetica", 10))
+        self.help_text_area = ScrolledText(
+            frame,
+            wrap=tk.WORD,
+            padx=10,
+            pady=10,
+            font=("Helvetica", self._scaled_size(10)),
+        )
         self.help_text_area.configure(
             background=self.theme_colors["card_bg"],
             foreground=self.theme_colors["text_primary"],
