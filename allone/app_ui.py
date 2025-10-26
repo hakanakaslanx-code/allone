@@ -17,205 +17,6 @@ import backend_logic as backend
 
 __version__ = "4.1.9"
 
-
-class Tooltip:
-    """A lightweight tooltip widget that appears when hovering over a widget."""
-
-    def __init__(
-        self,
-        widget: tk.Widget,
-        text: str,
-        *,
-        bg: str,
-        fg: str,
-        border: str,
-        wait_ms: int = 350,
-        wraplength: int = 320,
-    ) -> None:
-        self.widget = widget
-        self.text = text
-        self.bg = bg
-        self.fg = fg
-        self.border = border
-        self.wait_ms = wait_ms
-        self.wraplength = wraplength
-        self._after_id: Optional[str] = None
-        self._tip_window: Optional[tk.Toplevel] = None
-
-        self.widget.bind("<Enter>", self._schedule)
-        self.widget.bind("<Leave>", self._hide)
-        self.widget.bind("<ButtonPress>", self._hide)
-
-    def update_text(self, text: str) -> None:
-        self.text = text
-        if self._tip_window is not None:
-            self._tip_window.destroy()
-            self._tip_window = None
-            self._schedule()
-
-    def _schedule(self, _event=None) -> None:
-        self._cancel_schedule()
-        self._after_id = self.widget.after(self.wait_ms, self._show)
-
-    def _cancel_schedule(self) -> None:
-        if self._after_id is not None:
-            try:
-                self.widget.after_cancel(self._after_id)
-            finally:
-                self._after_id = None
-
-    def _show(self) -> None:
-        self._after_id = None
-        if self._tip_window or not self.text:
-            return
-
-        x = self.widget.winfo_rootx() + 20
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 10
-
-        self._tip_window = tk.Toplevel(self.widget)
-        self._tip_window.wm_overrideredirect(True)
-        self._tip_window.wm_geometry(f"+{x}+{y}")
-
-        frame = tk.Frame(self._tip_window, bg=self.border, padx=1, pady=1)
-        frame.pack()
-
-        label = tk.Label(
-            frame,
-            text=self.text,
-            justify="left",
-            background=self.bg,
-            foreground=self.fg,
-            relief="flat",
-            borderwidth=0,
-            wraplength=self.wraplength,
-            font=("Segoe UI", 10),
-        )
-        label.pack(padx=6, pady=4)
-
-    def _hide(self, _event=None) -> None:
-        self._cancel_schedule()
-        if self._tip_window is not None:
-            self._tip_window.destroy()
-            self._tip_window = None
-
-
-class CollapsiblePanel(tk.Frame):
-    """A custom collapsible panel with a header, toggle icon and info tooltip."""
-
-    def __init__(
-        self,
-        master,
-        *,
-        title: str,
-        colors: dict,
-        start_open: bool = False,
-        info_text: Optional[str] = None,
-    ) -> None:
-        super().__init__(master, bg=colors["panel_border"], bd=0, highlightthickness=1)
-        self.colors = colors
-        self.configure(highlightbackground=colors["panel_border"], highlightcolor=colors["panel_border"])
-
-        header_bg = colors["panel_header_bg"]
-        text_color = colors["text_primary"]
-
-        self.header = tk.Frame(self, bg=header_bg, bd=0)
-        self.header.pack(fill="x")
-        self.header.configure(cursor="hand2")
-
-        self.icon_label = tk.Label(
-            self.header,
-            text="▾" if start_open else "▸",
-            bg=header_bg,
-            fg=colors["accent"],
-            font=("Segoe UI", 13, "bold"),
-        )
-        self.icon_label.pack(side="left", padx=(12, 10), pady=8)
-        self.icon_label.configure(cursor="hand2")
-
-        self.title_label = tk.Label(
-            self.header,
-            text=title,
-            bg=header_bg,
-            fg=text_color,
-            font=("Segoe UI Semibold", 12),
-        )
-        self.title_label.pack(side="left", pady=8)
-        self.title_label.configure(cursor="hand2")
-
-        self.info_icon: Optional[tk.Label] = None
-        self.info_tooltip: Optional[Tooltip] = None
-
-        for widget in (self.header, self.icon_label, self.title_label):
-            widget.bind("<Button-1>", self.toggle)
-            widget.bind("<Enter>", lambda _e, hover=True: self._on_hover(hover))
-            widget.bind("<Leave>", lambda _e, hover=False: self._on_hover(hover))
-
-        self.content = ttk.Frame(self, style="PanelBody.TFrame", padding=15)
-        self._is_open = False
-        self.set_info_text(info_text)
-        if start_open:
-            self.open()
-
-    def toggle(self, event=None) -> None:
-        if self._is_open:
-            self.close()
-        else:
-            self.open()
-
-    def open(self) -> None:
-        if self._is_open:
-            return
-        self.content.pack(fill="both", expand=True)
-        self._is_open = True
-        self.icon_label.configure(text="▾")
-
-    def close(self) -> None:
-        if not self._is_open:
-            return
-        self.content.pack_forget()
-        self._is_open = False
-        self.icon_label.configure(text="▸")
-
-    def set_title(self, title: str) -> None:
-        self.title_label.configure(text=title)
-
-    def set_info_text(self, info_text: Optional[str]) -> None:
-        if info_text:
-            if self.info_icon is None:
-                self.info_icon = tk.Label(
-                    self.header,
-                    text="ℹ",
-                    bg=self.colors["panel_header_bg"],
-                    fg=self.colors["accent"],
-                    font=("Segoe UI", 12, "bold"),
-                )
-                self.info_icon.pack(side="right", padx=12)
-                self.info_icon.configure(cursor="question_arrow")
-                self.info_icon.bind("<Enter>", lambda _e, hover=True: self._on_hover(hover))
-                self.info_icon.bind("<Leave>", lambda _e, hover=False: self._on_hover(hover))
-                self.info_tooltip = Tooltip(
-                    self.info_icon,
-                    info_text,
-                    bg=self.colors["tooltip_bg"],
-                    fg=self.colors["tooltip_fg"],
-                    border=self.colors["panel_border"],
-                )
-            else:
-                if self.info_tooltip:
-                    self.info_tooltip.update_text(info_text)
-                self.info_icon.configure(bg=self.colors["panel_header_bg"], fg=self.colors["accent"])
-        else:
-            if self.info_icon is not None:
-                self.info_icon.destroy()
-                self.info_icon = None
-                self.info_tooltip = None
-
-    def _on_hover(self, hover: bool) -> None:
-        bg = self.colors["panel_header_hover"] if hover else self.colors["panel_header_bg"]
-        for widget in (self.header, self.icon_label, self.title_label, self.info_icon):
-            if widget is not None:
-                widget.configure(bg=bg)
-
 TRANSLATIONS = {
     "en": {
         "Combined Utility Tool": "Combined Utility Tool",
@@ -684,7 +485,8 @@ class ToolApp(tk.Tk):
             self.language = "en"
 
         self.translatable_widgets = []
-        self.panel_info_bindings = []
+        self.section_descriptions = []
+        self.notebook_tabs = []
 
         self.language_options = {"en": "English", "tr": "Turkish"}
         self.language_var = tk.StringVar(
@@ -725,47 +527,38 @@ class ToolApp(tk.Tk):
 
         self.create_language_selector()
 
-        panel_container = ttk.Frame(self, style="TFrame")
-        panel_container.pack(pady=10, padx=10, fill="both", expand=True)
+        content = ttk.Frame(self, style="TFrame")
+        content.pack(pady=(5, 12), padx=12, fill="both", expand=True)
 
-        self.panel_canvas = tk.Canvas(
-            panel_container,
-            bg=self.theme_colors["base_bg"],
-            highlightthickness=0,
-            borderwidth=0,
-        )
-        self.panel_canvas.pack(side="left", fill="both", expand=True)
+        self.section_notebook = ttk.Notebook(content, style="TNotebook")
+        self.section_notebook.pack(fill="both", expand=True)
 
-        self.panel_scrollbar = ttk.Scrollbar(panel_container, orient="vertical", command=self.panel_canvas.yview)
-        self.panel_scrollbar.pack(side="right", fill="y")
-        self.panel_canvas.configure(yscrollcommand=self.panel_scrollbar.set)
-
-        self.panels_frame = ttk.Frame(self.panel_canvas, style="TFrame")
-        self.panel_window = self.panel_canvas.create_window((0, 0), window=self.panels_frame, anchor="nw")
-
-        self.panels_frame.bind(
-            "<Configure>",
-            lambda event: self.panel_canvas.configure(scrollregion=self.panel_canvas.bbox("all")),
-        )
-        self.panel_canvas.bind(
-            "<Configure>",
-            lambda event: self.panel_canvas.itemconfigure(self.panel_window, width=event.width),
-        )
-
-        self.panel_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
-        self.panel_canvas.bind_all("<Button-4>", self._on_mousewheel)
-        self.panel_canvas.bind_all("<Button-5>", self._on_mousewheel)
+        self.section_frames = {}
+        for title in (
+            "File & Image Tools",
+            "Data & Calculation",
+            "Code Generators",
+            "Rinven Tag",
+            "Shared Label Printer",
+            "Help & About",
+        ):
+            frame = ttk.Frame(self.section_notebook, style="TFrame")
+            frame.columnconfigure(0, weight=1)
+            frame.columnconfigure(1, weight=1)
+            self.section_notebook.add(frame, text=self.tr(title))
+            self.section_frames[title] = frame
+            self.notebook_tabs.append((frame, title))
 
         self.rug_manual_history_entries = []
         self.rug_manual_last_result = None
         self.rug_comparison_results = None
 
-        self.create_file_image_panels()
-        self.create_data_calc_panels()
-        self.create_code_gen_panels()
-        self.create_rinven_tag_panel()
-        self.create_shared_printer_panel()
-        self.create_about_panel()
+        self.create_file_image_panels(self.section_frames["File & Image Tools"])
+        self.create_data_calc_panels(self.section_frames["Data & Calculation"])
+        self.create_code_gen_panels(self.section_frames["Code Generators"])
+        self.create_rinven_tag_panel(self.section_frames["Rinven Tag"])
+        self.create_shared_printer_panel(self.section_frames["Shared Label Printer"])
+        self.create_about_panel(self.section_frames["Help & About"])
 
         self.log_area = ScrolledText(self, height=12)
         self.log_area.pack(pady=10, padx=10, fill="both", expand=True)
@@ -897,6 +690,12 @@ class ToolApp(tk.Tk):
             "TLabel",
             background=card_bg,
             foreground=text_primary,
+            font=("Segoe UI", 10),
+        )
+        style.configure(
+            "Description.TLabel",
+            background=card_bg,
+            foreground=text_muted,
             font=("Segoe UI", 10),
         )
         style.configure(
@@ -1046,35 +845,38 @@ class ToolApp(tk.Tk):
 
         self._refresh_language_options()
 
-    def create_collapsible_panel(self, title_key: str, start_open: bool = False) -> CollapsiblePanel:
-        panel = CollapsiblePanel(
-            self.panels_frame,
-            title=self.tr(title_key),
-            colors=self.theme_colors,
-            start_open=start_open,
-            info_text=self.tr_info(title_key),
-        )
-        panel.pack(fill="x", padx=4, pady=(0, 12))
-        self.register_widget(panel.title_label, title_key)
-        self.panel_info_bindings.append((panel, title_key))
-        return panel
+    def create_section_card(self, parent: ttk.Frame, title_key: str) -> ttk.Labelframe:
+        """Create a labeled card container for a tool section."""
 
-    def _on_mousewheel(self, event) -> None:
-        if not hasattr(self, "panel_canvas"):
-            return
-        if getattr(event, "delta", 0):
-            direction = -1 if event.delta > 0 else 1
-            self.panel_canvas.yview_scroll(direction, "units")
-        elif getattr(event, "num", None) == 4:
-            self.panel_canvas.yview_scroll(-1, "units")
-        elif getattr(event, "num", None) == 5:
-            self.panel_canvas.yview_scroll(1, "units")
+        card = ttk.Labelframe(parent, text=self.tr(title_key), style="Card.TLabelframe", padding=16)
+        self.register_widget(card, title_key)
 
-    def create_file_image_panels(self):
-        """Build collapsible panels for file and image related tools."""
+        info_text = self.tr_info(title_key)
+        if info_text:
+            description = ttk.Label(
+                card,
+                text=info_text,
+                style="Description.TLabel",
+                wraplength=420,
+                justify="left",
+            )
+            description.pack(fill="x", pady=(0, 12))
+            self.section_descriptions.append((description, title_key))
 
-        copy_panel = self.create_collapsible_panel("1. Copy/Move Files by List", start_open=True)
-        copy_frame = copy_panel.content
+        body = ttk.Frame(card, style="PanelBody.TFrame")
+        body.pack(fill="both", expand=True)
+        card.body = body
+        return card
+
+    def create_file_image_panels(self, parent: ttk.Frame):
+        """Build cards for file and image related tools."""
+
+        parent.columnconfigure(0, weight=1)
+        parent.columnconfigure(1, weight=1)
+
+        copy_card = self.create_section_card(parent, "1. Copy/Move Files by List")
+        copy_card.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
+        copy_frame = copy_card.body
         copy_frame.columnconfigure(1, weight=1)
 
         self.source_folder = tk.StringVar(value=self.settings.get("source_folder", ""))
@@ -1141,8 +943,9 @@ class ToolApp(tk.Tk):
         save_button.pack(side="left", padx=(8, 0))
         self.register_widget(save_button, "Save Settings")
 
-        heic_panel = self.create_collapsible_panel("2. Convert HEIC to JPG")
-        heic_frame = heic_panel.content
+        heic_card = self.create_section_card(parent, "2. Convert HEIC to JPG")
+        heic_card.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
+        heic_frame = heic_card.body
         heic_frame.columnconfigure(1, weight=1)
 
         self.heic_folder = tk.StringVar()
@@ -1162,8 +965,9 @@ class ToolApp(tk.Tk):
         heic_button.grid(row=1, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 6))
         self.register_widget(heic_button, "Convert")
 
-        resize_panel = self.create_collapsible_panel("3. Batch Image Resizer")
-        resize_frame = resize_panel.content
+        resize_card = self.create_section_card(parent, "3. Batch Image Resizer")
+        resize_card.grid(row=1, column=1, sticky="nsew", padx=8, pady=8)
+        resize_frame = resize_card.body
         resize_frame.columnconfigure(1, weight=1)
 
         self.resize_folder = tk.StringVar()
@@ -1291,8 +1095,15 @@ class ToolApp(tk.Tk):
             self.header_subtitle.config(text=self.tr("Welcome to the Combined Utility Tool!"))
         for widget, attr, text_key in self.translatable_widgets:
             self._apply_translation(widget, attr, text_key)
-        for panel, title_key in self.panel_info_bindings:
-            panel.set_info_text(self.tr_info(title_key))
+        for label, title_key in self.section_descriptions:
+            info_text = self.tr_info(title_key)
+            if info_text:
+                label.configure(text=info_text)
+            else:
+                label.configure(text="")
+        if hasattr(self, "section_notebook"):
+            for frame, title_key in self.notebook_tabs:
+                self.section_notebook.tab(frame, text=self.tr(title_key))
         self.update_help_tab_content()
         if hasattr(self, "shared_status_var"):
             self._apply_shared_status_translation()
@@ -1560,15 +1371,18 @@ class ToolApp(tk.Tk):
         self.log(message)
         messagebox.showerror(self.tr("Error"), message)
 
-    def create_shared_printer_panel(self):
+    def create_shared_printer_panel(self, parent: ttk.Frame):
         """Paylaşılan yazıcı sekmesini oluşturur."""
-        panel = self.create_collapsible_panel("Shared Label Printer")
-        frame = panel.content
+        parent.columnconfigure(0, weight=1)
+        card = self.create_section_card(parent, "Shared Label Printer")
+        card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        frame = card.body
         frame.columnconfigure(1, weight=1)
 
         description = ttk.Label(
             frame,
             text=self.tr("SHARED_PRINTER_DESCRIPTION"),
+            style="Description.TLabel",
             wraplength=620,
             justify="left",
         )
@@ -1647,62 +1461,108 @@ class ToolApp(tk.Tk):
         finally:
             self.destroy()
 
-    def create_data_calc_panels(self):
-        format_panel = self.create_collapsible_panel("4. Format Numbers from File")
-        format_frame = format_panel.content
+    def create_data_calc_panels(self, parent: ttk.Frame):
+        parent.columnconfigure(0, weight=1)
+        parent.columnconfigure(1, weight=1)
 
         self.format_file = tk.StringVar()
+        format_card = self.create_section_card(parent, "4. Format Numbers from File")
+        format_card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        format_frame = format_card.body
+        format_frame.columnconfigure(1, weight=1)
+
         format_label = ttk.Label(format_frame, text=self.tr("Excel/CSV/TXT File:"))
-        format_label.pack(side="left", padx=5, pady=5)
+        format_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
         self.register_widget(format_label, "Excel/CSV/TXT File:")
-        ttk.Entry(format_frame, textvariable=self.format_file, width=60).pack(side="left", padx=5, pady=5, expand=True, fill="x")
-        format_browse = ttk.Button(format_frame, text=self.tr("Browse..."), command=lambda: self.format_file.set(filedialog.askopenfilename()))
-        format_browse.pack(side="left", padx=5, pady=5)
+        ttk.Entry(format_frame, textvariable=self.format_file).grid(row=0, column=1, sticky="we", padx=6, pady=6)
+        format_browse = ttk.Button(
+            format_frame,
+            text=self.tr("Browse..."),
+            command=lambda: self.format_file.set(filedialog.askopenfilename()),
+        )
+        format_browse.grid(row=0, column=2, sticky="e", padx=6, pady=6)
         self.register_widget(format_browse, "Browse...")
         format_button = ttk.Button(format_frame, text=self.tr("Format"), command=self.start_format_numbers)
-        format_button.pack(side="left", padx=5, pady=5)
+        format_button.grid(row=0, column=3, padx=6, pady=6)
         self.register_widget(format_button, "Format")
-
-        single_rug_panel = self.create_collapsible_panel("5. Rug Size Calculator (Single)")
-        single_rug_frame = single_rug_panel.content
 
         self.rug_dim_input = tk.StringVar()
         self.rug_result_label = tk.StringVar()
+        single_rug_card = self.create_section_card(parent, "5. Rug Size Calculator (Single)")
+        single_rug_card.grid(row=0, column=1, sticky="nsew", padx=8, pady=8)
+        single_rug_frame = single_rug_card.body
+        single_rug_frame.columnconfigure(1, weight=1)
 
         rug_label = ttk.Label(single_rug_frame, text=self.tr("Dimension (e.g., 5'2\" x 8'):"))
-        rug_label.pack(side="left", padx=5, pady=5)
+        rug_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
         self.register_widget(rug_label, "Dimension (e.g., 5'2\" x 8'):")
-        ttk.Entry(single_rug_frame, textvariable=self.rug_dim_input, width=20).pack(side="left", padx=5, pady=5)
+        ttk.Entry(single_rug_frame, textvariable=self.rug_dim_input).grid(row=0, column=1, sticky="we", padx=6, pady=6)
         rug_button = ttk.Button(single_rug_frame, text=self.tr("Calculate"), command=self.calculate_single_rug)
-        rug_button.pack(side="left", padx=5, pady=5)
+        rug_button.grid(row=0, column=2, padx=6, pady=6)
         self.register_widget(rug_button, "Calculate")
-        ttk.Label(single_rug_frame, textvariable=self.rug_result_label, font=("Helvetica", 10, "bold")).pack(side="left", padx=15, pady=5)
-
-        bulk_rug_panel = self.create_collapsible_panel("6. BULK Process Rug Sizes from File")
-        bulk_rug_frame = bulk_rug_panel.content
-        bulk_rug_frame.columnconfigure(1, weight=1)
+        ttk.Label(single_rug_frame, textvariable=self.rug_result_label, font=("Helvetica", 10, "bold")).grid(
+            row=1,
+            column=0,
+            columnspan=3,
+            sticky="w",
+            padx=6,
+            pady=(4, 0),
+        )
 
         self.bulk_rug_file = tk.StringVar()
         self.bulk_rug_col = tk.StringVar(value="Size")
+        bulk_rug_card = self.create_section_card(parent, "6. BULK Process Rug Sizes from File")
+        bulk_rug_card.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
+        bulk_rug_frame = bulk_rug_card.body
+        bulk_rug_frame.columnconfigure(1, weight=1)
 
         bulk_file_label = ttk.Label(bulk_rug_frame, text=self.tr("Excel/CSV File:"))
-        bulk_file_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        bulk_file_label.grid(row=0, column=0, padx=6, pady=6, sticky="w")
         self.register_widget(bulk_file_label, "Excel/CSV File:")
-        ttk.Entry(bulk_rug_frame, textvariable=self.bulk_rug_file, width=50).grid(row=0, column=1, padx=5, pady=5)
-        bulk_browse = ttk.Button(bulk_rug_frame, text=self.tr("Browse..."), command=lambda: self.bulk_rug_file.set(filedialog.askopenfilename()))
-        bulk_browse.grid(row=0, column=2, padx=5, pady=5)
+        ttk.Entry(bulk_rug_frame, textvariable=self.bulk_rug_file).grid(row=0, column=1, padx=6, pady=6, sticky="we")
+        bulk_browse = ttk.Button(
+            bulk_rug_frame,
+            text=self.tr("Browse..."),
+            command=lambda: self.bulk_rug_file.set(filedialog.askopenfilename()),
+        )
+        bulk_browse.grid(row=0, column=2, padx=6, pady=6)
         self.register_widget(bulk_browse, "Browse...")
 
         bulk_col_label = ttk.Label(bulk_rug_frame, text=self.tr("Column Name/Letter:"))
-        bulk_col_label.grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        bulk_col_label.grid(row=1, column=0, padx=6, pady=6, sticky="w")
         self.register_widget(bulk_col_label, "Column Name/Letter:")
-        ttk.Entry(bulk_rug_frame, textvariable=self.bulk_rug_col, width=20).grid(row=1, column=1, padx=5, pady=5, sticky="w")
+        ttk.Entry(bulk_rug_frame, textvariable=self.bulk_rug_col, width=20).grid(row=1, column=1, padx=6, pady=6, sticky="w")
         bulk_process = ttk.Button(bulk_rug_frame, text=self.tr("Process File"), command=self.start_bulk_rug_sizer)
-        bulk_process.grid(row=1, column=2, padx=5, pady=5)
+        bulk_process.grid(row=1, column=2, padx=6, pady=6)
         self.register_widget(bulk_process, "Process File")
 
-        rug_check_panel = self.create_collapsible_panel("Rug No Checker")
-        rug_check_frame = rug_check_panel.content
+        unit_card = self.create_section_card(parent, "7. Unit Converter")
+        unit_card.grid(row=1, column=1, sticky="nsew", padx=8, pady=8)
+        unit_frame = unit_card.body
+        unit_frame.columnconfigure(1, weight=1)
+
+        self.unit_input = tk.StringVar(value=self.tr("182 cm to ft"))
+        self.unit_result_label = tk.StringVar()
+
+        conversion_label = ttk.Label(unit_frame, text=self.tr("Conversion:"))
+        conversion_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
+        self.register_widget(conversion_label, "Conversion:")
+        ttk.Entry(unit_frame, textvariable=self.unit_input, width=20).grid(row=0, column=1, padx=6, pady=6, sticky="we")
+        convert_button = ttk.Button(unit_frame, text=self.tr("Convert"), command=self.convert_units)
+        convert_button.grid(row=0, column=2, padx=6, pady=6)
+        self.register_widget(convert_button, "Convert")
+        ttk.Label(unit_frame, textvariable=self.unit_result_label, font=("Helvetica", 10, "bold")).grid(
+            row=1,
+            column=0,
+            columnspan=3,
+            sticky="w",
+            padx=6,
+            pady=(4, 0),
+        )
+
+        rug_check_card = self.create_section_card(parent, "Rug No Checker")
+        rug_check_card.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
+        rug_check_frame = rug_check_card.body
         rug_check_frame.columnconfigure(1, weight=1)
         rug_check_frame.rowconfigure(1, weight=1)
 
@@ -1879,23 +1739,9 @@ class ToolApp(tk.Tk):
         self._update_rug_mode()
         self._refresh_rug_comparison_display()
 
-        unit_panel = self.create_collapsible_panel("7. Unit Converter")
-        unit_frame = unit_panel.content
-
-        self.unit_input = tk.StringVar(value=self.tr("182 cm to ft"))
-        self.unit_result_label = tk.StringVar()
-
-        conversion_label = ttk.Label(unit_frame, text=self.tr("Conversion:"))
-        conversion_label.pack(side="left", padx=5, pady=5)
-        self.register_widget(conversion_label, "Conversion:")
-        ttk.Entry(unit_frame, textvariable=self.unit_input, width=20).pack(side="left", padx=5, pady=5)
-        convert_button = ttk.Button(unit_frame, text=self.tr("Convert"), command=self.convert_units)
-        convert_button.pack(side="left", padx=5, pady=5)
-        self.register_widget(convert_button, "Convert")
-        ttk.Label(unit_frame, textvariable=self.unit_result_label, font=("Helvetica", 10, "bold")).pack(side="left", padx=15, pady=5)
-
-        image_link_panel = self.create_collapsible_panel("8. Match Image Links")
-        image_link_frame = image_link_panel.content
+        image_link_card = self.create_section_card(parent, "8. Match Image Links")
+        image_link_card.grid(row=3, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
+        image_link_frame = image_link_card.body
         image_link_frame.columnconfigure(1, weight=1)
 
         self.input_excel_file = tk.StringVar()
@@ -1936,7 +1782,10 @@ class ToolApp(tk.Tk):
         match_button.grid(row=3, column=1, pady=10)
         self.register_widget(match_button, "Match and Add Links")
 
-    def create_code_gen_panels(self):
+    def create_code_gen_panels(self, parent: ttk.Frame):
+        parent.columnconfigure(0, weight=1)
+        parent.columnconfigure(1, weight=1)
+
         def toggle_dymo_options(output_var, combobox, entry):
             if output_var.get() == "Dymo":
                 combobox.config(state="readonly")
@@ -1945,8 +1794,9 @@ class ToolApp(tk.Tk):
                 combobox.config(state="disabled")
                 entry.config(state="disabled")
 
-        qr_panel = self.create_collapsible_panel("8. QR Code Generator")
-        qr_frame = qr_panel.content
+        qr_card = self.create_section_card(parent, "8. QR Code Generator")
+        qr_card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        qr_frame = qr_card.body
         qr_frame.columnconfigure(1, weight=1)
         qr_frame.columnconfigure(3, weight=1)
 
@@ -2010,8 +1860,9 @@ class ToolApp(tk.Tk):
         qr_button.grid(row=4, column=1, columnspan=2, pady=10)
         self.register_widget(qr_button, "Generate QR Code")
 
-        bc_panel = self.create_collapsible_panel("9. Barcode Generator")
-        bc_frame = bc_panel.content
+        bc_card = self.create_section_card(parent, "9. Barcode Generator")
+        bc_card.grid(row=0, column=1, sticky="nsew", padx=8, pady=8)
+        bc_frame = bc_card.body
         bc_frame.columnconfigure(1, weight=1)
         bc_frame.columnconfigure(3, weight=1)
 
@@ -2081,9 +1932,11 @@ class ToolApp(tk.Tk):
         bc_button.grid(row=4, column=1, columnspan=2, pady=10)
         self.register_widget(bc_button, "Generate Barcode")
 
-    def create_rinven_tag_panel(self):
-        panel = self.create_collapsible_panel("Rinven Tag")
-        frame = panel.content
+    def create_rinven_tag_panel(self, parent: ttk.Frame):
+        parent.columnconfigure(0, weight=1)
+        card = self.create_section_card(parent, "Rinven Tag")
+        card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        frame = card.body
         frame.columnconfigure(1, weight=1)
 
         self.rinven_collection = tk.StringVar()
@@ -2161,9 +2014,11 @@ class ToolApp(tk.Tk):
         generate_button.grid(row=row_offset + 3, column=0, columnspan=2, pady=(12, 6))
         self.register_widget(generate_button, "Generate Rinven Tag")
 
-    def create_about_panel(self):
-        panel = self.create_collapsible_panel("Help & About")
-        frame = panel.content
+    def create_about_panel(self, parent: ttk.Frame):
+        parent.columnconfigure(0, weight=1)
+        card = self.create_section_card(parent, "Help & About")
+        card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        frame = card.body
 
         top_frame = ttk.Frame(frame, style="PanelBody.TFrame")
         top_frame.pack(fill="x", padx=0, pady=5)
