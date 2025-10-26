@@ -112,6 +112,8 @@ TRANSLATIONS = {
         "SHARED_PRINTER_START_FAILED": "Failed to start sharing: {error}",
         "SHARED_PRINTER_STATUS_FAILED": "Status request failed: {error}",
         "SHARED_PRINTER_TOKEN_REQUIRED": "Please enter an authorization token.",
+        "SHARED_PRINTER_AUTOSTARTED": "Shared label printer server auto-started on {host}:{port}.",
+        "SHARED_PRINTER_AUTOSTART_FAILED": "Automatic start failed: {error}",
         "SHARED_PRINTER_STATUS_DETAIL": "Server Status: 🟢 Running — {host}:{port}",
         "SHARED_PRINTER_HELP_TEXT": (
             "Other PCs on this same Wi-Fi / LAN can print to this label printer by sending a POST /print request to http://{host}:{port}/print with the same bearer token. Do not expose this port to the internet."
@@ -285,6 +287,8 @@ TRANSLATIONS = {
         "SHARED_PRINTER_START_FAILED": "Paylaşım başlatılamadı: {error}",
         "SHARED_PRINTER_STATUS_FAILED": "Durum isteği başarısız: {error}",
         "SHARED_PRINTER_TOKEN_REQUIRED": "Lütfen bir yetkilendirme jetonu girin.",
+        "SHARED_PRINTER_AUTOSTARTED": "Etiket yazıcısı paylaşımı otomatik olarak {host}:{port} adresinde başlatıldı.",
+        "SHARED_PRINTER_AUTOSTART_FAILED": "Otomatik başlatma başarısız oldu: {error}",
         "SHARED_PRINTER_STATUS_DETAIL": "Sunucu Durumu: 🟢 Çalışıyor — {host}:{port}",
         "SHARED_PRINTER_HELP_TEXT": (
             "Aynı Wi-Fi / LAN içindeki diğer bilgisayarlar http://{host}:{port}/print adresine aynı bearer jetonuyla POST /print isteği göndererek bu yazıcıya çıktı alabilir. Bu portu internete açmayın."
@@ -386,6 +390,7 @@ class ToolApp(tk.Tk):
         shared_settings = self.settings.setdefault("shared_label_printer", {})
         shared_settings.setdefault("token", legacy_print.get("token", "change-me"))
         shared_settings.setdefault("port", legacy_print.get("port", 5151))
+        shared_settings.setdefault("autostart_on_launch", False)
         if "print_server" in self.settings:
             # Eski ayar anahtarını temizleyerek tek bir kaynaktan devam ediyoruz.
             self.settings.pop("print_server", None)
@@ -464,6 +469,7 @@ class ToolApp(tk.Tk):
         self.run_in_thread(check_for_updates, self, self.log, __version__, silent=True)
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.after(0, self._maybe_auto_start_shared_printer)
 
     def log(self, message: str) -> None:
         """Append a message to the on-screen log in a thread-safe way."""
@@ -1011,16 +1017,31 @@ class ToolApp(tk.Tk):
 
     def start_shared_printer(self) -> None:
         """Gömülü Flask sunucusunu başlatır."""
+        self._start_shared_printer(show_dialogs=True)
+
+    def _start_shared_printer(self, *, show_dialogs: bool) -> bool:
+        """Paylaşılan yazıcı sunucusunu başlatır ve başarı durumunu döndürür."""
         if self.shared_printer_server.is_running():
             host = self.shared_printer_server.current_host()
             port = self.shared_printer_server.current_port()
             self._set_shared_status("running", host, port)
-            return
+            return True
+
+        shared_settings = self.settings.setdefault("shared_label_printer", {})
 
         token = self.shared_token_var.get().strip()
         if not token:
-            messagebox.showerror(self.tr("Error"), self.tr("SHARED_PRINTER_TOKEN_REQUIRED"))
-            return
+            message = self.tr("SHARED_PRINTER_TOKEN_REQUIRED")
+            if show_dialogs:
+                messagebox.showerror(self.tr("Error"), message)
+            else:
+                self.log(message)
+                if shared_settings.get("autostart_on_launch"):
+                    shared_settings["autostart_on_launch"] = False
+                    save_settings(self.settings)
+                auto_error = self.tr("SHARED_PRINTER_AUTOSTART_FAILED").format(error=message)
+                self.log(auto_error)
+            return False
 
         port_value = self.shared_port_var.get().strip()
         try:
@@ -1028,31 +1049,59 @@ class ToolApp(tk.Tk):
             if not (1 <= port_int <= 65535):
                 raise ValueError
         except ValueError:
-            messagebox.showerror(self.tr("Error"), self.tr("Please enter a valid port number."))
-            return
+            message = self.tr("Please enter a valid port number.")
+            if show_dialogs:
+                messagebox.showerror(self.tr("Error"), message)
+            else:
+                self.log(message)
+                if shared_settings.get("autostart_on_launch"):
+                    shared_settings["autostart_on_launch"] = False
+                    save_settings(self.settings)
+                auto_error = self.tr("SHARED_PRINTER_AUTOSTART_FAILED").format(error=message)
+                self.log(auto_error)
+            return False
 
         try:
             self.shared_printer_server.start(port_int, token)
         except Exception as exc:
-            error_message = self.tr("SHARED_PRINTER_START_FAILED").format(error=exc)
-            self.log(error_message)
-            messagebox.showerror(self.tr("Error"), error_message)
+            if show_dialogs:
+                error_message = self.tr("SHARED_PRINTER_START_FAILED").format(error=exc)
+                self.log(error_message)
+                messagebox.showerror(self.tr("Error"), error_message)
+            else:
+                auto_error = self.tr("SHARED_PRINTER_AUTOSTART_FAILED").format(error=exc)
+                self.log(auto_error)
+                if shared_settings.get("autostart_on_launch"):
+                    shared_settings["autostart_on_launch"] = False
+                    save_settings(self.settings)
             self._set_shared_status("stopped")
-            return
+            return False
 
-        shared_settings = self.settings.setdefault("shared_label_printer", {})
         shared_settings["token"] = token
         shared_settings["port"] = port_int
+        shared_settings["autostart_on_launch"] = True
         save_settings(self.settings)
 
         host = self.shared_printer_server.current_host()
         self._set_shared_status("running", host, port_int)
-        success_message = self.tr("SHARED_PRINTER_STARTED").format(host=host, port=port_int)
-        self.log(success_message)
-        messagebox.showinfo(self.tr("Information"), success_message)
+
+        if show_dialogs:
+            success_message = self.tr("SHARED_PRINTER_STARTED").format(host=host, port=port_int)
+            self.log(success_message)
+            messagebox.showinfo(self.tr("Information"), success_message)
+        else:
+            auto_message = self.tr("SHARED_PRINTER_AUTOSTARTED").format(host=host, port=port_int)
+            self.log(auto_message)
+
+        return True
 
     def stop_shared_printer(self) -> None:
         """Arka planda çalışan Flask sunucusunu durdurur."""
+        shared_settings = self.settings.setdefault("shared_label_printer", {})
+        if shared_settings.get("autostart_on_launch"):
+            shared_settings["autostart_on_launch"] = False
+            save_settings(self.settings)
+
         if not self.shared_printer_server.is_running():
             self._set_shared_status("stopped")
             return
@@ -1064,6 +1113,17 @@ class ToolApp(tk.Tk):
         stop_message = self.tr("SHARED_PRINTER_STOPPED")
         self.log(stop_message)
         messagebox.showinfo(self.tr("Information"), stop_message)
+
+    def _maybe_auto_start_shared_printer(self) -> None:
+        """Uygulama açıldığında gerekirse paylaşılan yazıcıyı başlatır."""
+        shared_settings = self.settings.get("shared_label_printer", {})
+        if not shared_settings.get("autostart_on_launch"):
+            return
+
+        if self.shared_printer_server.is_running():
+            return
+
+        self._start_shared_printer(show_dialogs=False)
 
     def check_shared_printer_status(self) -> None:
         """Sunucunun sağlık durumunu HTTP üzerinden sorgular."""
