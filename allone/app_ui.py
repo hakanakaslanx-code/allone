@@ -18,8 +18,89 @@ import backend_logic as backend
 __version__ = "4.1.8"
 
 
+class Tooltip:
+    """A lightweight tooltip widget that appears when hovering over a widget."""
+
+    def __init__(
+        self,
+        widget: tk.Widget,
+        text: str,
+        *,
+        bg: str,
+        fg: str,
+        border: str,
+        wait_ms: int = 350,
+        wraplength: int = 320,
+    ) -> None:
+        self.widget = widget
+        self.text = text
+        self.bg = bg
+        self.fg = fg
+        self.border = border
+        self.wait_ms = wait_ms
+        self.wraplength = wraplength
+        self._after_id: Optional[str] = None
+        self._tip_window: Optional[tk.Toplevel] = None
+
+        self.widget.bind("<Enter>", self._schedule)
+        self.widget.bind("<Leave>", self._hide)
+        self.widget.bind("<ButtonPress>", self._hide)
+
+    def update_text(self, text: str) -> None:
+        self.text = text
+        if self._tip_window is not None:
+            self._tip_window.destroy()
+            self._tip_window = None
+            self._schedule()
+
+    def _schedule(self, _event=None) -> None:
+        self._cancel_schedule()
+        self._after_id = self.widget.after(self.wait_ms, self._show)
+
+    def _cancel_schedule(self) -> None:
+        if self._after_id is not None:
+            try:
+                self.widget.after_cancel(self._after_id)
+            finally:
+                self._after_id = None
+
+    def _show(self) -> None:
+        self._after_id = None
+        if self._tip_window or not self.text:
+            return
+
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 10
+
+        self._tip_window = tk.Toplevel(self.widget)
+        self._tip_window.wm_overrideredirect(True)
+        self._tip_window.wm_geometry(f"+{x}+{y}")
+
+        frame = tk.Frame(self._tip_window, bg=self.border, padx=1, pady=1)
+        frame.pack()
+
+        label = tk.Label(
+            frame,
+            text=self.text,
+            justify="left",
+            background=self.bg,
+            foreground=self.fg,
+            relief="flat",
+            borderwidth=0,
+            wraplength=self.wraplength,
+            font=("Segoe UI", 10),
+        )
+        label.pack(padx=6, pady=4)
+
+    def _hide(self, _event=None) -> None:
+        self._cancel_schedule()
+        if self._tip_window is not None:
+            self._tip_window.destroy()
+            self._tip_window = None
+
+
 class CollapsiblePanel(tk.Frame):
-    """A custom collapsible panel with a header and toggle icon."""
+    """A custom collapsible panel with a header, toggle icon and info tooltip."""
 
     def __init__(
         self,
@@ -28,6 +109,7 @@ class CollapsiblePanel(tk.Frame):
         title: str,
         colors: dict,
         start_open: bool = False,
+        info_text: Optional[str] = None,
     ) -> None:
         super().__init__(master, bg=colors["panel_border"], bd=0, highlightthickness=1)
         self.colors = colors
@@ -42,12 +124,12 @@ class CollapsiblePanel(tk.Frame):
 
         self.icon_label = tk.Label(
             self.header,
-            text="[-]" if start_open else "[+]",
+            text="▾" if start_open else "▸",
             bg=header_bg,
-            fg=text_color,
-            font=("Segoe UI Semibold", 12),
+            fg=colors["accent"],
+            font=("Segoe UI", 13, "bold"),
         )
-        self.icon_label.pack(side="left", padx=(12, 8), pady=8)
+        self.icon_label.pack(side="left", padx=(12, 10), pady=8)
         self.icon_label.configure(cursor="hand2")
 
         self.title_label = tk.Label(
@@ -60,11 +142,17 @@ class CollapsiblePanel(tk.Frame):
         self.title_label.pack(side="left", pady=8)
         self.title_label.configure(cursor="hand2")
 
+        self.info_icon: Optional[tk.Label] = None
+        self.info_tooltip: Optional[Tooltip] = None
+
         for widget in (self.header, self.icon_label, self.title_label):
             widget.bind("<Button-1>", self.toggle)
+            widget.bind("<Enter>", lambda _e, hover=True: self._on_hover(hover))
+            widget.bind("<Leave>", lambda _e, hover=False: self._on_hover(hover))
 
         self.content = ttk.Frame(self, style="PanelBody.TFrame", padding=15)
         self._is_open = False
+        self.set_info_text(info_text)
         if start_open:
             self.open()
 
@@ -79,17 +167,54 @@ class CollapsiblePanel(tk.Frame):
             return
         self.content.pack(fill="both", expand=True)
         self._is_open = True
-        self.icon_label.configure(text="[-]")
+        self.icon_label.configure(text="▾")
 
     def close(self) -> None:
         if not self._is_open:
             return
         self.content.pack_forget()
         self._is_open = False
-        self.icon_label.configure(text="[+]")
+        self.icon_label.configure(text="▸")
 
     def set_title(self, title: str) -> None:
         self.title_label.configure(text=title)
+
+    def set_info_text(self, info_text: Optional[str]) -> None:
+        if info_text:
+            if self.info_icon is None:
+                self.info_icon = tk.Label(
+                    self.header,
+                    text="ℹ",
+                    bg=self.colors["panel_header_bg"],
+                    fg=self.colors["accent"],
+                    font=("Segoe UI", 12, "bold"),
+                )
+                self.info_icon.pack(side="right", padx=12)
+                self.info_icon.configure(cursor="question_arrow")
+                self.info_icon.bind("<Enter>", lambda _e, hover=True: self._on_hover(hover))
+                self.info_icon.bind("<Leave>", lambda _e, hover=False: self._on_hover(hover))
+                self.info_tooltip = Tooltip(
+                    self.info_icon,
+                    info_text,
+                    bg=self.colors["tooltip_bg"],
+                    fg=self.colors["tooltip_fg"],
+                    border=self.colors["panel_border"],
+                )
+            else:
+                if self.info_tooltip:
+                    self.info_tooltip.update_text(info_text)
+                self.info_icon.configure(bg=self.colors["panel_header_bg"], fg=self.colors["accent"])
+        else:
+            if self.info_icon is not None:
+                self.info_icon.destroy()
+                self.info_icon = None
+                self.info_tooltip = None
+
+    def _on_hover(self, hover: bool) -> None:
+        bg = self.colors["panel_header_hover"] if hover else self.colors["panel_header_bg"]
+        for widget in (self.header, self.icon_label, self.title_label, self.info_icon):
+            if widget is not None:
+                widget.configure(bg=bg)
 
 TRANSLATIONS = {
     "en": {
@@ -494,6 +619,41 @@ TRANSLATIONS = {
     },
 }
 
+PANEL_INFO = {
+    "en": {
+        "1. Copy/Move Files by List": "Quickly copy or move files referenced by a spreadsheet of item numbers.",
+        "2. Convert HEIC to JPG": "Convert entire folders of HEIC photos into widely compatible JPG images.",
+        "3. Batch Image Resizer": "Resize and compress images in bulk using width- or percentage-based rules.",
+        "4. Format Numbers from File": "Clean and format numbers from Excel, CSV or text files for exports.",
+        "5. Rug Size Calculator (Single)": "Calculate exact square footage and square meters for a single rug size.",
+        "6. BULK Process Rug Sizes from File": "Normalize every rug size inside a spreadsheet using your chosen column.",
+        "Rug No Checker": "Compare sold and master lists or search manually to verify rug numbers.",
+        "7. Unit Converter": "Convert between popular measurements such as centimeters, inches and feet.",
+        "8. Match Image Links": "Attach hosted image URLs to product rows by matching a shared key column.",
+        "8. QR Code Generator": "Generate QR codes for web links or label printers in just a few clicks.",
+        "9. Barcode Generator": "Create printable barcodes in multiple formats, including DYMO labels.",
+        "Rinven Tag": "Design branded Rinven tags with collection details and optional barcode.",
+        "Shared Label Printer": "Share your local DYMO printer securely with other devices on the network.",
+        "Help & About": "Review update status, helpful links and support information for the app.",
+    },
+    "tr": {
+        "1. Copy/Move Files by List": "Numara listesindeki kayıtlara göre dosyaları hızlıca kopyalayın veya taşıyın.",
+        "2. Convert HEIC to JPG": "Tüm HEIC fotoğraflarını tek seferde yaygın kullanılan JPG formatına dönüştürür.",
+        "3. Batch Image Resizer": "Görselleri genişliğe ya da yüzdeye göre toplu biçimde yeniden boyutlandırıp sıkıştırır.",
+        "4. Format Numbers from File": "Excel, CSV veya TXT dosyalarındaki sayıları dışa aktarıma uygun biçimde temizler.",
+        "5. Rug Size Calculator (Single)": "Tek bir halı ölçüsünün metrekare ve fit değerlerini anında hesaplar.",
+        "6. BULK Process Rug Sizes from File": "Seçtiğiniz sütundaki tüm halı ölçülerini standart forma dönüştürür.",
+        "Rug No Checker": "Satış ve ana listeleri karşılaştırarak halı numaralarını doğrular veya manuel arama yapar.",
+        "7. Unit Converter": "Sık kullanılan ölçü birimlerini (cm, inç, feet vb.) hızlıca çevirir.",
+        "8. Match Image Links": "Paylaşılan anahtar sütunu kullanarak ürün satırlarına görsel bağlantıları ekler.",
+        "8. QR Code Generator": "Web bağlantıları veya etiket yazıcıları için birkaç tıklamayla QR kodu üretir.",
+        "9. Barcode Generator": "PNG veya DYMO dahil birden çok formatta baskıya hazır barkod oluşturur.",
+        "Rinven Tag": "Koleksiyon bilgileri ve isteğe bağlı barkod içeren Rinven etiketleri tasarlar.",
+        "Shared Label Printer": "Yerel DYMO yazıcınızı ağdaki diğer cihazlarla güvenle paylaşmanızı sağlar.",
+        "Help & About": "Uygulama sürümünü, rehberleri ve destek bağlantılarını tek yerde gösterir.",
+    },
+}
+
 DYMO_LABELS = {
     'Address (30252)': {'w_in': 3.5, 'h_in': 1.125},
     'Shipping (30256)': {'w_in': 4.0, 'h_in': 2.3125},
@@ -524,6 +684,7 @@ class ToolApp(tk.Tk):
             self.language = "en"
 
         self.translatable_widgets = []
+        self.panel_info_bindings = []
 
         self.language_options = {"en": "English", "tr": "Turkish"}
         self.language_var = tk.StringVar(
@@ -689,23 +850,29 @@ class ToolApp(tk.Tk):
         base_bg = "#0b1120"
         card_bg = "#111c2e"
         panel_header_bg = "#1a253a"
+        panel_header_hover = "#24324d"
         panel_border = "#1f2d47"
         accent = "#38bdf8"
         accent_hover = "#0ea5e9"
         text_primary = "#f1f5f9"
         text_secondary = "#cbd5f5"
         text_muted = "#94a3b8"
+        tooltip_bg = "#111c2e"
+        tooltip_fg = text_primary
 
         self.theme_colors = {
             "base_bg": base_bg,
             "card_bg": card_bg,
             "panel_header_bg": panel_header_bg,
+            "panel_header_hover": panel_header_hover,
             "panel_border": panel_border,
             "accent": accent,
             "accent_hover": accent_hover,
             "text_primary": text_primary,
             "text_secondary": text_secondary,
             "text_muted": text_muted,
+            "tooltip_bg": tooltip_bg,
+            "tooltip_fg": tooltip_fg,
         }
 
         self.configure(bg=base_bg)
@@ -885,9 +1052,11 @@ class ToolApp(tk.Tk):
             title=self.tr(title_key),
             colors=self.theme_colors,
             start_open=start_open,
+            info_text=self.tr_info(title_key),
         )
         panel.pack(fill="x", padx=4, pady=(0, 12))
         self.register_widget(panel.title_label, title_key)
+        self.panel_info_bindings.append((panel, title_key))
         return panel
 
     def _on_mousewheel(self, event) -> None:
@@ -968,6 +1137,7 @@ class ToolApp(tk.Tk):
         self.register_widget(move_button, "Move Files")
 
         save_button = ttk.Button(button_frame, text=self.tr("Save Settings"), command=self.save_folder_settings)
+        save_button._text_icon_prefix = "⚙"
         save_button.pack(side="left", padx=(8, 0))
         self.register_widget(save_button, "Save Settings")
 
@@ -1068,6 +1238,14 @@ class ToolApp(tk.Tk):
         """Translate a text key according to the selected language."""
         return TRANSLATIONS.get(self.language, TRANSLATIONS["en"]).get(text_key, text_key)
 
+    def tr_info(self, title_key: str) -> Optional[str]:
+        """Return the localized info text for a given panel title."""
+        language_info = PANEL_INFO.get(self.language) or PANEL_INFO.get("en", {})
+        info_text = language_info.get(title_key)
+        if info_text:
+            return info_text
+        return PANEL_INFO.get("en", {}).get(title_key)
+
     def _update_resize_inputs(self):
         """Enable the relevant resize input fields according to the selected mode."""
         if not hasattr(self, "resize_mode"):
@@ -1092,7 +1270,15 @@ class ToolApp(tk.Tk):
 
     def _apply_translation(self, widget, attr, text_key):
         try:
-            widget.configure(**{attr: self.tr(text_key)})
+            value = self.tr(text_key)
+            if attr == "text":
+                prefix = getattr(widget, "_text_icon_prefix", "")
+                suffix = getattr(widget, "_text_icon_suffix", "")
+                if prefix:
+                    value = f"{prefix} {value}"
+                if suffix:
+                    value = f"{value} {suffix}"
+            widget.configure(**{attr: value})
         except tk.TclError:
             pass
 
@@ -1105,6 +1291,8 @@ class ToolApp(tk.Tk):
             self.header_subtitle.config(text=self.tr("Welcome to the Combined Utility Tool!"))
         for widget, attr, text_key in self.translatable_widgets:
             self._apply_translation(widget, attr, text_key)
+        for panel, title_key in self.panel_info_bindings:
+            panel.set_info_text(self.tr_info(title_key))
         self.update_help_tab_content()
         if hasattr(self, "shared_status_var"):
             self._apply_shared_status_translation()
