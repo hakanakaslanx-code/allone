@@ -43,6 +43,37 @@ TRANSLATIONS = {
         "Target Folder:": "Target Folder:",
         "Numbers File (List):": "Numbers File (List):",
         "Browse...": "Browse...",
+        "Browse": "Browse",
+        "(Select)": "(Select)",
+        "1. Choose Excel File": "1. Choose Excel File",
+        "2. Columns": "2. Columns",
+        "3. Map Wayfair Fields": "3. Map Wayfair Fields",
+        "Width:": "Width:",
+        "Length:": "Length:",
+        "Load Mapping": "Load Mapping",
+        "Save Mapping": "Save Mapping",
+        "Create File": "Create File",
+        "Select Excel File": "Select Excel File",
+        "Excel Files": "Excel Files",
+        "Excel file could not be read: {error}": "Excel file could not be read: {error}",
+        "{count} columns loaded.": "{count} columns loaded.",
+        "Please choose an Excel file first.": "Please choose an Excel file first.",
+        "Missing Fields": "Missing Fields",
+        "Please map the following fields:\n{fields}": "Please map the following fields:\n{fields}",
+        "Size (Width/Length must be selected)": "Size (Width/Length must be selected)",
+        "File could not be saved: {error}": "File could not be saved: {error}",
+        "Wayfair formatted file saved to {path}.": "Wayfair formatted file saved to {path}.",
+        "Missing Required Cells": "Missing Required Cells",
+        "Some required cells are empty. See below for details.": "Some required cells are empty. See below for details.",
+        "Wayfair formatted file is ready.": "Wayfair formatted file is ready.",
+        "Missing fields: {fields}": "Missing fields: {fields}",
+        "All required fields look filled.": "All required fields look filled.",
+        "JSON": "JSON",
+        "Mapping could not be saved: {error}": "Mapping could not be saved: {error}",
+        "Mapping saved as {filename}.": "Mapping saved as {filename}.",
+        "Mapping could not be loaded: {error}": "Mapping could not be loaded: {error}",
+        "Mapping {filename} loaded.": "Mapping {filename} loaded.",
+        "Width × Length": "Width × Length",
         "Copy Files": "Copy Files",
         "Move Files": "Move Files",
         "Save Settings": "Save Settings",
@@ -156,6 +187,19 @@ TRANSLATIONS = {
         "Please fill in all Rinven Tag fields.": "Please fill in all Rinven Tag fields.",
         "Barcode data is required when barcode is enabled.": "Barcode data is required when barcode is enabled.",
         "Filename is required.": "Filename is required.",
+        "win32print is only available on Windows.": "win32print is only available on Windows.",
+        "win32print module could not be loaded. Please check the pywin32 installation.": "win32print module could not be loaded. Please check the pywin32 installation.",
+        "Server token is not configured.": "Server token is not configured.",
+        "Invalid or missing authorization token.": "Invalid or missing authorization token.",
+        "No file found in request.": "No file found in request.",
+        "No valid filename provided.": "No valid filename provided.",
+        "Printer name could not be determined.": "Printer name could not be determined.",
+        "File content is empty; cannot print.": "File content is empty; cannot print.",
+        "Shared printer server error: {error}": "Shared printer server error: {error}",
+        "Server is already running.": "Server is already running.",
+        "Authorization token cannot be empty.": "Authorization token cannot be empty.",
+        "Port {port} is not available: {error}": "Port {port} is not available: {error}",
+        "Print error: %s": "Print error: %s",
         "Check for Updates": "Check for Updates",
         "Warning": "Warning",
         "Information": "Information",
@@ -250,6 +294,37 @@ TRANSLATIONS = {
         "Target Folder:": "Hedef Klasör:",
         "Numbers File (List):": "Numara Dosyası (Liste):",
         "Browse...": "Gözat...",
+        "Browse": "Gözat",
+        "(Select)": "(Seçiniz)",
+        "1. Choose Excel File": "1. Excel Dosyası Seç",
+        "2. Columns": "2. Sütunlar",
+        "3. Map Wayfair Fields": "3. Wayfair Alan Eşlemesi",
+        "Width:": "Genişlik:",
+        "Length:": "Uzunluk:",
+        "Load Mapping": "Mapping Yükle",
+        "Save Mapping": "Mapping Kaydet",
+        "Create File": "Dosya Oluştur",
+        "Select Excel File": "Excel Dosyası Seç",
+        "Excel Files": "Excel Dosyaları",
+        "Excel file could not be read: {error}": "Excel dosyası okunamadı: {error}",
+        "{count} columns loaded.": "{count} sütun yüklendi.",
+        "Please choose an Excel file first.": "Lütfen önce bir Excel dosyası seçin.",
+        "Missing Fields": "Eksik Alanlar",
+        "Please map the following fields:\n{fields}": "Lütfen aşağıdaki alanlar için eşleme yapın:\n{fields}",
+        "Size (Width/Length must be selected)": "Size (Width/Length seçilmeli)",
+        "File could not be saved: {error}": "Dosya kaydedilemedi: {error}",
+        "Wayfair formatted file saved to {path}.": "Wayfair formatlı dosya {path} konumuna kaydedildi.",
+        "Missing Required Cells": "Eksik Zorunlu Hücreler",
+        "Some required cells are empty. See below for details.": "Bazı zorunlu hücreler boş. Ayrıntılar için aşağıya bakın.",
+        "Wayfair formatted file is ready.": "Wayfair formatında dosya hazır.",
+        "Missing fields: {fields}": "Eksik alanlar: {fields}",
+        "All required fields look filled.": "Tüm zorunlu alanlar dolu görünüyor.",
+        "JSON": "JSON",
+        "Mapping could not be saved: {error}": "Mapping kaydedilemedi: {error}",
+        "Mapping saved as {filename}.": "Mapping {filename} olarak kaydedildi.",
+        "Mapping could not be loaded: {error}": "Mapping yüklenemedi: {error}",
+        "Mapping {filename} loaded.": "Mapping {filename} yüklendi.",
+        "Width × Length": "Genişlik × Uzunluk",
         "Copy Files": "Dosyaları Kopyala",
         "Move Files": "Dosyaları Taşı",
         "Save Settings": "Ayarları Kaydet",
@@ -363,6 +438,19 @@ TRANSLATIONS = {
         "Please fill in all Rinven Tag fields.": "Lütfen tüm Rinven Etiketi alanlarını doldurun.",
         "Barcode data is required when barcode is enabled.": "Barkod etkinleştirildiğinde barkod verisi gereklidir.",
         "Filename is required.": "Dosya adı gereklidir.",
+        "win32print is only available on Windows.": "win32print sadece Windows üzerinde kullanılabilir.",
+        "win32print module could not be loaded. Please check the pywin32 installation.": "win32print modülü yüklenemedi. Lütfen pywin32 kurulumunu kontrol edin.",
+        "Server token is not configured.": "Sunucu jetonu yapılandırılmamış.",
+        "Invalid or missing authorization token.": "Geçersiz veya eksik yetkilendirme jetonu.",
+        "No file found in request.": "Yüklenecek dosya bulunamadı.",
+        "No valid filename provided.": "Geçerli bir dosya adı gönderilmedi.",
+        "Printer name could not be determined.": "Yazıcı adı bulunamadı.",
+        "File content is empty; cannot print.": "Dosya içeriği boş olduğu için yazdırma yapılamadı.",
+        "Shared printer server error: {error}": "Paylaşılan yazıcı sunucusu hata verdi: {error}",
+        "Server is already running.": "Sunucu zaten çalışıyor.",
+        "Authorization token cannot be empty.": "Yetkilendirme jetonu boş olamaz.",
+        "Port {port} is not available: {error}": "Port {port} kullanılamıyor: {error}",
+        "Print error: %s": "Yazdırma sırasında hata oluştu: %s",
         "Check for Updates": "Güncellemeleri Kontrol Et",
         "Warning": "Uyarı",
         "Information": "Bilgi",
@@ -632,7 +720,7 @@ class ToolApp(tk.Tk):
         self.shared_status_state = "stopped"
         self.shared_status_host: Optional[str] = None
         self.shared_status_port: Optional[int] = None
-        self.shared_printer_server = SharedLabelPrinterServer(self.log)
+        self.shared_printer_server = SharedLabelPrinterServer(self.log, translator=self.tr)
         self.shared_status_lock = threading.RLock()
         self.shared_port_var.trace_add("write", lambda *args: self._update_shared_help_text())
 
@@ -1498,6 +1586,10 @@ class ToolApp(tk.Tk):
             self._update_manual_result_label()
         if hasattr(self, "rug_result_tree"):
             self._refresh_rug_comparison_display()
+        if hasattr(self, "wayfair_formatter"):
+            self.wayfair_formatter.set_translator(self.tr)
+        if hasattr(self, "shared_printer_server"):
+            self.shared_printer_server.set_translator(self.tr)
         self._update_sidebar_toggle_text()
         self._refresh_language_options()
 
@@ -1954,7 +2046,7 @@ class ToolApp(tk.Tk):
         wayfair_frame = wayfair_card.body
         wayfair_frame.columnconfigure(0, weight=1)
 
-        self.wayfair_formatter = WayfairFormatter(wayfair_frame)
+        self.wayfair_formatter = WayfairFormatter(wayfair_frame, translator=self.tr)
         self.wayfair_formatter.pack(fill="both", expand=True, padx=6, pady=6)
 
         rug_check_card = self.create_section_card(parent, "Rug No Checker")
