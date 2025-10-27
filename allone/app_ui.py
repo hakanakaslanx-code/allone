@@ -6,8 +6,9 @@ from tkinter import ttk, filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
 import threading
 import os
-from typing import Callable, Optional
+from typing import Callable, List, Optional, Set, Tuple
 
+import pandas as pd
 import requests
 
 from print_service import SharedLabelPrinterServer, resolve_local_ip
@@ -109,6 +110,12 @@ translations = {
         "Comparison Results:": "Comparison Results:",
         "Status": "Status",
         "Rug No": "Rug No",
+        "Rug No Check": "Rug No Check",
+        "Inventory List File:": "Inventory List File:",
+        "Check Rug Nos": "Check Rug Nos",
+        "Results:": "Results:",
+        "RUG_NO_CONTROL_FOUND": "Found",
+        "RUG_NO_CONTROL_NOT_FOUND": "Not Found",
         "FOUND": "FOUND",
         "MISSING": "MISSING",
         "Found: {found} | Missing: {missing}": "Found: {found} | Missing: {missing}",
@@ -124,6 +131,10 @@ translations = {
         "No recent searches yet.": "No recent searches yet.",
         "Found": "Found",
         "Not Found": "Not Found",
+        "Please select both Sold and Inventory files.": "Please select both Sold and Inventory files.",
+        "Could not find a Rug No column in the selected file.": "Could not find a Rug No column in the selected file.",
+        "Could not read the selected file: {error}": "Could not read the selected file: {error}",
+        "Rug No control completed.": "Rug No control completed.",
         "7. Unit Converter": "7. Unit Converter",
         "Conversion:": "Conversion:",
         "182 cm to ft": "182 cm to ft",
@@ -354,15 +365,21 @@ translations = {
         "Column Name/Letter:": "Sütun Adı/Harf:",
         "Process File": "Dosyayı İşle",
         "Rug No Checker": "Rug No Kontrolü",
+        "Rug No Check": "Rug No Kontrol",
         "Mode:": "Mod:",
         "Batch Comparison": "Toplu Karşılaştırma",
         "Manual Search": "Manuel Arama",
         "Sold List File:": "Sold List Dosyası:",
+        "Inventory List File:": "Envanter Listesi Dosyası:",
         "Master List File:": "Master List Dosyası:",
         "Start Comparison": "Karşılaştırmayı Başlat",
         "Comparison Results:": "Karşılaştırma Sonuçları:",
         "Status": "Durum",
         "Rug No": "Rug No",
+        "Check Rug Nos": "Rug No Kontrol Et",
+        "Results:": "Sonuçlar:",
+        "RUG_NO_CONTROL_FOUND": "Bulundu",
+        "RUG_NO_CONTROL_NOT_FOUND": "Yok",
         "FOUND": "BULUNDU",
         "MISSING": "EKSİK",
         "Found: {found} | Missing: {missing}": "Bulundu: {found} | Eksik: {missing}",
@@ -378,6 +395,10 @@ translations = {
         "No recent searches yet.": "Henüz arama geçmişi yok.",
         "Found": "Bulundu",
         "Not Found": "Bulunamadı",
+        "Please select both Sold and Inventory files.": "Lütfen Satılanlar ve Envanter dosyalarını seçin.",
+        "Could not find a Rug No column in the selected file.": "Seçilen dosyada bir Halı No sütunu bulunamadı.",
+        "Could not read the selected file: {error}": "Seçilen dosya okunamadı: {error}",
+        "Rug No control completed.": "Rug No kontrolü tamamlandı.",
         "7. Unit Converter": "7. Birim Dönüştürücü",
         "Conversion:": "Dönüşüm:",
         "182 cm to ft": "182 cm'yi ft'ye",
@@ -531,6 +552,9 @@ translations = {
 }
 
 
+RUG_NO_CONTROL_COLUMNS = ["Rug No", "RugNo", "RugNo#", "SKU", "Sku"]
+
+
 class ScrollableTab(ttk.Frame):
     """Wraps a frame within a canvas to provide per-tab scrolling."""
 
@@ -586,6 +610,7 @@ PANEL_INFO = {
         "5. Rug Size Calculator (Single)": "Calculate exact square footage and square meters for a single rug size.",
         "6. BULK Process Rug Sizes from File": "Normalize every rug size inside a spreadsheet using your chosen column.",
         "Rug No Checker": "Compare sold and master lists or search manually to verify rug numbers.",
+        "Rug No Check": "Check sold rug numbers against an inventory file and report their availability.",
         "7. Unit Converter": "Convert between popular measurements such as centimeters, inches and feet.",
         "8. Match Image Links": "Attach hosted image URLs to product rows by matching a shared key column.",
         "8. QR Code Generator": "Generate QR codes for web links or label printers in just a few clicks.",
@@ -603,6 +628,7 @@ PANEL_INFO = {
         "5. Rug Size Calculator (Single)": "Tek bir halı ölçüsünün metrekare ve fit değerlerini anında hesaplar.",
         "6. BULK Process Rug Sizes from File": "Seçtiğiniz sütundaki tüm halı ölçülerini standart forma dönüştürür.",
         "Rug No Checker": "Satış ve ana listeleri karşılaştırarak halı numaralarını doğrular veya manuel arama yapar.",
+        "Rug No Check": "Satılan halı numaralarını envanter dosyasıyla hızlıca karşılaştırıp durumlarını raporlar.",
         "7. Unit Converter": "Sık kullanılan ölçü birimlerini (cm, inç, feet vb.) hızlıca çevirir.",
         "8. Match Image Links": "Paylaşılan anahtar sütunu kullanarak ürün satırlarına görsel bağlantıları ekler.",
         "8. QR Code Generator": "Web bağlantıları veya etiket yazıcıları için birkaç tıklamayla QR kodu üretir.",
@@ -762,6 +788,7 @@ class ToolApp(tk.Tk):
         for title in (
             "File & Image Tools",
             "Data & Calculation",
+            "Rug No Check",
             "Code Generators",
             "Rinven Tag",
             "Shared Label Printer",
@@ -780,9 +807,11 @@ class ToolApp(tk.Tk):
         self.rug_manual_history_entries = []
         self.rug_manual_last_result = None
         self.rug_comparison_results = None
+        self.rug_control_results: List[Tuple[str, bool]] = []
 
         self.create_file_image_panels(self.section_frames["File & Image Tools"])
         self.create_data_calc_panels(self.section_frames["Data & Calculation"])
+        self.create_rug_no_control_tab(self.section_frames["Rug No Check"])
         self.create_code_gen_panels(self.section_frames["Code Generators"])
         self.create_rinven_tag_panel(self.section_frames["Rinven Tag"])
         self.create_shared_printer_panel(self.section_frames["Shared Label Printer"])
@@ -1602,6 +1631,8 @@ class ToolApp(tk.Tk):
             self._update_manual_result_label()
         if hasattr(self, "rug_result_tree"):
             self._refresh_rug_comparison_display()
+        if hasattr(self, "rug_control_tree"):
+            self.populate_rug_no_control_tree(getattr(self, "rug_control_results", []))
         if hasattr(self, "wayfair_formatter"):
             self.wayfair_formatter.set_translator(self.tr)
         if hasattr(self, "shared_printer_server"):
@@ -2287,6 +2318,192 @@ class ToolApp(tk.Tk):
         match_button.grid(row=3, column=1, pady=10)
         self.register_widget(match_button, "Match and Add Links")
 
+    def create_rug_no_control_tab(self, parent: ttk.Frame) -> ttk.Frame:
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(2, weight=1)
+
+        self.rug_control_sold_path = tk.StringVar()
+        self.rug_control_inventory_path = tk.StringVar()
+
+        input_frame = ttk.Frame(parent, style="PanelBody.TFrame")
+        input_frame.grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 6))
+        input_frame.columnconfigure(1, weight=1)
+        input_frame.columnconfigure(4, weight=1)
+
+        sold_label = ttk.Label(input_frame, text=self.tr("Sold List File:"))
+        sold_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
+        self.register_widget(sold_label, "Sold List File:")
+        ttk.Entry(input_frame, textvariable=self.rug_control_sold_path).grid(
+            row=0,
+            column=1,
+            columnspan=3,
+            sticky="we",
+            padx=6,
+            pady=6,
+        )
+        sold_browse = ttk.Button(
+            input_frame,
+            text=self.tr("Browse..."),
+            command=lambda: self._browse_rug_file(self.rug_control_sold_path),
+        )
+        sold_browse.grid(row=0, column=4, sticky="e", padx=6, pady=6)
+        self.register_widget(sold_browse, "Browse...")
+
+        inventory_label = ttk.Label(input_frame, text=self.tr("Inventory List File:"))
+        inventory_label.grid(row=1, column=0, sticky="w", padx=6, pady=6)
+        self.register_widget(inventory_label, "Inventory List File:")
+        ttk.Entry(input_frame, textvariable=self.rug_control_inventory_path).grid(
+            row=1,
+            column=1,
+            columnspan=3,
+            sticky="we",
+            padx=6,
+            pady=6,
+        )
+        inventory_browse = ttk.Button(
+            input_frame,
+            text=self.tr("Browse..."),
+            command=lambda: self._browse_rug_file(self.rug_control_inventory_path),
+        )
+        inventory_browse.grid(row=1, column=4, sticky="e", padx=6, pady=6)
+        self.register_widget(inventory_browse, "Browse...")
+
+        check_button = ttk.Button(
+            input_frame,
+            text=self.tr("Check Rug Nos"),
+            command=self.run_rug_no_control_check,
+        )
+        check_button.grid(row=2, column=0, columnspan=5, sticky="w", padx=6, pady=(6, 0))
+        self.register_widget(check_button, "Check Rug Nos")
+
+        results_label = ttk.Label(parent, text=self.tr("Results:"), style="Secondary.TLabel")
+        results_label.grid(row=1, column=0, sticky="w", padx=12)
+        self.register_widget(results_label, "Results:")
+        self.rug_control_results_label = results_label
+
+        tree_container = ttk.Frame(parent, style="PanelBody.TFrame")
+        tree_container.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 12))
+        tree_container.columnconfigure(0, weight=1)
+        tree_container.rowconfigure(0, weight=1)
+
+        columns = ("rug_no", "status")
+        tree = ttk.Treeview(tree_container, columns=columns, show="headings", height=12)
+        tree.grid(row=0, column=0, sticky="nsew")
+        scrollbar = ttk.Scrollbar(tree_container, orient="vertical", command=tree.yview)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        tree.configure(yscrollcommand=scrollbar.set)
+
+        self.rug_control_tree = tree
+        self.populate_rug_no_control_tree(self.rug_control_results)
+
+        return parent
+
+    def run_rug_no_control_check(self) -> None:
+        sold_path = self.rug_control_sold_path.get().strip()
+        inventory_path = self.rug_control_inventory_path.get().strip()
+        if not sold_path or not inventory_path:
+            messagebox.showerror(
+                self.tr("Error"),
+                self.tr("Please select both Sold and Inventory files."),
+            )
+            return
+
+        try:
+            results = self.load_rug_no_control_data(sold_path, inventory_path)
+        except FileNotFoundError as exc:
+            missing = getattr(exc, "filename", str(exc)) or str(exc)
+            message = self.tr("Could not read the selected file: {error}").format(error=missing)
+            messagebox.showerror(self.tr("Error"), message)
+            return
+        except ValueError as exc:
+            messagebox.showerror(self.tr("Error"), str(exc))
+            return
+
+        self.rug_control_results = results
+        self.populate_rug_no_control_tree(results)
+        self.log(self.tr("Rug No control completed."))
+
+    def load_rug_no_control_data(self, sold_path: str, inventory_path: str) -> List[Tuple[str, bool]]:
+        sold_values = self._load_sold_rug_numbers(sold_path)
+        inventory_values = self._load_inventory_rug_numbers(inventory_path)
+        return [(original, normalized in inventory_values) for original, normalized in sold_values]
+
+    def _read_rug_no_control_dataframe(self, path: str) -> pd.DataFrame:
+        extension = os.path.splitext(path)[1].lower()
+        try:
+            if extension in {".xlsx", ".xls", ".xlsm", ".xlsb"}:
+                dataframe = pd.read_excel(path, dtype=str)
+            else:
+                dataframe = pd.read_csv(path, dtype=str, keep_default_na=False)
+        except FileNotFoundError:
+            raise
+        except Exception as exc:  # pylint: disable=broad-except
+            message = self.tr("Could not read the selected file: {error}").format(error=exc)
+            raise ValueError(message) from exc
+
+        if not isinstance(dataframe, pd.DataFrame):
+            dataframe = pd.DataFrame(dataframe)
+
+        return dataframe.fillna("")
+
+    def _find_rug_no_columns(self, dataframe: pd.DataFrame) -> List[str]:
+        normalized_candidates = {candidate.strip().lower() for candidate in RUG_NO_CONTROL_COLUMNS}
+        matches = []
+        for column in dataframe.columns:
+            normalized = str(column).strip().lower()
+            if normalized in normalized_candidates:
+                matches.append(column)
+        return matches
+
+    def _extract_rug_values(self, series: pd.Series) -> List[Tuple[str, str]]:
+        values: List[Tuple[str, str]] = []
+        for raw in series:
+            if pd.isna(raw):
+                continue
+            text = str(raw).strip()
+            if not text:
+                continue
+            values.append((text, text.lower()))
+        return values
+
+    def _load_sold_rug_numbers(self, path: str) -> List[Tuple[str, str]]:
+        dataframe = self._read_rug_no_control_dataframe(path)
+        matches = self._find_rug_no_columns(dataframe)
+        if not matches:
+            raise ValueError(self.tr("Could not find a Rug No column in the selected file."))
+
+        primary_column = matches[0]
+        return self._extract_rug_values(dataframe[primary_column])
+
+    def _load_inventory_rug_numbers(self, path: str) -> Set[str]:
+        dataframe = self._read_rug_no_control_dataframe(path)
+        matches = self._find_rug_no_columns(dataframe)
+        if not matches:
+            raise ValueError(self.tr("Could not find a Rug No column in the selected file."))
+
+        normalized_values: Set[str] = set()
+        for column in matches:
+            for _original, normalized in self._extract_rug_values(dataframe[column]):
+                normalized_values.add(normalized)
+        return normalized_values
+
+    def populate_rug_no_control_tree(self, results: List[Tuple[str, bool]]):
+        tree = getattr(self, "rug_control_tree", None)
+        if tree is None:
+            return None
+
+        tree.heading("rug_no", text=self.tr("Rug No"))
+        tree.heading("status", text=self.tr("Status"))
+
+        for item in tree.get_children():
+            tree.delete(item)
+
+        for original, found in results:
+            status_text = self.tr("RUG_NO_CONTROL_FOUND") if found else self.tr("RUG_NO_CONTROL_NOT_FOUND")
+            tree.insert("", "end", values=(original, status_text))
+
+        return tree
+
     def create_code_gen_panels(self, parent: ttk.Frame):
         parent.columnconfigure(0, weight=1)
         parent.columnconfigure(1, weight=1)
@@ -2932,3 +3149,13 @@ class ToolApp(tk.Tk):
             self.task_completion_popup("Success", success_msg)
         else:
             messagebox.showerror(self.tr("Error"), log_msg)
+
+
+def get_rug_no_control_functions() -> Tuple[Callable, Callable, Callable]:
+    """Return helper callables for the Rug No Control tab."""
+
+    return (
+        ToolApp.create_rug_no_control_tab,
+        ToolApp.load_rug_no_control_data,
+        ToolApp.populate_rug_no_control_tree,
+    )
