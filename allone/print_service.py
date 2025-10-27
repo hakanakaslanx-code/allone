@@ -8,13 +8,24 @@ import platform
 import socket
 import tempfile
 import threading
+from functools import wraps
 from typing import Callable, Optional
 
 from flask import Flask, jsonify, request
-from werkzeug.serving import make_server
 from werkzeug.utils import secure_filename
 
 logger = logging.getLogger("allone.shared_printer")
+
+app = Flask(__name__)
+app.config.setdefault("MAX_CONTENT_LENGTH", 20 * 1024 * 1024)
+
+_state_lock = threading.RLock()
+_server_thread: Optional[threading.Thread] = None
+_server_token: Optional[str] = None
+_server_port: Optional[int] = None
+_server_host: str = "127.0.0.1"
+_sharing_enabled: bool = False
+_active_server: Optional["SharedLabelPrinterServer"] = None
 
 
 def resolve_local_ip() -> str:
@@ -31,6 +42,151 @@ def resolve_local_ip() -> str:
             return "127.0.0.1"
 
 
+def _is_thread_running() -> bool:
+    with _state_lock:
+        thread = _server_thread
+    return bool(thread and thread.is_alive())
+
+
+def _translate(key: str) -> str:
+    with _state_lock:
+        server = _active_server
+    return server._tr(key) if server else key
+
+
+def _run_flask_app() -> None:
+    global _server_thread, _sharing_enabled
+    try:
+        with _state_lock:
+            port = _server_port
+        if port is None:
+            logger.error("Shared printer server port is not configured.")
+            return
+        app.run(host="0.0.0.0", port=port, threaded=True, use_reloader=False)
+    except Exception as exc:  # pragma: no cover - dayanıklılık
+        logger.exception("Shared printer server error: %s", exc)
+        with _state_lock:
+            _sharing_enabled = False
+    finally:
+        with _state_lock:
+            _server_thread = None
+
+
+def _start_thread_locked() -> None:
+    global _server_thread
+    if _server_thread and _server_thread.is_alive():
+        return
+    if _server_port is None:
+        raise RuntimeError(_translate("Server port is not configured."))
+    thread = threading.Thread(
+        target=_run_flask_app,
+        name="SharedLabelPrinterServer",
+        daemon=True,
+    )
+    _server_thread = thread
+    thread.start()
+
+
+def _ensure_port_available(port: int) -> None:
+    test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        test_socket.bind(("0.0.0.0", port))
+    except OSError as exc:
+        raise RuntimeError(
+            _translate("Port {port} is not available: {error}").format(port=port, error=exc)
+        ) from exc
+    finally:
+        test_socket.close()
+
+
+def require_token(func: Callable) -> Callable:
+    """Bearer token doğrulaması ekleyen dekoratör."""
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        header = request.headers.get("Authorization", "")
+        token = None
+        if header.startswith("Bearer "):
+            token = header.split(" ", 1)[1].strip()
+
+        with _state_lock:
+            expected = _server_token
+
+        if not expected:
+            return jsonify({"error": _translate("Server token is not configured.")}), 503
+
+        if token != expected:
+            return jsonify({"error": _translate("Invalid or missing authorization token.")}), 401
+
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+@app.route("/status", methods=["GET"])
+@require_token
+def status():
+    """Sunucu durumunu JSON olarak döndürür."""
+    with _state_lock:
+        running = _sharing_enabled and _is_thread_running()
+        host = _server_host
+        port = _server_port
+        server = _active_server
+    printer_name = server._printer_name if server else "DYMO LabelWriter 450"
+    return jsonify(
+        {
+            "running": running,
+            "printer_name": printer_name,
+            "port": port,
+            "host": host,
+        }
+    )
+
+
+@app.route("/print", methods=["POST"])
+@require_token
+def print_job():
+    """Gönderilen dosyayı yerel yazıcıya yollar."""
+    with _state_lock:
+        server = _active_server
+        enabled = _sharing_enabled
+
+    if not enabled:
+        return jsonify({"error": _translate("SHARED_PRINTER_DISABLED")}), 409
+
+    if server is None:
+        return jsonify({"error": _translate("SHARED_PRINTER_NOT_READY")}), 503
+
+    if "file" not in request.files:
+        return jsonify({"error": server._tr("No file found in request.")}), 400
+
+    upload = request.files["file"]
+    if not upload or not upload.filename:
+        return jsonify({"error": server._tr("No valid filename provided.")}), 400
+
+    filename = secure_filename(upload.filename) or "job.bin"
+    suffix = os.path.splitext(filename)[1] or ".bin"
+
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            upload.save(tmp.name)
+            temp_path = tmp.name
+
+        server._send_to_printer(temp_path)
+    except Exception as exc:  # pragma: no cover - ortam bağımlı
+        logger.exception(server._tr("Print error: %s"), exc)
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+    return jsonify({"ok": True})
+
+
 class SharedLabelPrinterServer:
     """Flask sunucusunu arka planda çalıştırıp yazdırma isteklerini yöneten sınıf."""
 
@@ -42,17 +198,16 @@ class SharedLabelPrinterServer:
     ) -> None:
         # Kullanıcıya log mesajı gönderebilmek için isteğe bağlı geri çağırım saklanır.
         self._log_callback = log_callback
-        # Sunucu ve iş parçacığı durumunu korumak için kilit kullanıyoruz.
         self._lock = threading.RLock()
-        self._server = None
-        self._thread: Optional[threading.Thread] = None
-        self._app: Optional[Flask] = None
         self._port: Optional[int] = None
         self._token: Optional[str] = None
         self._host: str = "127.0.0.1"
         self._printer_name = printer_name
         self._win32print = None
         self._translator: Callable[[str], str] = translator or (lambda key: key)
+        with _state_lock:
+            global _active_server
+            _active_server = self
 
     # ------------------------------------------------------------------
     # Yardımcı metodlar
@@ -79,83 +234,6 @@ class SharedLabelPrinterServer:
             self._win32print = win32print
         return self._win32print
 
-    def _require_token(self, func):
-        """Bearer token doğrulamasını sağlayan dekoratör."""
-
-        def wrapper(*args, **kwargs):
-            header = request.headers.get("Authorization", "")
-            token = None
-            if header.startswith("Bearer "):
-                token = header.split(" ", 1)[1].strip()
-
-            with self._lock:
-                expected = self._token
-
-            if not expected:
-                return jsonify({"error": self._tr("Server token is not configured.")}), 503
-
-            if token != expected:
-                return jsonify({"error": self._tr("Invalid or missing authorization token.")}), 401
-
-            return func(*args, **kwargs)
-
-        return wrapper
-
-    def _create_app(self) -> Flask:
-        """Flask uygulamasını ve uç noktalarını tanımlar."""
-        app = Flask("shared_label_printer")
-        app.config.setdefault("MAX_CONTENT_LENGTH", 20 * 1024 * 1024)
-
-        @app.route("/status", methods=["GET"])
-        @self._require_token
-        def status():
-            """Sunucu durumunu JSON olarak döndürür."""
-            return jsonify(
-                {
-                    "running": self.is_running(),
-                    "printer_name": self._printer_name,
-                    "port": self.current_port(),
-                    "host": self._host,
-                }
-            )
-
-        @app.route("/print", methods=["POST"])
-        @self._require_token
-        def print_job():
-            """Gönderilen dosyayı yerel yazıcıya yollar."""
-            if "file" not in request.files:
-                return jsonify({"error": self._tr("No file found in request.")}), 400
-
-            upload = request.files["file"]
-            if not upload or not upload.filename:
-                return jsonify({"error": self._tr("No valid filename provided.")}), 400
-
-            filename = secure_filename(upload.filename) or "job.bin"
-            suffix = os.path.splitext(filename)[1] or ".bin"
-
-            temp_path = None
-            try:
-                # Dosyayı geçici dizine kaydediyoruz.
-                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                    upload.save(tmp.name)
-                    temp_path = tmp.name
-
-                # Kaydedilen dosyayı yazıcıya gönderiyoruz.
-                self._send_to_printer(temp_path)
-            except Exception as exc:
-                logger.exception(self._tr("Print error: %s"), exc)
-                return jsonify({"error": str(exc)}), 500
-            finally:
-                if temp_path and os.path.exists(temp_path):
-                    try:
-                        os.remove(temp_path)
-                    except OSError:
-                        pass
-
-            return jsonify({"ok": True})
-
-        return app
-
     def _send_to_printer(self, file_path: str) -> None:
         """Belirtilen dosyayı Windows yazdırma altyapısına iletir."""
         win32print = self._load_win32print()
@@ -178,76 +256,53 @@ class SharedLabelPrinterServer:
         finally:
             win32print.ClosePrinter(handle)
 
-    def _serve(self) -> None:
-        """Werkzeug sunucusunu arka planda çalıştırır."""
-        try:
-            if self._server is not None:
-                self._server.serve_forever()
-        except Exception as exc:  # pragma: no cover - dayanıklılık
-            self._log(self._tr("Shared printer server error: {error}").format(error=exc))
-        finally:
-            self._cleanup()
-
-    def _cleanup(self) -> None:
-        """Sunucu kapandığında tüm durum değişkenlerini sıfırlar."""
-        with self._lock:
-            self._server = None
-            self._thread = None
-            self._app = None
-            self._port = None
-            self._token = None
-            self._host = "127.0.0.1"
-
     # ------------------------------------------------------------------
     # Genel API
     # ------------------------------------------------------------------
     def start(self, port: int, token: str) -> None:
         """Sunucuyu belirtilen port ve jetonla başlatır."""
-        with self._lock:
-            if self.is_running():
+        cleaned_token = token.strip()
+        if not cleaned_token:
+            raise RuntimeError(self._tr("Authorization token cannot be empty."))
+
+        port_int = int(port)
+        if not (1 <= port_int <= 65535):
+            raise RuntimeError(self._tr("Please enter a valid port number."))
+
+        host_ip = resolve_local_ip()
+
+        with _state_lock:
+            global _server_token, _server_port, _server_host, _sharing_enabled, _active_server
+            thread_running = _server_thread and _server_thread.is_alive()
+            if thread_running and _server_port not in (None, port_int):
                 raise RuntimeError(self._tr("Server is already running."))
 
-            self._port = int(port)
-            self._token = token.strip()
-            if not self._token:
-                raise RuntimeError(self._tr("Authorization token cannot be empty."))
+            if not thread_running:
+                _ensure_port_available(port_int)
+                _server_port = port_int
+                _start_thread_locked()
+            else:
+                _server_port = _server_port or port_int
 
-            self._host = resolve_local_ip()
-            self._app = self._create_app()
+            _server_token = cleaned_token
+            _server_host = host_ip
+            _sharing_enabled = True
+            _active_server = self
 
-            try:
-                self._server = make_server("0.0.0.0", self._port, self._app)
-            except OSError as exc:
-                self._cleanup()
-                raise RuntimeError(
-                    self._tr("Port {port} is not available: {error}").format(port=self._port, error=exc)
-                ) from exc
-
-            self._thread = threading.Thread(
-                target=self._serve,
-                name="SharedLabelPrinterServer",
-                daemon=True,
-            )
-            self._thread.start()
+        with self._lock:
+            self._port = port_int
+            self._token = cleaned_token
+            self._host = host_ip
 
         self._log(
             self._tr("SHARED_PRINTER_STARTED").format(host=self._host, port=self._port)
         )
 
-    def stop(self, timeout: float = 5.0) -> None:
+    def stop(self, timeout: float = 5.0) -> None:  # noqa: ARG002 - timeout uyumluluk için
         """Sunucuyu nazikçe durdurur."""
-        with self._lock:
-            server = self._server
-            thread = self._thread
-
-        if not server or not thread:
-            return
-
-        try:
-            server.shutdown()
-        finally:
-            thread.join(timeout=timeout)
-            self._cleanup()
+        with _state_lock:
+            global _sharing_enabled
+            _sharing_enabled = False
 
         self._log(self._tr("SHARED_PRINTER_STOPPED"))
 
@@ -259,23 +314,23 @@ class SharedLabelPrinterServer:
 
     def is_running(self) -> bool:
         """Sunucunun hala aktif olup olmadığını döndürür."""
-        with self._lock:
-            return bool(self._thread and self._thread.is_alive())
+        with _state_lock:
+            return _sharing_enabled and _is_thread_running()
 
     def current_port(self) -> Optional[int]:
         """Aktif port bilgisini verir."""
-        with self._lock:
-            return self._port
+        with _state_lock:
+            return _server_port
 
     def current_token(self) -> Optional[str]:
         """Mevcut bearer jetonunu döndürür."""
-        with self._lock:
-            return self._token
+        with _state_lock:
+            return _server_token
 
     def current_host(self) -> str:
         """Ağa ilan edilen IP bilgisini döndürür."""
-        with self._lock:
-            return self._host
+        with _state_lock:
+            return _server_host
 
 
 __all__ = ["SharedLabelPrinterServer", "resolve_local_ip"]
