@@ -38,6 +38,7 @@ class SharedLabelPrinterServer:
         self,
         log_callback: Optional[Callable[[str], None]] = None,
         printer_name: str = "DYMO LabelWriter 450",
+        translator: Optional[Callable[[str], str]] = None,
     ) -> None:
         # Kullanıcıya log mesajı gönderebilmek için isteğe bağlı geri çağırım saklanır.
         self._log_callback = log_callback
@@ -51,6 +52,7 @@ class SharedLabelPrinterServer:
         self._host: str = "127.0.0.1"
         self._printer_name = printer_name
         self._win32print = None
+        self._translator: Callable[[str], str] = translator or (lambda key: key)
 
     # ------------------------------------------------------------------
     # Yardımcı metodlar
@@ -64,13 +66,15 @@ class SharedLabelPrinterServer:
     def _load_win32print(self):
         """Windows yazdırma API'sini dinamik olarak yükler."""
         if platform.system() != "Windows":
-            raise RuntimeError("win32print sadece Windows üzerinde kullanılabilir.")
+            raise RuntimeError(self._tr("win32print is only available on Windows."))
         if self._win32print is None:
             try:
                 import win32print  # type: ignore
             except ImportError as exc:  # pragma: no cover - ortam bağımlı
                 raise RuntimeError(
-                    "win32print modülü yüklenemedi. Lütfen pywin32 kurulumunu kontrol edin."
+                    self._tr(
+                        "win32print module could not be loaded. Please check the pywin32 installation."
+                    )
                 ) from exc
             self._win32print = win32print
         return self._win32print
@@ -88,10 +92,10 @@ class SharedLabelPrinterServer:
                 expected = self._token
 
             if not expected:
-                return jsonify({"error": "Sunucu jetonu yapılandırılmamış."}), 503
+                return jsonify({"error": self._tr("Server token is not configured.")}), 503
 
             if token != expected:
-                return jsonify({"error": "Geçersiz veya eksik yetkilendirme jetonu."}), 401
+                return jsonify({"error": self._tr("Invalid or missing authorization token.")}), 401
 
             return func(*args, **kwargs)
 
@@ -120,11 +124,11 @@ class SharedLabelPrinterServer:
         def print_job():
             """Gönderilen dosyayı yerel yazıcıya yollar."""
             if "file" not in request.files:
-                return jsonify({"error": "Yüklenecek dosya bulunamadı."}), 400
+                return jsonify({"error": self._tr("No file found in request.")}), 400
 
             upload = request.files["file"]
             if not upload or not upload.filename:
-                return jsonify({"error": "Geçerli bir dosya adı gönderilmedi."}), 400
+                return jsonify({"error": self._tr("No valid filename provided.")}), 400
 
             filename = secure_filename(upload.filename) or "job.bin"
             suffix = os.path.splitext(filename)[1] or ".bin"
@@ -139,7 +143,7 @@ class SharedLabelPrinterServer:
                 # Kaydedilen dosyayı yazıcıya gönderiyoruz.
                 self._send_to_printer(temp_path)
             except Exception as exc:
-                logger.exception("Yazdırma sırasında hata oluştu: %s", exc)
+                logger.exception(self._tr("Print error: %s"), exc)
                 return jsonify({"error": str(exc)}), 500
             finally:
                 if temp_path and os.path.exists(temp_path):
@@ -157,7 +161,7 @@ class SharedLabelPrinterServer:
         win32print = self._load_win32print()
         printer_name = self._printer_name or win32print.GetDefaultPrinter()
         if not printer_name:
-            raise RuntimeError("Yazıcı adı bulunamadı.")
+            raise RuntimeError(self._tr("Printer name could not be determined."))
 
         handle = win32print.OpenPrinter(printer_name)
         try:
@@ -167,7 +171,7 @@ class SharedLabelPrinterServer:
             with open(file_path, "rb") as job_file:
                 data = job_file.read()
                 if not data:
-                    raise RuntimeError("Dosya içeriği boş olduğu için yazdırma yapılamadı.")
+                    raise RuntimeError(self._tr("File content is empty; cannot print."))
                 win32print.WritePrinter(handle, data)
             win32print.EndPagePrinter(handle)
             win32print.EndDocPrinter(handle)
@@ -180,7 +184,7 @@ class SharedLabelPrinterServer:
             if self._server is not None:
                 self._server.serve_forever()
         except Exception as exc:  # pragma: no cover - dayanıklılık
-            self._log(f"Paylaşılan yazıcı sunucusu hata verdi: {exc}")
+            self._log(self._tr("Shared printer server error: {error}").format(error=exc))
         finally:
             self._cleanup()
 
@@ -201,12 +205,12 @@ class SharedLabelPrinterServer:
         """Sunucuyu belirtilen port ve jetonla başlatır."""
         with self._lock:
             if self.is_running():
-                raise RuntimeError("Sunucu zaten çalışıyor.")
+                raise RuntimeError(self._tr("Server is already running."))
 
             self._port = int(port)
             self._token = token.strip()
             if not self._token:
-                raise RuntimeError("Yetkilendirme jetonu boş olamaz.")
+                raise RuntimeError(self._tr("Authorization token cannot be empty."))
 
             self._host = resolve_local_ip()
             self._app = self._create_app()
@@ -215,7 +219,9 @@ class SharedLabelPrinterServer:
                 self._server = make_server("0.0.0.0", self._port, self._app)
             except OSError as exc:
                 self._cleanup()
-                raise RuntimeError(f"Port {self._port} kullanılamıyor: {exc}") from exc
+                raise RuntimeError(
+                    self._tr("Port {port} is not available: {error}").format(port=self._port, error=exc)
+                ) from exc
 
             self._thread = threading.Thread(
                 target=self._serve,
@@ -225,7 +231,7 @@ class SharedLabelPrinterServer:
             self._thread.start()
 
         self._log(
-            f"Etiket yazıcısı paylaşımı {self._host}:{self._port} adresinde başlatıldı."
+            self._tr("SHARED_PRINTER_STARTED").format(host=self._host, port=self._port)
         )
 
     def stop(self, timeout: float = 5.0) -> None:
@@ -243,7 +249,13 @@ class SharedLabelPrinterServer:
             thread.join(timeout=timeout)
             self._cleanup()
 
-        self._log("Etiket yazıcısı paylaşımı durduruldu.")
+        self._log(self._tr("SHARED_PRINTER_STOPPED"))
+
+    def _tr(self, key: str) -> str:
+        return self._translator(key) if self._translator else key
+
+    def set_translator(self, translator: Optional[Callable[[str], str]]) -> None:
+        self._translator = translator or (lambda key: key)
 
     def is_running(self) -> bool:
         """Sunucunun hala aktif olup olmadığını döndürür."""
