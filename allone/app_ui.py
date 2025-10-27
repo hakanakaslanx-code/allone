@@ -17,7 +17,7 @@ from updater import check_for_updates
 import backend_logic as backend
 from wayfair_formatter import WayfairFormatter
 
-__version__ = "4.2.5"
+__version__ = "4.2.6"
 
 translations = {
     "en": {
