@@ -19,7 +19,7 @@ from wayfair_formatter import WayfairFormatter
 
 __version__ = "4.2.4"
 
-TRANSLATIONS = {
+translations = {
     "en": {
         "Combined Utility Tool": "Combined Utility Tool",
         "Welcome to the Combined Utility Tool!": "Welcome to the Combined Utility Tool!",
@@ -634,7 +634,7 @@ class ToolApp(tk.Tk):
             self.settings.pop("print_server", None)
             save_settings(self.settings)
         self.language = self.settings.get("language", "en")
-        if self.language not in TRANSLATIONS:
+        if self.language not in translations:
             self.language = "en"
 
         self.translatable_widgets = []
@@ -1098,12 +1098,12 @@ class ToolApp(tk.Tk):
         style.map(
             "TNotebook.Tab",
             background=[("selected", accent), ("active", accent_hover)],
-            foreground=[("selected", base_bg), ("active", base_bg)],
+            foreground=[("selected", text_primary), ("active", text_primary)],
         )
         style.configure(
             "TButton",
             background=accent,
-            foreground=base_bg,
+            foreground=text_primary,
             font=self._font("Segoe UI Semibold", 10),
             padding=(self._pad_value(14, 6), self._pad_value(6, 3)),
             borderwidth=0,
@@ -1111,7 +1111,7 @@ class ToolApp(tk.Tk):
         style.map(
             "TButton",
             background=[("active", accent_hover), ("disabled", "#1e293b")],
-            foreground=[("disabled", text_muted)],
+            foreground=[("disabled", text_muted), ("active", text_primary)],
         )
         style.configure(
             "TEntry",
@@ -1133,14 +1133,14 @@ class ToolApp(tk.Tk):
         )
         style.configure(
             "Light.TCombobox",
-            fieldbackground="#f8fafc",
-            foreground="#0f172a",
+            fieldbackground=card_bg,
+            foreground=text_primary,
             background=card_bg,
         )
         style.map(
             "Light.TCombobox",
-            fieldbackground=[("readonly", "#f8fafc"), ("disabled", "#e2e8f0")],
-            foreground=[("readonly", "#0f172a"), ("disabled", text_muted)],
+            fieldbackground=[("readonly", card_bg), ("disabled", "#1f2937")],
+            foreground=[("readonly", text_primary), ("disabled", text_muted)],
         )
         style.configure(
             "TLabelframe",
@@ -1192,25 +1192,26 @@ class ToolApp(tk.Tk):
         style.configure(
             "SidebarSelected.TButton",
             background=accent,
-            foreground=base_bg,
+            foreground=text_primary,
             font=self._font("Segoe UI Semibold", 10),
             padding=sidebar_padding,
         )
         style.map(
             "SidebarSelected.TButton",
             background=[("active", accent_hover)],
+            foreground=[("active", text_primary)],
         )
         style.configure("Horizontal.TSeparator", background="#1f2937")
 
         option_font = self._font("Segoe UI", 10)
         self.option_add("*TCombobox*Listbox.font", option_font)
-        self.option_add("*TCombobox*Listbox.foreground", "#000000")
-        self.option_add("*TCombobox*Listbox.background", "#f8fafc")
+        self.option_add("*TCombobox*Listbox.foreground", text_primary)
+        self.option_add("*TCombobox*Listbox.background", card_bg)
         self.option_add("*Background", base_bg)
         self.option_add("*Entry.background", "#111827")
         self.option_add("*Entry.foreground", text_primary)
-        self.option_add("*Listbox.background", "#f8fafc")
-        self.option_add("*Listbox.foreground", "#0f172a")
+        self.option_add("*Listbox.background", card_bg)
+        self.option_add("*Listbox.foreground", text_primary)
         self.option_add("*Font", option_font)
         self.option_add("*Foreground", text_primary)
 
@@ -1511,7 +1512,16 @@ class ToolApp(tk.Tk):
 
     def tr(self, text_key):
         """Translate a text key according to the selected language."""
-        return TRANSLATIONS.get(self.language, TRANSLATIONS["en"]).get(text_key, text_key)
+        return translations.get(self.language, translations["en"]).get(text_key, text_key)
+
+    def update_language(self, lang: str) -> None:
+        """Update the UI language immediately without restarting the app."""
+        if lang not in translations:
+            return
+        self.language = lang
+        self.settings["language"] = lang
+        save_settings(self.settings)
+        self.refresh_translations()
 
     def tr_info(self, title_key: str) -> Optional[str]:
         """Return the localized info text for a given panel title."""
@@ -1612,15 +1622,14 @@ class ToolApp(tk.Tk):
         for code, key in self.language_options.items():
             if selected == self.tr(key):
                 if code != self.language:
-                    self.language = code
-                    self.settings["language"] = code
-                    save_settings(self.settings)
-                    self.refresh_translations()
+                    self.update_language(code)
                     self.log(
                         self.tr("Language changed to {language}.").format(
                             language=self.tr(key)
                         )
                     )
+                else:
+                    self.refresh_translations()
                 break
         else:
             self._refresh_language_options()
