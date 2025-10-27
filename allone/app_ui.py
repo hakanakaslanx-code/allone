@@ -183,6 +183,9 @@ translations = {
         "SHARED_PRINTER_HELP_TEXT": (
             "Other PCs on this same Wi-Fi / LAN can print to this label printer by sending a POST /print request to http://{host}:{port}/print with the same bearer token. Do not expose this port to the internet."
         ),
+        "SHARED_PRINTER_DISABLED": "Shared label printer sharing is currently disabled.",
+        "SHARED_PRINTER_NOT_READY": "Shared label printer server is not ready yet.",
+        "Server port is not configured.": "Server port is not configured.",
         "Please enter a valid port number.": "Please enter a valid port number.",
         "Please fill in all Rinven Tag fields.": "Please fill in all Rinven Tag fields.",
         "Barcode data is required when barcode is enabled.": "Barcode data is required when barcode is enabled.",
@@ -434,6 +437,9 @@ translations = {
         "SHARED_PRINTER_HELP_TEXT": (
             "Aynı Wi-Fi / LAN içindeki diğer bilgisayarlar http://{host}:{port}/print adresine aynı bearer jetonuyla POST /print isteği göndererek bu yazıcıya çıktı alabilir. Bu portu internete açmayın."
         ),
+        "SHARED_PRINTER_DISABLED": "Etiket yazıcısı paylaşımı şu anda devre dışı.",
+        "SHARED_PRINTER_NOT_READY": "Paylaşılan etiket yazıcısı sunucusu henüz hazır değil.",
+        "Server port is not configured.": "Sunucu portu yapılandırılmadı.",
         "Please enter a valid port number.": "Lütfen geçerli bir port numarası girin.",
         "Please fill in all Rinven Tag fields.": "Lütfen tüm Rinven Etiketi alanlarını doldurun.",
         "Barcode data is required when barcode is enabled.": "Barkod etkinleştirildiğinde barkod verisi gereklidir.",
