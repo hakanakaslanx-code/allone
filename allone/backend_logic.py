@@ -1,9 +1,11 @@
 # backend_logic.py
 import os
 import re
+import sys
 import logging
 import shutil
-from typing import Iterable, List
+from pathlib import Path
+from typing import Iterable, List, Optional, Set
 
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
@@ -15,6 +17,52 @@ from barcode.writer import ImageWriter
 # This file contains no Tkinter code.
 
 # --- Helper Functions ---
+
+
+def get_resource_path(*path_parts: str) -> Optional[str]:
+    """Return an absolute path for bundled resources (PyInstaller friendly).
+
+    The function searches several likely locations including the PyInstaller
+    temporary directory (``sys._MEIPASS``), the package directory, and optional
+    ``resources`` sub-directories. ``None`` is returned if the resource cannot
+    be resolved.
+    """
+
+    if not path_parts:
+        return None
+
+    if len(path_parts) == 1 and isinstance(path_parts[0], (list, tuple)):
+        path_parts = tuple(path_parts[0])  # type: ignore[assignment]
+
+    relative_path = os.path.join(*map(str, path_parts))
+
+    if os.path.isabs(relative_path):
+        return relative_path if os.path.exists(relative_path) else None
+
+    search_roots: List[Path] = []
+
+    try:
+        search_roots.append(Path(sys._MEIPASS))  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
+
+    module_dir = Path(__file__).resolve().parent
+    search_roots.extend([module_dir, module_dir.parent])
+
+    seen: Set[str] = set()
+    for root in search_roots:
+        for candidate in (
+            root / relative_path,
+            root / "resources" / relative_path,
+        ):
+            candidate_str = str(candidate)
+            if candidate_str in seen:
+                continue
+            seen.add(candidate_str)
+            if candidate.exists():
+                return candidate_str
+
+    return None
 
 def clean_file_path(file_path: str) -> str:
     """Cleans quotes and spaces from the file path string."""
@@ -459,10 +507,32 @@ def generate_barcode_task(data, fname, bc_format, output_type, dymo_size_info, b
 
 def _load_font(preferred_names, size):
     for name in preferred_names:
+        resource_candidates = [name]
+        if not os.path.dirname(name):
+            resource_candidates.append(os.path.join("fonts", name))
+        for resource_name in resource_candidates:
+            resource_path = get_resource_path(resource_name)
+            if resource_path:
+                try:
+                    return ImageFont.truetype(resource_path, size=size)
+                except (IOError, OSError):
+                    logging.debug(
+                        "Failed to load font from resource '%s'", resource_path
+                    )
+
+        if os.path.isabs(name) and os.path.exists(name):
+            try:
+                return ImageFont.truetype(name, size=size)
+            except (IOError, OSError):
+                logging.debug("Failed to load font from absolute path '%s'", name)
+                continue
+
         try:
             return ImageFont.truetype(name, size=size)
-        except IOError:
+        except (IOError, OSError):
+            logging.debug("Failed to load font '%s' from system fonts", name)
             continue
+
     return ImageFont.load_default()
 
 
@@ -493,7 +563,35 @@ def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
     top_extra_padding = int(0.08 * DPI)
 
     try:
-        canvas = Image.new("RGB", (width_px, height_px), "white")
+        template_candidates = [
+            ("rinven_tag_template.png",),
+            ("templates", "rinven_tag_template.png"),
+            ("assets", "rinven_tag_template.png"),
+        ]
+        template_image = None
+        for candidate in template_candidates:
+            template_path = get_resource_path(*candidate)
+            if not template_path:
+                continue
+            try:
+                with Image.open(template_path) as img:
+                    template_image = img.convert("RGB")
+                break
+            except (FileNotFoundError, OSError) as exc:
+                logging.warning(
+                    "Failed to load Rinven tag template from '%s': %s",
+                    template_path,
+                    exc,
+                )
+                template_image = None
+
+        if template_image is not None:
+            if template_image.size != (width_px, height_px):
+                template_image = template_image.resize((width_px, height_px), Image.Resampling.LANCZOS)
+            canvas = template_image.copy()
+        else:
+            canvas = Image.new("RGB", (width_px, height_px), "white")
+
         draw = ImageDraw.Draw(canvas)
 
         title_font_size = int(0.18 * DPI)
@@ -514,11 +612,26 @@ def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
 
         current_y = padding + top_extra_padding
 
+        barcode_img = None
         if include_barcode and barcode_data:
-            BarcodeClass = barcode.get_barcode_class("code128")
-            barcode_img = BarcodeClass(barcode_data, writer=ImageWriter()).render(
-                writer_options={"module_height": int(0.7 * DPI), "quiet_zone": 6}
-            )
+            last_barcode_error: Optional[Exception] = None
+            for bc_format in ("code128", "code39"):
+                try:
+                    BarcodeClass = barcode.get_barcode_class(bc_format)
+                    barcode_img = BarcodeClass(barcode_data, writer=ImageWriter()).render(
+                        writer_options={"module_height": int(0.7 * DPI), "quiet_zone": 6}
+                    )
+                    break
+                except Exception as exc:  # noqa: BLE001 - barcode library raises generic exceptions
+                    last_barcode_error = exc
+                    logging.debug("Failed to render %s barcode: %s", bc_format, exc)
+            if barcode_img is None and last_barcode_error is not None:
+                logging.warning(
+                    "Skipping barcode rendering for Rinven tag due to error: %s",
+                    last_barcode_error,
+                )
+
+        if barcode_img is not None:
             max_barcode_width = width_px - (padding * 2)
             max_barcode_height = int(height_px * 0.26)
             barcode_img.thumbnail((max_barcode_width, max_barcode_height), Image.Resampling.LANCZOS)
@@ -649,6 +762,7 @@ def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
             f"Rinven tag saved to:\n{os.path.abspath(fname)}",
         )
     except Exception as exc:
+        logging.exception("Error generating Rinven tag")
         return (f"Error generating Rinven tag: {exc}", None)
 
 def add_image_links_task(input_path, links_path, key_col, log_callback, completion_callback):
