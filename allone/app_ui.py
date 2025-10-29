@@ -8,14 +8,14 @@ import threading
 import os
 import math
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 import pandas as pd
 import requests
 
 import numpy as np
 
-from PIL import Image, ImageTk, ImageDraw, ImageOps
+from PIL import Image, ImageTk, ImageDraw, ImageFilter, ImageOps
 
 from print_service import SharedLabelPrinterServer, resolve_local_ip
 
@@ -101,13 +101,13 @@ translations = {
         "Room Image:": "Room Image:",
         "Rug Image:": "Rug Image:",
         "Resize Rug (%):": "Resize Rug (%):",
-        "Yere Yayma (%):": "Yere Yayma (%):",
+        "Yere Yayma (%):": "Floor Spread (%):",
         "Rug Transparency:": "Rug Transparency:",
         "Lay Rug (90°)": "Lay Rug (90°)",
         "Generate Preview": "Generate Preview",
         "Save Image": "Save Image",
-        "Manual Place Rug": "Halıyı Elle Yerleştir (4 Nokta)",
-        "Select Foreground (Mask)": "Select Foreground (Mask)",
+        "Manual Place Rug": "Manual Place (4 Points)",
+        "Select Foreground (Mask)": "Draw Foreground Mask",
         "Clear Mask": "Clear Mask",
         "Preview will appear here.": "Preview will appear here.",
         "View in Room Controls": "Canvas controls: Left click and drag to move, mouse wheel to scale, right click and drag to rotate.",
@@ -115,11 +115,11 @@ translations = {
         "Could not open selected images: {error}": "Could not open selected images: {error}",
         "Preview image saved to {path}.": "Preview image saved to {path}.",
         "No preview available. Please generate a preview first.": "No preview available. Please generate a preview first.",
-        "Manual Prompt 1": "Üst sol köşeyi seçin",
-        "Manual Prompt 2": "Üst sağ köşeyi seçin",
-        "Manual Prompt 3": "Alt sağ köşeyi seçin",
-        "Manual Prompt 4": "Alt sol köşeyi seçin",
-        "Manual Placement Complete": "Halı yerleşti. Taşıyabilir veya ölçekleyebilirsiniz.",
+        "Manual Prompt 1": "Distort Mode: Click the top-left corner where the rug should sit on the floor.",
+        "Manual Prompt 2": "Click the top-right corner where the rug should sit on the floor.",
+        "Manual Prompt 3": "Click the bottom-right corner where the rug should sit on the floor.",
+        "Manual Prompt 4": "Click the bottom-left corner where the rug should sit on the floor.",
+        "Manual Placement Complete": "Rug placed. You can drag, scale, or rotate.",
         "4. Format Numbers from File": "4. Format Numbers from File",
         "Excel/CSV/TXT File:": "Excel/CSV/TXT File:",
         "Format": "Format",
@@ -334,7 +334,7 @@ translations = {
         "Automatic compact mode enabled for small screens.": "Küçük ekranlar için otomatik kompakt mod etkinleştirildi.",
         "Language changed to {language}.": "Dil {language} olarak değiştirildi.",
         "1. Copy/Move Files by List": "1. Listeye Göre Dosya Kopyala/Taşı",
-        "View in Room": "Odanızda Görüntüle",
+        "View in Room": "View in Room",
         "Source Folder:": "Kaynak Klasör:",
         "Target Folder:": "Hedef Klasör:",
         "Numbers File (List):": "Numara Dosyası (Liste):",
@@ -386,28 +386,28 @@ translations = {
         "Percentage (%):": "Yüzde (%):",
         "JPEG Quality (1-95):": "JPEG Kalitesi (1-95):",
         "Resize & Compress": "Yeniden Boyutlandır ve Sıkıştır",
-        "Room Image:": "Oda Görseli:",
-        "Rug Image:": "Halı Görseli:",
-        "Resize Rug (%):": "Halı Boyutu (%):",
-        "Yere Yayma (%):": "Yere Yayma (%):",
-        "Rug Transparency:": "Halı Saydamlığı:",
-        "Lay Rug (90°)": "Halıyı Yatır (90°)",
-        "Generate Preview": "Önizleme Oluştur",
-        "Save Image": "Görseli Kaydet",
-        "Manual Place Rug": "Halıyı Elle Yerleştir (4 Nokta)",
-        "Select Foreground (Mask)": "Ön Plan Seç (Maske)",
-        "Clear Mask": "Maskeyi Temizle",
-        "Preview will appear here.": "Önizleme burada görünecek.",
-        "View in Room Controls": "Kontroller: Taşımak için sol tıkla sürükleyin, ölçek için tekerleği çevirin, döndürmek için sağ tıkla sürükleyin.",
-        "Please select both room and rug images.": "Lütfen hem oda hem halı görsellerini seçin.",
-        "Could not open selected images: {error}": "Seçilen görseller açılamadı: {error}",
-        "Preview image saved to {path}.": "Önizleme görseli {path} konumuna kaydedildi.",
-        "No preview available. Please generate a preview first.": "Önizleme yok. Lütfen önce bir önizleme oluşturun.",
-        "Manual Prompt 1": "Üst sol köşeyi seçin",
-        "Manual Prompt 2": "Üst sağ köşeyi seçin",
-        "Manual Prompt 3": "Alt sağ köşeyi seçin",
-        "Manual Prompt 4": "Alt sol köşeyi seçin",
-        "Manual Placement Complete": "Halı yerleşti. Taşıyabilir veya ölçekleyebilirsiniz.",
+        "Room Image:": "Room Image:",
+        "Rug Image:": "Rug Image:",
+        "Resize Rug (%):": "Resize Rug (%):",
+        "Yere Yayma (%):": "Floor Spread (%):",
+        "Rug Transparency:": "Rug Transparency:",
+        "Lay Rug (90°)": "Lay Rug (90°)",
+        "Generate Preview": "Generate Preview",
+        "Save Image": "Save Image",
+        "Manual Place Rug": "Manual Place (4 Points)",
+        "Select Foreground (Mask)": "Draw Foreground Mask",
+        "Clear Mask": "Clear Mask",
+        "Preview will appear here.": "Preview will appear here.",
+        "View in Room Controls": "Canvas controls: Left click and drag to move, mouse wheel to scale, right click and drag to rotate.",
+        "Please select both room and rug images.": "Please select both room and rug images.",
+        "Could not open selected images: {error}": "Could not open selected images: {error}",
+        "Preview image saved to {path}.": "Preview image saved to {path}.",
+        "No preview available. Please generate a preview first.": "No preview available. Please generate a preview first.",
+        "Manual Prompt 1": "Distort Mode: Click the top-left corner where the rug should sit on the floor.",
+        "Manual Prompt 2": "Click the top-right corner where the rug should sit on the floor.",
+        "Manual Prompt 3": "Click the bottom-right corner where the rug should sit on the floor.",
+        "Manual Prompt 4": "Click the bottom-left corner where the rug should sit on the floor.",
+        "Manual Placement Complete": "Rug placed. You can drag, scale, or rotate.",
         "4. Format Numbers from File": "4. Dosyadan Numaraları Biçimlendir",
         "Excel/CSV/TXT File:": "Excel/CSV/TXT Dosyası:",
         "Format": "Biçimlendir",
@@ -743,6 +743,7 @@ class ToolApp(tk.Tk):
         self.view_in_room_preview_has_image = False
         self.view_in_room_room_image: Optional[Image.Image] = None
         self.view_in_room_rug_original: Optional[Image.Image] = None
+        self.view_in_room_rug_processed_cache: Dict[str, Image.Image] = {}
         self.view_in_room_rug_scale: float = 1.0
         self.view_in_room_rug_angle: float = 0.0
         self.view_in_room_rug_center: Optional[Tuple[float, float]] = None
@@ -1863,7 +1864,9 @@ class ToolApp(tk.Tk):
     def _start_manual_rug_placement(self) -> None:
         if not getattr(self, "view_in_room_preview_has_image", False):
             if self.view_in_room_manual_prompt_var is not None:
-                self.view_in_room_manual_prompt_var.set("Lütfen oda ve halı görsellerini seçin.")
+                self.view_in_room_manual_prompt_var.set(
+                    self.tr("Please select both room and rug images.")
+                )
             return
         if getattr(self, "view_in_room_mask_enabled_var", None) and self.view_in_room_mask_enabled_var.get():
             self._set_view_in_room_mask_mode(False)
@@ -2728,6 +2731,49 @@ class ToolApp(tk.Tk):
             self.view_in_room_rug_path.set(path)
         self.generate_view_in_room_preview(reset_rug=(target == "rug"))
 
+    def _load_processed_rug_image(self, rug_path: str) -> Image.Image:
+        """Open a rug image, remove its white background, and cache the result."""
+
+        cached = self.view_in_room_rug_processed_cache.get(rug_path)
+        if cached is not None:
+            return cached.copy()
+        with Image.open(rug_path) as rug_raw:
+            rug_img = rug_raw.convert("RGBA")
+        processed = self._remove_near_white_background(rug_img)
+        self.view_in_room_rug_processed_cache[rug_path] = processed
+        return processed.copy()
+
+    def _remove_near_white_background(self, image: Image.Image) -> Image.Image:
+        """Convert near-white pixels to transparency and feather the edge slightly."""
+
+        if image.mode != "RGBA":
+            image = image.convert("RGBA")
+        rgba = np.array(image)
+        if rgba.size == 0:
+            return image
+        rgb = rgba[..., :3].astype(np.uint16)
+        alpha_channel = rgba[..., 3].astype(np.float32) / 255.0
+        threshold = 235
+        brightness = rgb.mean(axis=2)
+        near_white = (
+            (rgb[..., 0] >= threshold)
+            & (rgb[..., 1] >= threshold)
+            & (rgb[..., 2] >= threshold)
+        ) | (brightness >= threshold)
+        keep_mask = ~near_white
+        if not keep_mask.any():
+            return image
+        if keep_mask.all():
+            return image
+        mask_array = keep_mask.astype(np.uint8) * 255
+        mask_image = Image.fromarray(mask_array, mode="L")
+        mask_image = mask_image.filter(ImageFilter.GaussianBlur(radius=1.5))
+        softened = np.array(mask_image).astype(np.float32) / 255.0
+        combined_alpha = np.clip(softened * alpha_channel, 0.0, 1.0)
+        combined_alpha[~keep_mask] = 0.0
+        rgba[..., 3] = (combined_alpha * 255.0).astype(np.uint8)
+        return Image.fromarray(rgba, mode="RGBA")
+
     def generate_view_in_room_preview(self, reset_rug: bool = True) -> None:
         """Create an overlaid preview of the rug inside the room photo."""
 
@@ -2766,8 +2812,7 @@ class ToolApp(tk.Tk):
             return
 
         try:
-            with Image.open(rug_path) as rug_raw:
-                rug_img = rug_raw.convert("RGBA")
+            rug_img = self._load_processed_rug_image(rug_path)
         except Exception as exc:  # pragma: no cover - safeguard for Pillow errors
             messagebox.showerror(
                 self.tr("Error"),
