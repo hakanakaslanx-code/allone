@@ -11,6 +11,8 @@ from typing import Callable, List, Optional, Set, Tuple
 import pandas as pd
 import requests
 
+from PIL import Image, ImageTk
+
 from print_service import SharedLabelPrinterServer, resolve_local_ip
 
 from settings_manager import load_settings, save_settings
@@ -40,12 +42,14 @@ translations = {
         "Automatic compact mode enabled for small screens.": "Automatic compact mode enabled for small screens.",
         "Language changed to {language}.": "Language changed to {language}.",
         "1. Copy/Move Files by List": "1. Copy/Move Files by List",
+        "View in Room": "View in Room",
         "Source Folder:": "Source Folder:",
         "Target Folder:": "Target Folder:",
         "Numbers File (List):": "Numbers File (List):",
         "Browse...": "Browse...",
         "Browse": "Browse",
         "(Select)": "(Select)",
+        "Image Files": "Image Files",
         "1. Choose Excel File": "1. Choose Excel File",
         "2. Columns": "2. Columns",
         "3. Map Wayfair Fields": "3. Map Wayfair Fields",
@@ -90,6 +94,17 @@ translations = {
         "Percentage (%):": "Percentage (%):",
         "JPEG Quality (1-95):": "JPEG Quality (1-95):",
         "Resize & Compress": "Resize & Compress",
+        "Room Image:": "Room Image:",
+        "Rug Image:": "Rug Image:",
+        "Resize Rug (%):": "Resize Rug (%):",
+        "Rug Transparency:": "Rug Transparency:",
+        "Generate Preview": "Generate Preview",
+        "Save Image": "Save Image",
+        "Preview will appear here.": "Preview will appear here.",
+        "Please select both room and rug images.": "Please select both room and rug images.",
+        "Could not open selected images: {error}": "Could not open selected images: {error}",
+        "Preview image saved to {path}.": "Preview image saved to {path}.",
+        "No preview available. Please generate a preview first.": "No preview available. Please generate a preview first.",
         "4. Format Numbers from File": "4. Format Numbers from File",
         "Excel/CSV/TXT File:": "Excel/CSV/TXT File:",
         "Format": "Format",
@@ -304,12 +319,14 @@ translations = {
         "Automatic compact mode enabled for small screens.": "Küçük ekranlar için otomatik kompakt mod etkinleştirildi.",
         "Language changed to {language}.": "Dil {language} olarak değiştirildi.",
         "1. Copy/Move Files by List": "1. Listeye Göre Dosya Kopyala/Taşı",
+        "View in Room": "Odanızda Görüntüle",
         "Source Folder:": "Kaynak Klasör:",
         "Target Folder:": "Hedef Klasör:",
         "Numbers File (List):": "Numara Dosyası (Liste):",
         "Browse...": "Gözat...",
         "Browse": "Gözat",
         "(Select)": "(Seçiniz)",
+        "Image Files": "Görsel Dosyaları",
         "1. Choose Excel File": "1. Excel Dosyası Seç",
         "2. Columns": "2. Sütunlar",
         "3. Map Wayfair Fields": "3. Wayfair Alan Eşlemesi",
@@ -354,6 +371,17 @@ translations = {
         "Percentage (%):": "Yüzde (%):",
         "JPEG Quality (1-95):": "JPEG Kalitesi (1-95):",
         "Resize & Compress": "Yeniden Boyutlandır ve Sıkıştır",
+        "Room Image:": "Oda Görseli:",
+        "Rug Image:": "Halı Görseli:",
+        "Resize Rug (%):": "Halı Boyutu (%):",
+        "Rug Transparency:": "Halı Saydamlığı:",
+        "Generate Preview": "Önizleme Oluştur",
+        "Save Image": "Görseli Kaydet",
+        "Preview will appear here.": "Önizleme burada görünecek.",
+        "Please select both room and rug images.": "Lütfen hem oda hem halı görsellerini seçin.",
+        "Could not open selected images: {error}": "Seçilen görseller açılamadı: {error}",
+        "Preview image saved to {path}.": "Önizleme görseli {path} konumuna kaydedildi.",
+        "No preview available. Please generate a preview first.": "Önizleme yok. Lütfen önce bir önizleme oluşturun.",
         "4. Format Numbers from File": "4. Dosyadan Numaraları Biçimlendir",
         "Excel/CSV/TXT File:": "Excel/CSV/TXT Dosyası:",
         "Format": "Biçimlendir",
@@ -606,6 +634,7 @@ PANEL_INFO = {
         "1. Copy/Move Files by List": "Quickly copy or move files referenced by a spreadsheet of item numbers.",
         "2. Convert HEIC to JPG": "Convert entire folders of HEIC photos into widely compatible JPG images.",
         "3. Batch Image Resizer": "Resize and compress images in bulk using width- or percentage-based rules.",
+        "View in Room": "Preview rugs inside a selected room photo with scaling and transparency controls.",
         "4. Format Numbers from File": "Clean and format numbers from Excel, CSV or text files for exports.",
         "5. Rug Size Calculator (Single)": "Calculate exact square footage and square meters for a single rug size.",
         "6. BULK Process Rug Sizes from File": "Normalize every rug size inside a spreadsheet using your chosen column.",
@@ -624,6 +653,7 @@ PANEL_INFO = {
         "1. Copy/Move Files by List": "Numara listesindeki kayıtlara göre dosyaları hızlıca kopyalayın veya taşıyın.",
         "2. Convert HEIC to JPG": "Tüm HEIC fotoğraflarını tek seferde yaygın kullanılan JPG formatına dönüştürür.",
         "3. Batch Image Resizer": "Görselleri genişliğe ya da yüzdeye göre toplu biçimde yeniden boyutlandırıp sıkıştırır.",
+        "View in Room": "Seçtiğiniz oda fotoğrafında halıyı ölçek ve saydamlıkla yerleştirerek önizleyin.",
         "4. Format Numbers from File": "Excel, CSV veya TXT dosyalarındaki sayıları dışa aktarıma uygun biçimde temizler.",
         "5. Rug Size Calculator (Single)": "Tek bir halı ölçüsünün metrekare ve fit değerlerini anında hesaplar.",
         "6. BULK Process Rug Sizes from File": "Seçtiğiniz sütundaki tüm halı ölçülerini standart forma dönüştürür.",
@@ -674,6 +704,9 @@ class ToolApp(tk.Tk):
         self.notebook_tabs = []
         self.sidebar_nav = []
         self.advanced_cards = []
+        self.view_in_room_preview_photo: Optional[ImageTk.PhotoImage] = None
+        self.view_in_room_preview_image: Optional[Image.Image] = None
+        self.view_in_room_preview_has_image = False
 
         self.language_options = {"en": "English", "tr": "Turkish"}
         self.language_var = tk.StringVar(
@@ -787,6 +820,7 @@ class ToolApp(tk.Tk):
         self.section_frames = {}
         for title in (
             "File & Image Tools",
+            "View in Room",
             "Data & Calculation",
             "Rug No Check",
             "Code Generators",
@@ -810,6 +844,7 @@ class ToolApp(tk.Tk):
         self.rug_control_results: List[Tuple[str, bool]] = []
 
         self.create_file_image_panels(self.section_frames["File & Image Tools"])
+        self.create_view_in_room_tab(self.section_frames["View in Room"])
         self.create_data_calc_panels(self.section_frames["Data & Calculation"])
         self.create_rug_no_control_tab(self.section_frames["Rug No Check"])
         self.create_code_gen_panels(self.section_frames["Code Generators"])
@@ -1381,6 +1416,9 @@ class ToolApp(tk.Tk):
         parent.columnconfigure(0, weight=1)
         parent.columnconfigure(1, weight=1)
 
+        # Allow additional rows to expand if needed.
+        parent.rowconfigure(2, weight=1)
+
         copy_card = self.create_section_card(parent, "1. Copy/Move Files by List")
         copy_card.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
         copy_frame = copy_card.body
@@ -1545,6 +1583,241 @@ class ToolApp(tk.Tk):
 
         self._update_resize_inputs()
 
+    def create_view_in_room_tab(self, parent: ttk.Frame) -> None:
+        """Create the View in Room preview tab."""
+
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(0, weight=1)
+
+        card = self.create_section_card(parent, "View in Room")
+        card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+
+        frame = card.body
+        frame.columnconfigure(1, weight=1)
+        frame.rowconfigure(5, weight=1)
+
+        self.view_in_room_room_path = tk.StringVar()
+        self.view_in_room_rug_path = tk.StringVar()
+        self.view_in_room_scale_var = tk.DoubleVar(value=100.0)
+        self.view_in_room_alpha_var = tk.DoubleVar(value=0.85)
+
+        room_label = ttk.Label(frame, text=self.tr("Room Image:"))
+        room_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
+        self.register_widget(room_label, "Room Image:")
+
+        room_entry = ttk.Entry(frame, textvariable=self.view_in_room_room_path, state="readonly")
+        room_entry.grid(row=0, column=1, sticky="we", padx=6, pady=6)
+
+        room_button = ttk.Button(
+            frame,
+            text=self.tr("Browse..."),
+            command=lambda: self._select_view_in_room_file("room"),
+        )
+        room_button.grid(row=0, column=2, sticky="e", padx=6, pady=6)
+        self.register_widget(room_button, "Browse...")
+
+        rug_label = ttk.Label(frame, text=self.tr("Rug Image:"))
+        rug_label.grid(row=1, column=0, sticky="w", padx=6, pady=6)
+        self.register_widget(rug_label, "Rug Image:")
+
+        rug_entry = ttk.Entry(frame, textvariable=self.view_in_room_rug_path, state="readonly")
+        rug_entry.grid(row=1, column=1, sticky="we", padx=6, pady=6)
+
+        rug_button = ttk.Button(
+            frame,
+            text=self.tr("Browse..."),
+            command=lambda: self._select_view_in_room_file("rug"),
+        )
+        rug_button.grid(row=1, column=2, sticky="e", padx=6, pady=6)
+        self.register_widget(rug_button, "Browse...")
+
+        scale_label = ttk.Label(frame, text=self.tr("Resize Rug (%):"))
+        scale_label.grid(row=2, column=0, sticky="w", padx=6, pady=(10, 4))
+        self.register_widget(scale_label, "Resize Rug (%):")
+
+        scale = ttk.Scale(
+            frame,
+            from_=20,
+            to=200,
+            variable=self.view_in_room_scale_var,
+            orient="horizontal",
+            command=self._update_view_in_room_scale_display,
+        )
+        scale.grid(row=2, column=1, sticky="we", padx=6, pady=(10, 4))
+
+        self.view_in_room_scale_value = ttk.Label(frame, text="100%")
+        self.view_in_room_scale_value.grid(row=2, column=2, sticky="e", padx=6, pady=(10, 4))
+        self._update_view_in_room_scale_display(self.view_in_room_scale_var.get())
+
+        alpha_label = ttk.Label(frame, text=self.tr("Rug Transparency:"))
+        alpha_label.grid(row=3, column=0, sticky="w", padx=6, pady=4)
+        self.register_widget(alpha_label, "Rug Transparency:")
+
+        alpha_scale = ttk.Scale(
+            frame,
+            from_=0.5,
+            to=1.0,
+            variable=self.view_in_room_alpha_var,
+            orient="horizontal",
+            command=self._update_view_in_room_alpha_display,
+        )
+        alpha_scale.grid(row=3, column=1, sticky="we", padx=6, pady=4)
+
+        self.view_in_room_alpha_value = ttk.Label(frame, text="0.85")
+        self.view_in_room_alpha_value.grid(row=3, column=2, sticky="e", padx=6, pady=4)
+        self._update_view_in_room_alpha_display(self.view_in_room_alpha_var.get())
+
+        button_frame = ttk.Frame(frame, style="PanelBody.TFrame")
+        button_frame.grid(row=4, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 0))
+
+        preview_button = ttk.Button(button_frame, text=self.tr("Generate Preview"), command=self.generate_view_in_room_preview)
+        preview_button.pack(side="left")
+        self.register_widget(preview_button, "Generate Preview")
+
+        save_button = ttk.Button(button_frame, text=self.tr("Save Image"), command=self.save_view_in_room_image)
+        save_button.pack(side="left", padx=(8, 0))
+        self.register_widget(save_button, "Save Image")
+
+        self.view_in_room_preview_label = ttk.Label(
+            frame,
+            anchor="center",
+            text=self.tr("Preview will appear here."),
+            style="Secondary.TLabel",
+            wraplength=520,
+            justify="center",
+        )
+        self.view_in_room_preview_label.grid(row=5, column=0, columnspan=3, sticky="nsew", padx=6, pady=(12, 6))
+        self.view_in_room_preview_label.image = None
+        self.view_in_room_preview_has_image = False
+
+    def _select_view_in_room_file(self, target: str) -> None:
+        """Prompt the user for an image path and store it in the relevant variable."""
+
+        filetypes = [
+            (self.tr("Image Files"), "*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff"),
+            ("All Files", "*.*"),
+        ]
+        path = filedialog.askopenfilename(filetypes=filetypes)
+        if not path:
+            return
+        if target == "room":
+            self.view_in_room_room_path.set(path)
+        else:
+            self.view_in_room_rug_path.set(path)
+
+    def _update_view_in_room_scale_display(self, value) -> None:
+        """Update the percentage label when the rug scale slider changes."""
+
+        if not hasattr(self, "view_in_room_scale_value"):
+            return
+        try:
+            percent = float(value)
+        except (TypeError, ValueError):
+            return
+        self.view_in_room_scale_value.config(text=f"{percent:.0f}%")
+
+    def _update_view_in_room_alpha_display(self, value) -> None:
+        """Update the transparency label when the alpha slider changes."""
+
+        if not hasattr(self, "view_in_room_alpha_value"):
+            return
+        try:
+            alpha = float(value)
+        except (TypeError, ValueError):
+            return
+        self.view_in_room_alpha_value.config(text=f"{alpha:.2f}")
+
+    def generate_view_in_room_preview(self) -> None:
+        """Create an overlaid preview of the rug inside the room photo."""
+
+        if not hasattr(self, "view_in_room_room_path"):
+            return
+
+        room_path = self.view_in_room_room_path.get()
+        rug_path = self.view_in_room_rug_path.get()
+        if not room_path or not rug_path:
+            messagebox.showwarning(self.tr("Warning"), self.tr("Please select both room and rug images."))
+            return
+
+        try:
+            with Image.open(room_path) as room_raw:
+                room_img = room_raw.convert("RGBA")
+            with Image.open(rug_path) as rug_raw:
+                rug_img = rug_raw.convert("RGBA")
+        except Exception as exc:  # pragma: no cover - safeguard for Pillow errors
+            messagebox.showerror(
+                self.tr("Error"),
+                self.tr("Could not open selected images: {error}").format(error=exc),
+            )
+            return
+
+        resampling = getattr(Image, "Resampling", Image).LANCZOS
+        scale_factor = max(0.2, min(2.0, float(self.view_in_room_scale_var.get()) / 100.0))
+        new_width = max(1, int(round(rug_img.width * scale_factor)))
+        new_height = max(1, int(round(rug_img.height * scale_factor)))
+        rug_resized = rug_img.resize((new_width, new_height), resample=resampling)
+
+        alpha_factor = max(0.5, min(1.0, float(self.view_in_room_alpha_var.get())))
+        if alpha_factor < 1.0:
+            r, g, b, a = rug_resized.split()
+            a = a.point(lambda v: int(v * alpha_factor))
+            rug_resized = Image.merge("RGBA", (r, g, b, a))
+
+        if rug_resized.width > room_img.width or rug_resized.height > room_img.height:
+            fit_ratio = min(room_img.width / rug_resized.width, room_img.height / rug_resized.height)
+            if fit_ratio > 0 and fit_ratio < 1:
+                fit_width = max(1, int(round(rug_resized.width * fit_ratio)))
+                fit_height = max(1, int(round(rug_resized.height * fit_ratio)))
+                rug_resized = rug_resized.resize((fit_width, fit_height), resample=resampling)
+
+        dest_x = max(0, (room_img.width - rug_resized.width) // 2)
+        dest_y = max(0, room_img.height - rug_resized.height)
+
+        composed = room_img.copy()
+        composed.alpha_composite(rug_resized, dest=(dest_x, dest_y))
+
+        preview_display = composed.copy()
+        preview_display.thumbnail((720, 540), resample=resampling)
+
+        self.view_in_room_preview_image = composed
+        self.view_in_room_preview_photo = ImageTk.PhotoImage(preview_display)
+        self.view_in_room_preview_label.configure(image=self.view_in_room_preview_photo, text="")
+        self.view_in_room_preview_label.image = self.view_in_room_preview_photo
+        self.view_in_room_preview_has_image = True
+
+    def save_view_in_room_image(self) -> None:
+        """Save the generated preview to disk."""
+
+        if not getattr(self, "view_in_room_preview_image", None):
+            messagebox.showwarning(
+                self.tr("Warning"),
+                self.tr("No preview available. Please generate a preview first."),
+            )
+            return
+
+        filetypes = [
+            ("PNG", "*.png"),
+            ("JPEG", "*.jpg *.jpeg"),
+            ("TIFF", "*.tif *.tiff"),
+            ("All Files", "*.*"),
+        ]
+        path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=filetypes)
+        if not path:
+            return
+
+        image_to_save = self.view_in_room_preview_image
+        ext = os.path.splitext(path)[1].lower()
+        if ext in {".jpg", ".jpeg"} and image_to_save.mode != "RGB":
+            image_to_save = image_to_save.convert("RGB")
+
+        try:
+            image_to_save.save(path)
+        except Exception as exc:  # pragma: no cover - filesystem errors
+            messagebox.showerror(self.tr("Error"), self.tr("File could not be saved: {error}").format(error=exc))
+            return
+
+        messagebox.showinfo(self.tr("Success"), self.tr("Preview image saved to {path}.").format(path=path))
+
     def tr(self, text_key):
         """Translate a text key according to the selected language."""
         return translations.get(self.language, translations["en"]).get(text_key, text_key)
@@ -1637,6 +1910,11 @@ class ToolApp(tk.Tk):
             self.wayfair_formatter.set_translator(self.tr)
         if hasattr(self, "shared_printer_server"):
             self.shared_printer_server.set_translator(self.tr)
+        if hasattr(self, "view_in_room_preview_label") and not self.view_in_room_preview_has_image:
+            self.view_in_room_preview_label.configure(
+                text=self.tr("Preview will appear here."),
+                image="",
+            )
         self._update_sidebar_toggle_text()
         self._refresh_language_options()
 
