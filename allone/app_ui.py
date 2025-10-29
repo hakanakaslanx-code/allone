@@ -23,7 +23,7 @@ from updater import check_for_updates
 import backend_logic as backend
 from wayfair_formatter import WayfairFormatter
 
-__version__ = "4.3.2"
+__version__ = "4.4.2"
 
 translations = {
     "en": {
