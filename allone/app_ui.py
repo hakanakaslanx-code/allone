@@ -106,12 +106,18 @@ translations = {
         "Lay Rug (90°)": "Lay Rug (90°)",
         "Generate Preview": "Generate Preview",
         "Save Image": "Save Image",
+        "Manual Place Rug": "Halıyı Elle Yerleştir (4 Nokta)",
         "Preview will appear here.": "Preview will appear here.",
         "View in Room Controls": "Canvas controls: Left click and drag to move, mouse wheel to scale, right click and drag to rotate.",
         "Please select both room and rug images.": "Please select both room and rug images.",
         "Could not open selected images: {error}": "Could not open selected images: {error}",
         "Preview image saved to {path}.": "Preview image saved to {path}.",
         "No preview available. Please generate a preview first.": "No preview available. Please generate a preview first.",
+        "Manual Prompt 1": "Üst sol köşeyi seçin",
+        "Manual Prompt 2": "Üst sağ köşeyi seçin",
+        "Manual Prompt 3": "Alt sağ köşeyi seçin",
+        "Manual Prompt 4": "Alt sol köşeyi seçin",
+        "Manual Placement Complete": "Halı yerleşti. Taşıyabilir veya ölçekleyebilirsiniz.",
         "4. Format Numbers from File": "4. Format Numbers from File",
         "Excel/CSV/TXT File:": "Excel/CSV/TXT File:",
         "Format": "Format",
@@ -386,12 +392,18 @@ translations = {
         "Lay Rug (90°)": "Halıyı Yatır (90°)",
         "Generate Preview": "Önizleme Oluştur",
         "Save Image": "Görseli Kaydet",
+        "Manual Place Rug": "Halıyı Elle Yerleştir (4 Nokta)",
         "Preview will appear here.": "Önizleme burada görünecek.",
         "View in Room Controls": "Kontroller: Taşımak için sol tıkla sürükleyin, ölçek için tekerleği çevirin, döndürmek için sağ tıkla sürükleyin.",
         "Please select both room and rug images.": "Lütfen hem oda hem halı görsellerini seçin.",
         "Could not open selected images: {error}": "Seçilen görseller açılamadı: {error}",
         "Preview image saved to {path}.": "Önizleme görseli {path} konumuna kaydedildi.",
         "No preview available. Please generate a preview first.": "Önizleme yok. Lütfen önce bir önizleme oluşturun.",
+        "Manual Prompt 1": "Üst sol köşeyi seçin",
+        "Manual Prompt 2": "Üst sağ köşeyi seçin",
+        "Manual Prompt 3": "Alt sağ köşeyi seçin",
+        "Manual Prompt 4": "Alt sol köşeyi seçin",
+        "Manual Placement Complete": "Halı yerleşti. Taşıyabilir veya ölçekleyebilirsiniz.",
         "4. Format Numbers from File": "4. Dosyadan Numaraları Biçimlendir",
         "Excel/CSV/TXT File:": "Excel/CSV/TXT Dosyası:",
         "Format": "Biçimlendir",
@@ -747,6 +759,12 @@ class ToolApp(tk.Tk):
         self.view_in_room_display_size: Tuple[int, int] = (720, 540)
         self.view_in_room_canvas_size: Tuple[int, int] = (720, 540)
         self.view_in_room_perspective_top_scale: float = 0.6
+        self.view_in_room_manual_active: bool = False
+        self.view_in_room_manual_points: List[Tuple[float, float]] = []
+        self.view_in_room_manual_relative_polygon: Optional[List[Tuple[float, float]]] = None
+        self.view_in_room_manual_prompt_var: Optional[tk.StringVar] = None
+        self.view_in_room_manual_button: Optional[ttk.Button] = None
+        self.view_in_room_manual_prompt_label: Optional[ttk.Label] = None
 
         self.language_options = {"en": "English", "tr": "Turkish"}
         self.language_var = tk.StringVar(
@@ -1634,7 +1652,7 @@ class ToolApp(tk.Tk):
 
         frame = card.body
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(3, weight=1)
+        frame.rowconfigure(5, weight=1)
 
         self.view_in_room_room_path = tk.StringVar()
         self.view_in_room_rug_path = tk.StringVar()
@@ -1693,6 +1711,26 @@ class ToolApp(tk.Tk):
         save_button.pack(side="left", padx=(8, 0))
         self.register_widget(save_button, "Save Image")
 
+        manual_button = ttk.Button(
+            button_frame,
+            text=self.tr("Manual Place Rug"),
+            command=self._start_manual_rug_placement,
+        )
+        manual_button.pack(side="left", padx=(8, 0))
+        self.view_in_room_manual_button = manual_button
+        self.register_widget(manual_button, "Manual Place Rug")
+
+        self.view_in_room_manual_prompt_var = tk.StringVar(value="")
+        manual_prompt_label = ttk.Label(
+            frame,
+            textvariable=self.view_in_room_manual_prompt_var,
+            foreground="#1d4ed8",
+            wraplength=520,
+        )
+        manual_prompt_label.grid(row=4, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 2))
+        manual_prompt_label.configure(anchor="w")
+        self.view_in_room_manual_prompt_label = manual_prompt_label
+
         canvas_bg = self._get_canvas_background(frame)
         self.view_in_room_canvas = tk.Canvas(
             frame,
@@ -1702,7 +1740,7 @@ class ToolApp(tk.Tk):
             borderwidth=0,
             background=canvas_bg,
         )
-        self.view_in_room_canvas.grid(row=4, column=0, columnspan=3, sticky="nsew", padx=6, pady=(12, 6))
+        self.view_in_room_canvas.grid(row=5, column=0, columnspan=3, sticky="nsew", padx=6, pady=(8, 6))
         self.view_in_room_canvas.bind("<Button-1>", self._on_view_in_room_canvas_left_click)
         self.view_in_room_canvas.bind("<B1-Motion>", self._on_view_in_room_canvas_left_drag)
         self.view_in_room_canvas.bind("<ButtonRelease-1>", self._on_view_in_room_canvas_left_release)
@@ -1759,6 +1797,164 @@ class ToolApp(tk.Tk):
         self.view_in_room_preview_image = None
         self.view_in_room_drag_mode = None
         self.view_in_room_drag_offset = (0.0, 0.0)
+        self._reset_manual_placement_state()
+
+    def _reset_manual_placement_state(self, *, reset_polygon: bool = True) -> None:
+        self.view_in_room_manual_active = False
+        self.view_in_room_manual_points = []
+        if reset_polygon:
+            self.view_in_room_manual_relative_polygon = None
+        if hasattr(self, "view_in_room_canvas"):
+            try:
+                self.view_in_room_canvas.delete("manual-overlay")
+            except tk.TclError:
+                pass
+        self._update_manual_prompt_label()
+
+    def _update_manual_prompt_label(self) -> None:
+        if self.view_in_room_manual_prompt_var is None:
+            return
+        if self.view_in_room_manual_active:
+            index = len(self.view_in_room_manual_points)
+            if index < 4:
+                key = f"Manual Prompt {index + 1}"
+                self.view_in_room_manual_prompt_var.set(self.tr(key))
+            else:
+                self.view_in_room_manual_prompt_var.set("")
+        elif self.view_in_room_manual_relative_polygon:
+            self.view_in_room_manual_prompt_var.set(self.tr("Manual Placement Complete"))
+        else:
+            self.view_in_room_manual_prompt_var.set("")
+
+    def _start_manual_rug_placement(self) -> None:
+        if not getattr(self, "view_in_room_preview_has_image", False):
+            if self.view_in_room_manual_prompt_var is not None:
+                self.view_in_room_manual_prompt_var.set("Lütfen oda ve halı görsellerini seçin.")
+            return
+        self.view_in_room_manual_active = True
+        self.view_in_room_manual_points = []
+        self._set_view_in_room_rug_selected(False)
+        self._hide_view_in_room_control_icons()
+        self._update_manual_prompt_label()
+        self._render_view_in_room_canvas()
+
+    def _handle_manual_placement_click(self, event: tk.Event) -> None:
+        if not self.view_in_room_manual_active:
+            return
+        scale = self.view_in_room_display_scale or 1.0
+        if scale <= 0:
+            scale = 1.0
+        actual_x = event.x / scale
+        actual_y = event.y / scale
+        self.view_in_room_manual_points.append((actual_x, actual_y))
+        if len(self.view_in_room_manual_points) > 4:
+            self.view_in_room_manual_points = self.view_in_room_manual_points[:4]
+        if len(self.view_in_room_manual_points) == 4:
+            self._finalize_manual_placement()
+        else:
+            self._update_manual_prompt_label()
+            self._render_view_in_room_canvas()
+
+    def _finalize_manual_placement(self) -> None:
+        points = self.view_in_room_manual_points
+        if len(points) != 4:
+            return
+        if self.view_in_room_rug_scale <= 0:
+            self.view_in_room_rug_scale = 1.0
+        center_x = sum(x for x, _ in points) / 4.0
+        center_y = sum(y for _, y in points) / 4.0
+        base_scale = self.view_in_room_rug_scale or 1.0
+        relative = [((x - center_x) / base_scale, (y - center_y) / base_scale) for x, y in points]
+        self.view_in_room_manual_relative_polygon = relative
+        self.view_in_room_manual_active = False
+        self.view_in_room_manual_points = []
+        self.view_in_room_rug_angle = 0.0
+        self.view_in_room_rug_center = (center_x, center_y)
+        rug_size = self._get_current_rug_size()
+        if self.view_in_room_rug_center is not None:
+            self.view_in_room_rug_center = self._clamp_rug_center(self.view_in_room_rug_center, rug_size)
+        self._set_view_in_room_rug_selected(True)
+        self._update_manual_prompt_label()
+        self._render_view_in_room_canvas()
+        self._update_view_in_room_preview_image()
+
+    def _draw_manual_overlay(self, room_scale: float) -> None:
+        if not hasattr(self, "view_in_room_canvas"):
+            return
+        canvas = self.view_in_room_canvas
+        try:
+            canvas.delete("manual-overlay")
+        except tk.TclError:
+            return
+        if self.view_in_room_manual_active:
+            if self.view_in_room_manual_points:
+                display_points = [
+                    (x * room_scale, y * room_scale) for x, y in self.view_in_room_manual_points
+                ]
+                color = "#2563eb"
+                if len(display_points) == 1:
+                    x, y = display_points[0]
+                    radius = 4
+                    canvas.create_oval(
+                        x - radius,
+                        y - radius,
+                        x + radius,
+                        y + radius,
+                        outline=color,
+                        fill=color,
+                        width=1,
+                        tags="manual-overlay",
+                        state="disabled",
+                    )
+                else:
+                    flat = [coord for point in display_points for coord in point]
+                    canvas.create_line(
+                        *flat,
+                        fill=color,
+                        width=2,
+                        tags="manual-overlay",
+                        state="disabled",
+                    )
+                    if len(display_points) == 4:
+                        canvas.create_polygon(
+                            *flat,
+                            outline=color,
+                            fill=color,
+                            stipple="gray25",
+                            width=2,
+                            tags="manual-overlay",
+                            state="disabled",
+                        )
+                canvas.tag_raise("manual-overlay")
+            return
+        if (
+            self.view_in_room_manual_relative_polygon
+            and self.view_in_room_rug_center is not None
+            and room_scale > 0
+        ):
+            angle_rad = math.radians(self.view_in_room_rug_angle % 360)
+            cos_a = math.cos(angle_rad)
+            sin_a = math.sin(angle_rad)
+            points = []
+            for dx, dy in self.view_in_room_manual_relative_polygon:
+                scaled_x = dx * self.view_in_room_rug_scale
+                scaled_y = dy * self.view_in_room_rug_scale
+                rot_x = scaled_x * cos_a - scaled_y * sin_a
+                rot_y = scaled_x * sin_a + scaled_y * cos_a
+                actual_x = (self.view_in_room_rug_center[0] + rot_x) * room_scale
+                actual_y = (self.view_in_room_rug_center[1] + rot_y) * room_scale
+                points.extend([actual_x, actual_y])
+            if points:
+                canvas.create_polygon(
+                    *points,
+                    outline="#2563eb",
+                    fill="#2563eb",
+                    stipple="gray25",
+                    width=2,
+                    tags="manual-overlay",
+                    state="disabled",
+                )
+                canvas.tag_raise("manual-overlay")
 
     def _compute_pil_perspective_coeffs(
         self, src: List[Tuple[float, float]], dst: List[Tuple[float, float]]
@@ -1804,17 +2000,23 @@ class ToolApp(tk.Tk):
         if width <= 0 or height <= 0:
             return None
         rug_scaled = base.resize((width, height), resample=resampling)
-        top_scale = getattr(self, "view_in_room_perspective_top_scale", 0.6)
-        top_scale = float(max(0.1, min(top_scale, 0.95)))
-        bottom_half_width = width / 2.0
-        top_half_width = bottom_half_width * top_scale
-        half_height = height / 2.0
-        dest_local = [
-            (-top_half_width, -half_height),
-            (top_half_width, -half_height),
-            (bottom_half_width, half_height),
-            (-bottom_half_width, half_height),
-        ]
+        manual_relative = self.view_in_room_manual_relative_polygon
+        if manual_relative and len(manual_relative) == 4:
+            dest_local = [
+                (dx * scale_multiplier, dy * scale_multiplier) for dx, dy in manual_relative
+            ]
+        else:
+            top_scale = getattr(self, "view_in_room_perspective_top_scale", 0.6)
+            top_scale = float(max(0.1, min(top_scale, 0.95)))
+            bottom_half_width = width / 2.0
+            top_half_width = bottom_half_width * top_scale
+            half_height = height / 2.0
+            dest_local = [
+                (-top_half_width, -half_height),
+                (top_half_width, -half_height),
+                (bottom_half_width, half_height),
+                (-bottom_half_width, half_height),
+            ]
         angle_value = angle if angle is not None else self.view_in_room_rug_angle
         angle_rad = math.radians(angle_value % 360)
         cos_a = math.cos(angle_rad)
@@ -2051,6 +2253,7 @@ class ToolApp(tk.Tk):
             self.view_in_room_rug_display_center = None
             self.view_in_room_preview_has_image = False
             self._clear_view_in_room_selection()
+            self._draw_manual_overlay(scale)
             return
         display_scale = self.view_in_room_rug_scale * scale
         rug_projection = self._get_transformed_rug(display_scale)
@@ -2061,6 +2264,7 @@ class ToolApp(tk.Tk):
             self.view_in_room_rug_display_center = None
             self.view_in_room_preview_has_image = False
             self._clear_view_in_room_selection()
+            self._draw_manual_overlay(scale)
             return
         rug_display = rug_projection.image
         center_x = self.view_in_room_rug_center[0] * scale
@@ -2085,9 +2289,13 @@ class ToolApp(tk.Tk):
         self.view_in_room_rug_display_center = (center_x, center_y)
         self.view_in_room_preview_has_image = True
         self._update_view_in_room_preview_image()
+        self._draw_manual_overlay(scale)
         self._ensure_view_in_room_control_icons()
 
     def _on_view_in_room_canvas_left_click(self, event: tk.Event) -> None:
+        if self.view_in_room_manual_active:
+            self._handle_manual_placement_click(event)
+            return
         if not getattr(self, "view_in_room_preview_has_image", False):
             return
         if self.view_in_room_rug_display_bbox is None or self.view_in_room_rug_display_center is None:
@@ -2125,6 +2333,8 @@ class ToolApp(tk.Tk):
             self._set_view_in_room_rug_selected(False)
 
     def _on_view_in_room_canvas_left_drag(self, event: tk.Event) -> None:
+        if self.view_in_room_manual_active:
+            return
         if self.view_in_room_drag_mode not in {"move", "scale", "rotate_icon"}:
             return
         self._record_view_in_room_mouse_activity()
@@ -2164,6 +2374,8 @@ class ToolApp(tk.Tk):
         self._render_view_in_room_canvas()
 
     def _on_view_in_room_canvas_left_release(self, _event: tk.Event) -> None:
+        if self.view_in_room_manual_active:
+            return
         if self.view_in_room_drag_mode == "move":
             self.view_in_room_drag_mode = None
             self.view_in_room_drag_offset = (0.0, 0.0)
@@ -2177,6 +2389,8 @@ class ToolApp(tk.Tk):
             self._update_view_in_room_preview_image()
 
     def _on_view_in_room_canvas_right_click(self, event: tk.Event) -> None:
+        if self.view_in_room_manual_active:
+            return
         if not getattr(self, "view_in_room_preview_has_image", False):
             return
         if self.view_in_room_rug_display_bbox is None or self.view_in_room_rug_display_center is None:
@@ -2193,6 +2407,8 @@ class ToolApp(tk.Tk):
         self._record_view_in_room_mouse_activity()
 
     def _on_view_in_room_canvas_right_drag(self, event: tk.Event) -> None:
+        if self.view_in_room_manual_active:
+            return
         if self.view_in_room_drag_mode != "rotate":
             return
         if self.view_in_room_rug_display_center is None:
@@ -2205,11 +2421,15 @@ class ToolApp(tk.Tk):
         self._render_view_in_room_canvas()
 
     def _on_view_in_room_canvas_right_release(self, _event: tk.Event) -> None:
+        if self.view_in_room_manual_active:
+            return
         if self.view_in_room_drag_mode == "rotate":
             self.view_in_room_drag_mode = None
             self._update_view_in_room_preview_image()
 
     def _on_view_in_room_mouse_wheel(self, event: tk.Event, delta: Optional[int] = None) -> None:
+        if self.view_in_room_manual_active:
+            return
         if not getattr(self, "view_in_room_preview_has_image", False):
             return
         self._record_view_in_room_mouse_activity()
@@ -2292,6 +2512,8 @@ class ToolApp(tk.Tk):
             return
 
         self.view_in_room_room_image = room_img
+        if reset_rug:
+            self._reset_manual_placement_state()
 
         if not rug_path:
             if reset_rug:
@@ -2451,6 +2673,7 @@ class ToolApp(tk.Tk):
             self.shared_printer_server.set_translator(self.tr)
         if hasattr(self, "view_in_room_canvas") and not self.view_in_room_preview_has_image:
             self._show_view_in_room_message(self.tr("Preview will appear here."))
+        self._update_manual_prompt_label()
         self._update_sidebar_toggle_text()
         self._refresh_language_options()
 
