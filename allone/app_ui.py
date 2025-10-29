@@ -97,6 +97,7 @@ translations = {
         "Room Image:": "Room Image:",
         "Rug Image:": "Rug Image:",
         "Resize Rug (%):": "Resize Rug (%):",
+        "Yere Yayma (%):": "Yere Yayma (%):",
         "Rug Transparency:": "Rug Transparency:",
         "Lay Rug (90°)": "Lay Rug (90°)",
         "Generate Preview": "Generate Preview",
@@ -375,6 +376,7 @@ translations = {
         "Room Image:": "Oda Görseli:",
         "Rug Image:": "Halı Görseli:",
         "Resize Rug (%):": "Halı Boyutu (%):",
+        "Yere Yayma (%):": "Yere Yayma (%):",
         "Rug Transparency:": "Halı Saydamlığı:",
         "Lay Rug (90°)": "Halıyı Yatır (90°)",
         "Generate Preview": "Önizleme Oluştur",
@@ -1609,11 +1611,12 @@ class ToolApp(tk.Tk):
 
         frame = card.body
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(6, weight=1)
+        frame.rowconfigure(7, weight=1)
 
         self.view_in_room_room_path = tk.StringVar()
         self.view_in_room_rug_path = tk.StringVar()
         self.view_in_room_scale_var = tk.DoubleVar(value=100.0)
+        self.view_in_room_squash_var = tk.DoubleVar(value=100.0)
         self.view_in_room_alpha_var = tk.DoubleVar(value=0.85)
         self.view_in_room_rotate_var = tk.BooleanVar(value=False)
 
@@ -1665,8 +1668,26 @@ class ToolApp(tk.Tk):
         self.view_in_room_scale_value.grid(row=2, column=2, sticky="e", padx=6, pady=(10, 4))
         self._update_view_in_room_scale_display(self.view_in_room_scale_var.get())
 
+        squash_label = ttk.Label(frame, text=self.tr("Yere Yayma (%):"))
+        squash_label.grid(row=3, column=0, sticky="w", padx=6, pady=4)
+        self.register_widget(squash_label, "Yere Yayma (%):")
+
+        squash_scale = ttk.Scale(
+            frame,
+            from_=40,
+            to=100,
+            variable=self.view_in_room_squash_var,
+            orient="horizontal",
+            command=self._update_view_in_room_squash_display,
+        )
+        squash_scale.grid(row=3, column=1, sticky="we", padx=6, pady=4)
+
+        self.view_in_room_squash_value = ttk.Label(frame, text="100%")
+        self.view_in_room_squash_value.grid(row=3, column=2, sticky="e", padx=6, pady=4)
+        self._update_view_in_room_squash_display(self.view_in_room_squash_var.get())
+
         alpha_label = ttk.Label(frame, text=self.tr("Rug Transparency:"))
-        alpha_label.grid(row=3, column=0, sticky="w", padx=6, pady=4)
+        alpha_label.grid(row=4, column=0, sticky="w", padx=6, pady=4)
         self.register_widget(alpha_label, "Rug Transparency:")
 
         alpha_scale = ttk.Scale(
@@ -1677,10 +1698,10 @@ class ToolApp(tk.Tk):
             orient="horizontal",
             command=self._update_view_in_room_alpha_display,
         )
-        alpha_scale.grid(row=3, column=1, sticky="we", padx=6, pady=4)
+        alpha_scale.grid(row=4, column=1, sticky="we", padx=6, pady=4)
 
         self.view_in_room_alpha_value = ttk.Label(frame, text="0.85")
-        self.view_in_room_alpha_value.grid(row=3, column=2, sticky="e", padx=6, pady=4)
+        self.view_in_room_alpha_value.grid(row=4, column=2, sticky="e", padx=6, pady=4)
         self._update_view_in_room_alpha_display(self.view_in_room_alpha_var.get())
 
         rotate_check = ttk.Checkbutton(
@@ -1689,11 +1710,11 @@ class ToolApp(tk.Tk):
             variable=self.view_in_room_rotate_var,
             command=self._on_view_in_room_rotate_toggle,
         )
-        rotate_check.grid(row=4, column=0, columnspan=3, sticky="w", padx=6, pady=(6, 0))
+        rotate_check.grid(row=5, column=0, columnspan=3, sticky="w", padx=6, pady=(6, 0))
         self.register_widget(rotate_check, "Lay Rug (90°)")
 
         button_frame = ttk.Frame(frame, style="PanelBody.TFrame")
-        button_frame.grid(row=5, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 0))
+        button_frame.grid(row=6, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 0))
 
         preview_button = ttk.Button(button_frame, text=self.tr("Generate Preview"), command=self.generate_view_in_room_preview)
         preview_button.pack(side="left")
@@ -1712,7 +1733,7 @@ class ToolApp(tk.Tk):
             borderwidth=0,
             background=canvas_bg,
         )
-        self.view_in_room_canvas.grid(row=6, column=0, columnspan=3, sticky="nsew", padx=6, pady=(12, 6))
+        self.view_in_room_canvas.grid(row=7, column=0, columnspan=3, sticky="nsew", padx=6, pady=(12, 6))
         self.view_in_room_canvas.bind("<Button-1>", self._on_view_in_room_canvas_click)
         self.view_in_room_canvas.bind("<B1-Motion>", self._on_view_in_room_canvas_drag)
         self.view_in_room_canvas.bind("<ButtonRelease-1>", self._on_view_in_room_canvas_release)
@@ -1930,6 +1951,17 @@ class ToolApp(tk.Tk):
             return
         self.view_in_room_scale_value.config(text=f"{percent:.0f}%")
 
+    def _update_view_in_room_squash_display(self, value) -> None:
+        """Update the label when the squash slider changes."""
+
+        if not hasattr(self, "view_in_room_squash_value"):
+            return
+        try:
+            percent = float(value)
+        except (TypeError, ValueError):
+            return
+        self.view_in_room_squash_value.config(text=f"{percent:.0f}%")
+
     def _update_view_in_room_alpha_display(self, value) -> None:
         """Update the transparency label when the alpha slider changes."""
 
@@ -1974,6 +2006,11 @@ class ToolApp(tk.Tk):
         new_width = max(1, int(round(rug_img.width * scale_factor)))
         new_height = max(1, int(round(rug_img.height * scale_factor)))
         rug_resized = rug_img.resize((new_width, new_height), resample=resampling)
+
+        squash_factor = max(0.4, min(1.0, float(self.view_in_room_squash_var.get()) / 100.0))
+        squashed_height = max(1, int(round(rug_resized.height * squash_factor)))
+        if squashed_height != rug_resized.height:
+            rug_resized = rug_resized.resize((rug_resized.width, squashed_height), resample=resampling)
 
         alpha_factor = max(0.5, min(1.0, float(self.view_in_room_alpha_var.get())))
         if alpha_factor < 1.0:
