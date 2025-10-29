@@ -7,6 +7,7 @@ from tkinter.scrolledtext import ScrolledText
 import threading
 import os
 import math
+from dataclasses import dataclass
 from typing import Callable, List, Optional, Set, Tuple
 
 import pandas as pd
@@ -687,6 +688,14 @@ DYMO_LABELS = {
 }
 
 
+@dataclass
+class RugWarpResult:
+    image: Image.Image
+    offset: Tuple[float, float]
+    size: Tuple[int, int]
+    polygon: List[Tuple[float, float]]
+
+
 class ToolApp(tk.Tk):
     """Main application window that builds the entire tkinter interface."""
 
@@ -718,7 +727,6 @@ class ToolApp(tk.Tk):
         self.view_in_room_preview_has_image = False
         self.view_in_room_room_image: Optional[Image.Image] = None
         self.view_in_room_rug_original: Optional[Image.Image] = None
-        self.view_in_room_rug_perspective: Optional[Image.Image] = None
         self.view_in_room_rug_scale: float = 1.0
         self.view_in_room_rug_angle: float = 0.0
         self.view_in_room_rug_center: Optional[Tuple[float, float]] = None
@@ -738,6 +746,7 @@ class ToolApp(tk.Tk):
         self.view_in_room_rug_display_center: Optional[Tuple[float, float]] = None
         self.view_in_room_display_size: Tuple[int, int] = (720, 540)
         self.view_in_room_canvas_size: Tuple[int, int] = (720, 540)
+        self.view_in_room_perspective_top_scale: float = 0.6
 
         self.language_options = {"en": "English", "tr": "Turkish"}
         self.language_var = tk.StringVar(
@@ -1751,44 +1760,87 @@ class ToolApp(tk.Tk):
         self.view_in_room_drag_mode = None
         self.view_in_room_drag_offset = (0.0, 0.0)
 
-    def _find_perspective_coeffs(
+    def _compute_pil_perspective_coeffs(
         self, src: List[Tuple[float, float]], dst: List[Tuple[float, float]]
-    ) -> List[float]:
+    ) -> Optional[List[float]]:
         matrix = []
         vector = []
         for (x_src, y_src), (x_dst, y_dst) in zip(src, dst):
-            matrix.append([x_dst, y_dst, 1, 0, 0, 0, -x_src * x_dst, -x_src * y_dst])
-            matrix.append([0, 0, 0, x_dst, y_dst, 1, -y_src * x_dst, -y_src * y_dst])
-            vector.extend([x_src, y_src])
+            matrix.append([x_src, y_src, 1, 0, 0, 0, -x_dst * x_src, -x_dst * y_src])
+            matrix.append([0, 0, 0, x_src, y_src, 1, -y_dst * x_src, -y_dst * y_src])
+            vector.extend([x_dst, y_dst])
         matrix_np = np.array(matrix, dtype=float)
         vector_np = np.array(vector, dtype=float)
-        coeffs, *_ = np.linalg.lstsq(matrix_np, vector_np, rcond=None)
-        return coeffs.tolist()
-
-    def _apply_floor_perspective(self, rug_img: Image.Image) -> Image.Image:
-        width, height = rug_img.size
-        top_scale = 0.65
-        vertical_offset = 0.18
-        top_width = width * top_scale
-        x_offset = (width - top_width) / 2
-        y_offset = height * vertical_offset
-        src = [(0, 0), (width, 0), (width, height), (0, height)]
-        dst = [
-            (x_offset, y_offset),
-            (width - x_offset, y_offset),
-            (width, height),
-            (0, height),
-        ]
         try:
-            coeffs = self._find_perspective_coeffs(src, dst)
+            solution = np.linalg.solve(matrix_np, vector_np)
         except np.linalg.LinAlgError:
-            return rug_img
+            return None
+        h11, h12, h13, h21, h22, h23, h31, h32 = solution
+        transform_matrix = np.array(
+            [[h11, h12, h13], [h21, h22, h23], [h31, h32, 1.0]], dtype=float
+        )
+        try:
+            inverse = np.linalg.inv(transform_matrix)
+        except np.linalg.LinAlgError:
+            return None
+        a, b, c = inverse[0]
+        d, e, f = inverse[1]
+        g, h, _ = inverse[2]
+        return [a, b, c, d, e, f, g, h]
+
+    def _create_warped_rug(
+        self,
+        scale_multiplier: float,
+        *,
+        angle: Optional[float] = None,
+        source_image: Optional[Image.Image] = None,
+    ) -> Optional[RugWarpResult]:
+        base = source_image if source_image is not None else self.view_in_room_rug_original
+        if base is None:
+            return None
         resampling = getattr(Image, "Resampling", Image).BICUBIC
-        transformed = rug_img.transform((width, height), Image.PERSPECTIVE, coeffs, resample=resampling)
-        bbox = transformed.getbbox()
-        if bbox:
-            transformed = transformed.crop(bbox)
-        return transformed
+        width = max(1, int(round(base.width * scale_multiplier)))
+        height = max(1, int(round(base.height * scale_multiplier)))
+        if width <= 0 or height <= 0:
+            return None
+        rug_scaled = base.resize((width, height), resample=resampling)
+        top_scale = getattr(self, "view_in_room_perspective_top_scale", 0.6)
+        top_scale = float(max(0.1, min(top_scale, 0.95)))
+        bottom_half_width = width / 2.0
+        top_half_width = bottom_half_width * top_scale
+        half_height = height / 2.0
+        dest_local = [
+            (-top_half_width, -half_height),
+            (top_half_width, -half_height),
+            (bottom_half_width, half_height),
+            (-bottom_half_width, half_height),
+        ]
+        angle_value = angle if angle is not None else self.view_in_room_rug_angle
+        angle_rad = math.radians(angle_value % 360)
+        cos_a = math.cos(angle_rad)
+        sin_a = math.sin(angle_rad)
+        dest_rotated = [
+            (x * cos_a - y * sin_a, x * sin_a + y * cos_a)
+            for x, y in dest_local
+        ]
+        xs = [pt[0] for pt in dest_rotated]
+        ys = [pt[1] for pt in dest_rotated]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        out_width = int(math.ceil(max_x - min_x))
+        out_height = int(math.ceil(max_y - min_y))
+        if out_width <= 0 or out_height <= 0:
+            return None
+        dest_shifted = [(x - min_x, y - min_y) for x, y in dest_rotated]
+        src = [(0.0, 0.0), (float(width), 0.0), (float(width), float(height)), (0.0, float(height))]
+        coeffs = self._compute_pil_perspective_coeffs(src, dest_shifted)
+        if coeffs is None:
+            return None
+        warped = rug_scaled.transform(
+            (out_width, out_height), Image.PERSPECTIVE, coeffs, resample=resampling
+        )
+        offset = (min_x, min_y)
+        return RugWarpResult(warped, offset, (out_width, out_height), dest_rotated)
 
     def _default_rug_center(self, room_img: Image.Image) -> Tuple[float, float]:
         return (room_img.width / 2.0, room_img.height * 0.75)
@@ -1796,9 +1848,11 @@ class ToolApp(tk.Tk):
     def _calculate_default_rug_scale(self, room_img: Image.Image, rug_img: Image.Image) -> float:
         if rug_img.width == 0 or rug_img.height == 0:
             return 1.0
-        projected = self._apply_floor_perspective(rug_img)
-        proj_width = projected.width or rug_img.width
-        proj_height = projected.height or rug_img.height
+        projection = self._create_warped_rug(1.0, angle=0.0, source_image=rug_img)
+        if projection is None:
+            proj_width, proj_height = rug_img.width, rug_img.height
+        else:
+            proj_width, proj_height = projection.size
         target_width = room_img.width * 0.45
         target_height = room_img.height * 0.3
         scale_width = target_width / proj_width
@@ -1806,25 +1860,14 @@ class ToolApp(tk.Tk):
         scale = min(scale_width, scale_height)
         return float(max(0.2, min(scale, 1.6)))
 
-    def _get_transformed_rug(self, scale_multiplier: float) -> Optional[Image.Image]:
-        if self.view_in_room_rug_original is None:
-            return None
-        resampling = getattr(Image, "Resampling", Image).BICUBIC
-        base = self.view_in_room_rug_original
-        width = max(1, int(round(base.width * scale_multiplier)))
-        height = max(1, int(round(base.height * scale_multiplier)))
-        rug_scaled = base.resize((width, height), resample=resampling)
-        angle = self.view_in_room_rug_angle % 360
-        if angle:
-            rug_scaled = rug_scaled.rotate(angle, expand=True, resample=resampling)
-        rug_warped = self._apply_floor_perspective(rug_scaled)
-        return rug_warped
+    def _get_transformed_rug(self, scale_multiplier: float) -> Optional[RugWarpResult]:
+        return self._create_warped_rug(scale_multiplier)
 
     def _get_current_rug_size(self) -> Tuple[int, int]:
         transformed = self._get_transformed_rug(self.view_in_room_rug_scale)
         if transformed is None:
             return 0, 0
-        return transformed.width, transformed.height
+        return transformed.size
 
     def _clamp_rug_center(self, center: Tuple[float, float], rug_size: Tuple[int, int]) -> Tuple[float, float]:
         room_img = self.view_in_room_room_image
@@ -2010,8 +2053,8 @@ class ToolApp(tk.Tk):
             self._clear_view_in_room_selection()
             return
         display_scale = self.view_in_room_rug_scale * scale
-        rug_display = self._get_transformed_rug(display_scale)
-        if rug_display is None:
+        rug_projection = self._get_transformed_rug(display_scale)
+        if rug_projection is None:
             self.view_in_room_canvas_rug_item = None
             self.view_in_room_canvas_rug_photo = None
             self.view_in_room_rug_display_bbox = None
@@ -2019,10 +2062,12 @@ class ToolApp(tk.Tk):
             self.view_in_room_preview_has_image = False
             self._clear_view_in_room_selection()
             return
+        rug_display = rug_projection.image
         center_x = self.view_in_room_rug_center[0] * scale
         center_y = self.view_in_room_rug_center[1] * scale
-        top_left_x = center_x - rug_display.width / 2.0
-        top_left_y = center_y - rug_display.height / 2.0
+        offset_x, offset_y = rug_projection.offset
+        top_left_x = center_x + offset_x
+        top_left_y = center_y + offset_y
         self.view_in_room_canvas_rug_photo = ImageTk.PhotoImage(rug_display)
         self.view_in_room_canvas_rug_item = self.view_in_room_canvas.create_image(
             int(round(top_left_x)),
@@ -2034,8 +2079,8 @@ class ToolApp(tk.Tk):
         self.view_in_room_rug_display_bbox = (
             top_left_x,
             top_left_y,
-            top_left_x + rug_display.width,
-            top_left_y + rug_display.height,
+            top_left_x + rug_projection.size[0],
+            top_left_y + rug_projection.size[1],
         )
         self.view_in_room_rug_display_center = (center_x, center_y)
         self.view_in_room_preview_has_image = True
@@ -2190,16 +2235,18 @@ class ToolApp(tk.Tk):
             self.view_in_room_preview_image = None
             self.view_in_room_preview_has_image = False
             return
-        rug_image = self._get_transformed_rug(self.view_in_room_rug_scale)
-        if rug_image is None:
+        rug_projection = self._get_transformed_rug(self.view_in_room_rug_scale)
+        if rug_projection is None:
             self.view_in_room_preview_image = None
             self.view_in_room_preview_has_image = False
             return
-        rug_size = (rug_image.width, rug_image.height)
+        rug_image = rug_projection.image
+        rug_size = rug_projection.size
         self.view_in_room_rug_center = self._clamp_rug_center(self.view_in_room_rug_center, rug_size)
         center_x, center_y = self.view_in_room_rug_center
-        top_left_x = int(round(center_x - rug_image.width / 2.0))
-        top_left_y = int(round(center_y - rug_image.height / 2.0))
+        offset_x, offset_y = rug_projection.offset
+        top_left_x = int(round(center_x + offset_x))
+        top_left_y = int(round(center_y + offset_y))
         overlay = Image.new("RGBA", room_img.size, (0, 0, 0, 0))
         overlay.paste(rug_image, (top_left_x, top_left_y), rug_image)
         composed = Image.alpha_composite(room_img, overlay)
@@ -2250,7 +2297,6 @@ class ToolApp(tk.Tk):
             if reset_rug:
                 messagebox.showwarning(self.tr("Warning"), self.tr("Please select both room and rug images."))
             self.view_in_room_rug_original = None
-            self.view_in_room_rug_perspective = None
             self.view_in_room_rug_center = None
             self.view_in_room_rug_scale = 1.0
             self.view_in_room_rug_angle = 0.0
@@ -2269,8 +2315,6 @@ class ToolApp(tk.Tk):
             return
 
         self.view_in_room_rug_original = rug_img
-        perspective_rug = self._apply_floor_perspective(rug_img)
-        self.view_in_room_rug_perspective = perspective_rug
         if reset_rug or self.view_in_room_rug_center is None:
             self.view_in_room_rug_scale = self._calculate_default_rug_scale(room_img, rug_img)
             self.view_in_room_rug_angle = 0.0
