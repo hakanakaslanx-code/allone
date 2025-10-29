@@ -98,6 +98,7 @@ translations = {
         "Rug Image:": "Rug Image:",
         "Resize Rug (%):": "Resize Rug (%):",
         "Rug Transparency:": "Rug Transparency:",
+        "Lay Rug (90°)": "Lay Rug (90°)",
         "Generate Preview": "Generate Preview",
         "Save Image": "Save Image",
         "Preview will appear here.": "Preview will appear here.",
@@ -375,6 +376,7 @@ translations = {
         "Rug Image:": "Halı Görseli:",
         "Resize Rug (%):": "Halı Boyutu (%):",
         "Rug Transparency:": "Halı Saydamlığı:",
+        "Lay Rug (90°)": "Halıyı Yatır (90°)",
         "Generate Preview": "Önizleme Oluştur",
         "Save Image": "Görseli Kaydet",
         "Preview will appear here.": "Önizleme burada görünecek.",
@@ -707,6 +709,19 @@ class ToolApp(tk.Tk):
         self.view_in_room_preview_photo: Optional[ImageTk.PhotoImage] = None
         self.view_in_room_preview_image: Optional[Image.Image] = None
         self.view_in_room_preview_has_image = False
+        self.view_in_room_room_image: Optional[Image.Image] = None
+        self.view_in_room_rug_image: Optional[Image.Image] = None
+        self.view_in_room_rug_position: Optional[Tuple[int, int]] = None
+        self.view_in_room_display_scale: float = 1.0
+        self.view_in_room_canvas_room_photo: Optional[ImageTk.PhotoImage] = None
+        self.view_in_room_canvas_rug_photo: Optional[ImageTk.PhotoImage] = None
+        self.view_in_room_canvas_room_item = None
+        self.view_in_room_canvas_rug_item = None
+        self.view_in_room_canvas_message = None
+        self.view_in_room_drag_active = False
+        self.view_in_room_drag_offset: Tuple[int, int] = (0, 0)
+        self.view_in_room_display_size: Tuple[int, int] = (720, 540)
+        self.view_in_room_canvas_size: Tuple[int, int] = (720, 540)
 
         self.language_options = {"en": "English", "tr": "Turkish"}
         self.language_var = tk.StringVar(
@@ -1594,12 +1609,13 @@ class ToolApp(tk.Tk):
 
         frame = card.body
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(5, weight=1)
+        frame.rowconfigure(6, weight=1)
 
         self.view_in_room_room_path = tk.StringVar()
         self.view_in_room_rug_path = tk.StringVar()
         self.view_in_room_scale_var = tk.DoubleVar(value=100.0)
         self.view_in_room_alpha_var = tk.DoubleVar(value=0.85)
+        self.view_in_room_rotate_var = tk.BooleanVar(value=False)
 
         room_label = ttk.Label(frame, text=self.tr("Room Image:"))
         room_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
@@ -1667,8 +1683,17 @@ class ToolApp(tk.Tk):
         self.view_in_room_alpha_value.grid(row=3, column=2, sticky="e", padx=6, pady=4)
         self._update_view_in_room_alpha_display(self.view_in_room_alpha_var.get())
 
+        rotate_check = ttk.Checkbutton(
+            frame,
+            text=self.tr("Lay Rug (90°)"),
+            variable=self.view_in_room_rotate_var,
+            command=self._on_view_in_room_rotate_toggle,
+        )
+        rotate_check.grid(row=4, column=0, columnspan=3, sticky="w", padx=6, pady=(6, 0))
+        self.register_widget(rotate_check, "Lay Rug (90°)")
+
         button_frame = ttk.Frame(frame, style="PanelBody.TFrame")
-        button_frame.grid(row=4, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 0))
+        button_frame.grid(row=5, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 0))
 
         preview_button = ttk.Button(button_frame, text=self.tr("Generate Preview"), command=self.generate_view_in_room_preview)
         preview_button.pack(side="left")
@@ -1678,17 +1703,205 @@ class ToolApp(tk.Tk):
         save_button.pack(side="left", padx=(8, 0))
         self.register_widget(save_button, "Save Image")
 
-        self.view_in_room_preview_label = ttk.Label(
+        canvas_bg = self._get_canvas_background(frame)
+        self.view_in_room_canvas = tk.Canvas(
             frame,
-            anchor="center",
-            text=self.tr("Preview will appear here."),
-            style="Secondary.TLabel",
-            wraplength=520,
+            width=self.view_in_room_canvas_size[0],
+            height=self.view_in_room_canvas_size[1],
+            highlightthickness=0,
+            borderwidth=0,
+            background=canvas_bg,
+        )
+        self.view_in_room_canvas.grid(row=6, column=0, columnspan=3, sticky="nsew", padx=6, pady=(12, 6))
+        self.view_in_room_canvas.bind("<Button-1>", self._on_view_in_room_canvas_click)
+        self.view_in_room_canvas.bind("<B1-Motion>", self._on_view_in_room_canvas_drag)
+        self.view_in_room_canvas.bind("<ButtonRelease-1>", self._on_view_in_room_canvas_release)
+        self.view_in_room_preview_has_image = False
+        self._show_view_in_room_message(self.tr("Preview will appear here."))
+
+    def _get_canvas_background(self, widget: tk.Widget) -> str:
+        try:
+            return widget.cget("background")
+        except tk.TclError:
+            try:
+                return widget.winfo_toplevel().cget("background")
+            except tk.TclError:
+                return "#f0f0f0"
+
+    def _show_view_in_room_message(self, message: str) -> None:
+        if not hasattr(self, "view_in_room_canvas"):
+            return
+        width, height = self.view_in_room_canvas_size
+        self.view_in_room_canvas.delete("all")
+        self.view_in_room_canvas.config(width=width, height=height)
+        text_width = min(520, max(200, width - 40))
+        self.view_in_room_canvas_message = self.view_in_room_canvas.create_text(
+            width // 2,
+            height // 2,
+            text=message,
+            fill="#666666",
+            width=text_width,
             justify="center",
         )
-        self.view_in_room_preview_label.grid(row=5, column=0, columnspan=3, sticky="nsew", padx=6, pady=(12, 6))
-        self.view_in_room_preview_label.image = None
         self.view_in_room_preview_has_image = False
+        self.view_in_room_canvas_room_item = None
+        self.view_in_room_canvas_rug_item = None
+        self.view_in_room_canvas_room_photo = None
+        self.view_in_room_canvas_rug_photo = None
+        self.view_in_room_preview_image = None
+        self.view_in_room_drag_active = False
+
+    def _on_view_in_room_rotate_toggle(self) -> None:
+        if getattr(self, "view_in_room_preview_has_image", False):
+            self.generate_view_in_room_preview()
+
+    def _clamp_view_in_room_position(
+        self, x: int, y: int, room_img: Optional[Image.Image], rug_img: Optional[Image.Image]
+    ) -> Tuple[int, int]:
+        if room_img is None or rug_img is None:
+            return max(0, x), max(0, y)
+        max_x = max(0, room_img.width - rug_img.width)
+        max_y = max(0, room_img.height - rug_img.height)
+        return max(0, min(x, max_x)), max(0, min(y, max_y))
+
+    def _render_view_in_room_canvas(self) -> None:
+        room_img = self.view_in_room_room_image
+        rug_img = self.view_in_room_rug_image
+        position = self.view_in_room_rug_position
+        if room_img is None or rug_img is None or position is None:
+            self._show_view_in_room_message(self.tr("Preview will appear here."))
+            return
+
+        resampling = getattr(Image, "Resampling", Image).LANCZOS
+        max_width, max_height = self.view_in_room_display_size
+        if room_img.width <= 0 or room_img.height <= 0:
+            self._show_view_in_room_message(self.tr("Preview will appear here."))
+            return
+
+        scale = min(max_width / room_img.width, max_height / room_img.height, 1.0)
+        if scale <= 0:
+            scale = 1.0
+
+        display_width = max(1, int(round(room_img.width * scale)))
+        display_height = max(1, int(round(room_img.height * scale)))
+        self.view_in_room_display_scale = scale
+        self.view_in_room_canvas_size = (display_width, display_height)
+        self.view_in_room_canvas.config(width=display_width, height=display_height)
+
+        if scale != 1.0:
+            room_display = room_img.resize((display_width, display_height), resample=resampling)
+            rug_display_size = (
+                max(1, int(round(rug_img.width * scale))),
+                max(1, int(round(rug_img.height * scale))),
+            )
+            rug_display = rug_img.resize(rug_display_size, resample=resampling)
+        else:
+            room_display = room_img.copy()
+            rug_display_size = (rug_img.width, rug_img.height)
+            rug_display = rug_img.copy()
+
+        display_x = int(round(position[0] * scale))
+        display_y = int(round(position[1] * scale))
+        max_display_x = max(0, display_width - rug_display_size[0])
+        max_display_y = max(0, display_height - rug_display_size[1])
+        display_x = max(0, min(display_x, max_display_x))
+        display_y = max(0, min(display_y, max_display_y))
+
+        self.view_in_room_canvas.delete("all")
+        self.view_in_room_canvas_room_photo = ImageTk.PhotoImage(room_display)
+        self.view_in_room_canvas_rug_photo = ImageTk.PhotoImage(rug_display)
+        self.view_in_room_canvas_room_item = self.view_in_room_canvas.create_image(
+            0,
+            0,
+            anchor="nw",
+            image=self.view_in_room_canvas_room_photo,
+        )
+        self.view_in_room_canvas_rug_item = self.view_in_room_canvas.create_image(
+            display_x,
+            display_y,
+            anchor="nw",
+            image=self.view_in_room_canvas_rug_photo,
+        )
+        self.view_in_room_canvas_message = None
+        self.view_in_room_preview_has_image = True
+        self._update_view_in_room_preview_image()
+
+    def _on_view_in_room_canvas_click(self, event: tk.Event) -> None:
+        if not getattr(self, "view_in_room_preview_has_image", False):
+            return
+        if (
+            self.view_in_room_canvas_rug_item is None
+            or self.view_in_room_rug_image is None
+            or self.view_in_room_rug_position is None
+        ):
+            return
+        scale = self.view_in_room_display_scale or 1.0
+        display_x = int(round(self.view_in_room_rug_position[0] * scale))
+        display_y = int(round(self.view_in_room_rug_position[1] * scale))
+        rug_width = max(1, int(round(self.view_in_room_rug_image.width * scale)))
+        rug_height = max(1, int(round(self.view_in_room_rug_image.height * scale)))
+        if display_x <= event.x <= display_x + rug_width and display_y <= event.y <= display_y + rug_height:
+            self.view_in_room_drag_active = True
+            self.view_in_room_drag_offset = (event.x - display_x, event.y - display_y)
+            self.view_in_room_canvas.tag_raise(self.view_in_room_canvas_rug_item)
+
+    def _on_view_in_room_canvas_drag(self, event: tk.Event) -> None:
+        if not self.view_in_room_drag_active:
+            return
+        if (
+            self.view_in_room_canvas_rug_item is None
+            or self.view_in_room_rug_image is None
+            or self.view_in_room_rug_position is None
+        ):
+            return
+        scale = self.view_in_room_display_scale or 1.0
+        display_width, display_height = self.view_in_room_canvas_size
+        rug_width = max(1, int(round(self.view_in_room_rug_image.width * scale)))
+        rug_height = max(1, int(round(self.view_in_room_rug_image.height * scale)))
+
+        new_display_x = event.x - self.view_in_room_drag_offset[0]
+        new_display_y = event.y - self.view_in_room_drag_offset[1]
+        new_display_x = max(0, min(new_display_x, max(0, display_width - rug_width)))
+        new_display_y = max(0, min(new_display_y, max(0, display_height - rug_height)))
+
+        self.view_in_room_canvas.coords(self.view_in_room_canvas_rug_item, new_display_x, new_display_y)
+
+        new_actual_x = int(round(new_display_x / scale)) if scale else int(new_display_x)
+        new_actual_y = int(round(new_display_y / scale)) if scale else int(new_display_y)
+        new_actual_x, new_actual_y = self._clamp_view_in_room_position(
+            new_actual_x,
+            new_actual_y,
+            self.view_in_room_room_image,
+            self.view_in_room_rug_image,
+        )
+        self.view_in_room_rug_position = (new_actual_x, new_actual_y)
+
+        corrected_display_x = int(round(self.view_in_room_rug_position[0] * scale))
+        corrected_display_y = int(round(self.view_in_room_rug_position[1] * scale))
+        if (corrected_display_x, corrected_display_y) != (new_display_x, new_display_y):
+            self.view_in_room_canvas.coords(
+                self.view_in_room_canvas_rug_item,
+                corrected_display_x,
+                corrected_display_y,
+            )
+
+    def _on_view_in_room_canvas_release(self, _event: tk.Event) -> None:
+        if not self.view_in_room_drag_active:
+            return
+        self.view_in_room_drag_active = False
+        self.view_in_room_drag_offset = (0, 0)
+        self._update_view_in_room_preview_image()
+
+    def _update_view_in_room_preview_image(self) -> None:
+        if self.view_in_room_room_image is None or self.view_in_room_rug_image is None:
+            self.view_in_room_preview_image = None
+            return
+        if self.view_in_room_rug_position is None:
+            self.view_in_room_preview_image = None
+            return
+        composed = self.view_in_room_room_image.copy()
+        composed.alpha_composite(self.view_in_room_rug_image, dest=self.view_in_room_rug_position)
+        self.view_in_room_preview_image = composed
 
     def _select_view_in_room_file(self, target: str) -> None:
         """Prompt the user for an image path and store it in the relevant variable."""
@@ -1704,6 +1917,7 @@ class ToolApp(tk.Tk):
             self.view_in_room_room_path.set(path)
         else:
             self.view_in_room_rug_path.set(path)
+        self.view_in_room_rug_position = None
 
     def _update_view_in_room_scale_display(self, value) -> None:
         """Update the percentage label when the rug scale slider changes."""
@@ -1752,6 +1966,10 @@ class ToolApp(tk.Tk):
             return
 
         resampling = getattr(Image, "Resampling", Image).LANCZOS
+
+        if self.view_in_room_rotate_var.get():
+            rug_img = rug_img.rotate(90, expand=True)
+
         scale_factor = max(0.2, min(2.0, float(self.view_in_room_scale_var.get()) / 100.0))
         new_width = max(1, int(round(rug_img.width * scale_factor)))
         new_height = max(1, int(round(rug_img.height * scale_factor)))
@@ -1770,20 +1988,26 @@ class ToolApp(tk.Tk):
                 fit_height = max(1, int(round(rug_resized.height * fit_ratio)))
                 rug_resized = rug_resized.resize((fit_width, fit_height), resample=resampling)
 
-        dest_x = max(0, (room_img.width - rug_resized.width) // 2)
-        dest_y = max(0, room_img.height - rug_resized.height)
+        default_x = max(0, (room_img.width - rug_resized.width) // 2)
+        default_y = max(0, room_img.height - rug_resized.height)
 
-        composed = room_img.copy()
-        composed.alpha_composite(rug_resized, dest=(dest_x, dest_y))
+        if self.view_in_room_rug_position is not None:
+            dest_x, dest_y = self._clamp_view_in_room_position(
+                self.view_in_room_rug_position[0],
+                self.view_in_room_rug_position[1],
+                room_img,
+                rug_resized,
+            )
+        else:
+            dest_x, dest_y = default_x, default_y
 
-        preview_display = composed.copy()
-        preview_display.thumbnail((720, 540), resample=resampling)
-
-        self.view_in_room_preview_image = composed
-        self.view_in_room_preview_photo = ImageTk.PhotoImage(preview_display)
-        self.view_in_room_preview_label.configure(image=self.view_in_room_preview_photo, text="")
-        self.view_in_room_preview_label.image = self.view_in_room_preview_photo
-        self.view_in_room_preview_has_image = True
+        self.view_in_room_room_image = room_img
+        self.view_in_room_rug_image = rug_resized
+        self.view_in_room_rug_position = (dest_x, dest_y)
+        self.view_in_room_preview_photo = None
+        self.view_in_room_drag_active = False
+        self.view_in_room_drag_offset = (0, 0)
+        self._render_view_in_room_canvas()
 
     def save_view_in_room_image(self) -> None:
         """Save the generated preview to disk."""
@@ -1910,11 +2134,8 @@ class ToolApp(tk.Tk):
             self.wayfair_formatter.set_translator(self.tr)
         if hasattr(self, "shared_printer_server"):
             self.shared_printer_server.set_translator(self.tr)
-        if hasattr(self, "view_in_room_preview_label") and not self.view_in_room_preview_has_image:
-            self.view_in_room_preview_label.configure(
-                text=self.tr("Preview will appear here."),
-                image="",
-            )
+        if hasattr(self, "view_in_room_canvas") and not self.view_in_room_preview_has_image:
+            self._show_view_in_room_message(self.tr("Preview will appear here."))
         self._update_sidebar_toggle_text()
         self._refresh_language_options()
 
