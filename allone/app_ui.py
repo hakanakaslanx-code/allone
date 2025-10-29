@@ -15,7 +15,7 @@ import requests
 
 import numpy as np
 
-from PIL import Image, ImageTk, ImageDraw, ImageFilter, ImageOps
+from PIL import Image, ImageTk, ImageDraw, ImageFilter, ImageOps, ImageChops
 
 from print_service import SharedLabelPrinterServer, resolve_local_ip
 
@@ -107,7 +107,13 @@ translations = {
         "Generate Preview": "Generate Preview",
         "Save Image": "Save Image",
         "Manual Place Rug": "Manual Place (4 Points)",
-        "Select Foreground (Mask)": "Draw Foreground Mask",
+        "Draw Foreground Mask": "Draw Foreground Mask",
+        "Open Large Preview": "Open Large Preview",
+        "Close Preview": "Close Preview",
+        "Brush Size": "Brush Size",
+        "Brush Mode": "Brush Mode",
+        "Paint (Hide Rug)": "Paint (Hide Rug)",
+        "Erase (Reveal Rug)": "Erase (Reveal Rug)",
         "Clear Mask": "Clear Mask",
         "Preview will appear here.": "Preview will appear here.",
         "View in Room Controls": "Canvas controls: Left click and drag to move, mouse wheel to scale, right click and drag to rotate.",
@@ -395,7 +401,13 @@ translations = {
         "Generate Preview": "Generate Preview",
         "Save Image": "Save Image",
         "Manual Place Rug": "Manual Place (4 Points)",
-        "Select Foreground (Mask)": "Draw Foreground Mask",
+        "Draw Foreground Mask": "Draw Foreground Mask",
+        "Open Large Preview": "Open Large Preview",
+        "Close Preview": "Close Preview",
+        "Brush Size": "Brush Size",
+        "Brush Mode": "Brush Mode",
+        "Paint (Hide Rug)": "Paint (Hide Rug)",
+        "Erase (Reveal Rug)": "Erase (Reveal Rug)",
         "Clear Mask": "Clear Mask",
         "Preview will appear here.": "Preview will appear here.",
         "View in Room Controls": "Canvas controls: Left click and drag to move, mouse wheel to scale, right click and drag to rotate.",
@@ -1657,7 +1669,7 @@ class ToolApp(tk.Tk):
 
         frame = card.body
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(5, weight=1)
+        frame.rowconfigure(6, weight=1)
 
         self.view_in_room_room_path = tk.StringVar()
         self.view_in_room_rug_path = tk.StringVar()
@@ -1725,27 +1737,88 @@ class ToolApp(tk.Tk):
         self.view_in_room_manual_button = manual_button
         self.register_widget(manual_button, "Manual Place Rug")
 
+        large_preview_button = ttk.Button(
+            button_frame,
+            text=self.tr("Open Large Preview"),
+            command=self._open_large_preview_window,
+        )
+        large_preview_button.pack(side="left", padx=(8, 0))
+        self.view_in_room_large_preview_button = large_preview_button
+        self.register_widget(large_preview_button, "Open Large Preview")
+
+        mask_controls = ttk.Frame(frame, style="PanelBody.TFrame")
+        mask_controls.grid(row=4, column=0, columnspan=3, sticky="we", padx=6, pady=(0, 6))
+        mask_controls.columnconfigure(1, weight=1)
+
         self.view_in_room_mask_enabled_var = tk.BooleanVar(value=False)
         mask_toggle = ttk.Checkbutton(
-            button_frame,
-            text=self.tr("Select Foreground (Mask)"),
+            mask_controls,
+            text=self.tr("Draw Foreground Mask"),
             variable=self.view_in_room_mask_enabled_var,
             command=self._on_view_in_room_mask_toggle,
-            style="Toolbutton",
         )
-        mask_toggle.pack(side="left", padx=(8, 0))
+        mask_toggle.grid(row=0, column=0, sticky="w", padx=(0, 8), pady=(4, 2))
         self.view_in_room_mask_toggle = mask_toggle
-        self.register_widget(mask_toggle, "Select Foreground (Mask)")
+        self.register_widget(mask_toggle, "Draw Foreground Mask")
 
         clear_mask_button = ttk.Button(
-            button_frame,
+            mask_controls,
             text=self.tr("Clear Mask"),
             command=self._on_view_in_room_clear_mask,
             state="disabled",
         )
-        clear_mask_button.pack(side="left", padx=(8, 0))
+        clear_mask_button.grid(row=0, column=2, sticky="e", pady=(4, 2))
         self.view_in_room_clear_mask_button = clear_mask_button
         self.register_widget(clear_mask_button, "Clear Mask")
+
+        self.view_in_room_mask_brush_size_var = tk.DoubleVar(value=24.0)
+        self.view_in_room_mask_brush_radius = 24
+        brush_size_label = ttk.Label(mask_controls, text=self.tr("Brush Size"))
+        brush_size_label.grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(2, 2))
+        self.register_widget(brush_size_label, "Brush Size")
+
+        brush_scale = ttk.Scale(
+            mask_controls,
+            orient="horizontal",
+            from_=5,
+            to=100,
+            variable=self.view_in_room_mask_brush_size_var,
+            command=self._on_view_in_room_brush_size_changed,
+        )
+        brush_scale.grid(row=1, column=1, sticky="we", padx=(0, 8), pady=(2, 2))
+        self.view_in_room_brush_scale = brush_scale
+
+        self.view_in_room_mask_brush_value_var = tk.StringVar(value="24 px")
+        brush_value_label = ttk.Label(mask_controls, textvariable=self.view_in_room_mask_brush_value_var)
+        brush_value_label.grid(row=1, column=2, sticky="e", pady=(2, 2))
+
+        brush_mode_label = ttk.Label(mask_controls, text=self.tr("Brush Mode"))
+        brush_mode_label.grid(row=2, column=0, sticky="w", padx=(0, 8), pady=(2, 2))
+        self.register_widget(brush_mode_label, "Brush Mode")
+
+        self.view_in_room_mask_mode_var = tk.StringVar(value="paint")
+        brush_mode_frame = ttk.Frame(mask_controls, style="PanelBody.TFrame")
+        brush_mode_frame.grid(row=2, column=1, columnspan=2, sticky="w", pady=(2, 2))
+
+        paint_radio = ttk.Radiobutton(
+            brush_mode_frame,
+            text=self.tr("Paint (Hide Rug)"),
+            value="paint",
+            variable=self.view_in_room_mask_mode_var,
+            command=self._on_view_in_room_brush_mode_changed,
+        )
+        paint_radio.pack(side="left")
+        self.register_widget(paint_radio, "Paint (Hide Rug)")
+
+        erase_radio = ttk.Radiobutton(
+            brush_mode_frame,
+            text=self.tr("Erase (Reveal Rug)"),
+            value="erase",
+            variable=self.view_in_room_mask_mode_var,
+            command=self._on_view_in_room_brush_mode_changed,
+        )
+        erase_radio.pack(side="left", padx=(12, 0))
+        self.register_widget(erase_radio, "Erase (Reveal Rug)")
 
         self.view_in_room_manual_prompt_var = tk.StringVar(value="")
         manual_prompt_label = ttk.Label(
@@ -1754,7 +1827,7 @@ class ToolApp(tk.Tk):
             foreground="#1d4ed8",
             wraplength=520,
         )
-        manual_prompt_label.grid(row=4, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 2))
+        manual_prompt_label.grid(row=5, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 2))
         manual_prompt_label.configure(anchor="w")
         self.view_in_room_manual_prompt_label = manual_prompt_label
 
@@ -1767,7 +1840,7 @@ class ToolApp(tk.Tk):
             borderwidth=0,
             background=canvas_bg,
         )
-        self.view_in_room_canvas.grid(row=5, column=0, columnspan=3, sticky="nsew", padx=6, pady=(8, 6))
+        self.view_in_room_canvas.grid(row=6, column=0, columnspan=3, sticky="nsew", padx=6, pady=(8, 6))
         self.view_in_room_canvas.bind("<Button-1>", self._on_view_in_room_canvas_left_click)
         self.view_in_room_canvas.bind("<B1-Motion>", self._on_view_in_room_canvas_left_drag)
         self.view_in_room_canvas.bind("<ButtonRelease-1>", self._on_view_in_room_canvas_left_release)
@@ -1778,6 +1851,7 @@ class ToolApp(tk.Tk):
         self.view_in_room_canvas.bind("<Button-4>", lambda e: self._on_view_in_room_mouse_wheel(e, delta=120))
         self.view_in_room_canvas.bind("<Button-5>", lambda e: self._on_view_in_room_mouse_wheel(e, delta=-120))
         self.view_in_room_canvas.bind("<Motion>", self._on_view_in_room_mouse_motion)
+        self.view_in_room_canvas.bind("<Leave>", self._on_view_in_room_canvas_leave)
 
         self.view_in_room_rug_selected = False
         self.view_in_room_controls_hidden = True
@@ -1793,8 +1867,15 @@ class ToolApp(tk.Tk):
         self.view_in_room_mask_has_strokes = False
         self.view_in_room_mask_last_point: Optional[Tuple[int, int]] = None
         self.view_in_room_mask_drawing = False
-        self.view_in_room_mask_brush_radius = 25
-        self.view_in_room_mask_overlay_photo: Optional[ImageTk.PhotoImage] = None
+        self.view_in_room_mask_cursor_item: Optional[int] = None
+        self.view_in_room_mask_cursor_position: Optional[Tuple[float, float]] = None
+
+        self.view_in_room_large_window: Optional[tk.Toplevel] = None
+        self.view_in_room_large_canvas: Optional[tk.Canvas] = None
+        self.view_in_room_large_canvas_photo: Optional[ImageTk.PhotoImage] = None
+        self.view_in_room_large_display_scale: float = 1.0
+        self.view_in_room_large_rug_display_bbox: Optional[Tuple[float, float, float, float]] = None
+        self.view_in_room_large_rug_display_center: Optional[Tuple[float, float]] = None
         self._update_view_in_room_mask_buttons()
 
     def _get_canvas_background(self, widget: tk.Widget) -> str:
@@ -2251,8 +2332,15 @@ class ToolApp(tk.Tk):
         x0, y0, x1, y1 = bounds
         return x0 <= x <= x1 and y0 <= y <= y1
 
-    def _on_view_in_room_mouse_motion(self, _event: tk.Event) -> None:
+    def _on_view_in_room_mouse_motion(self, event: tk.Event) -> None:
         self._record_view_in_room_mouse_activity()
+        if getattr(self, "view_in_room_mask_enabled_var", None) and self.view_in_room_mask_enabled_var.get():
+            self._update_view_in_room_mask_cursor(event.x, event.y)
+        else:
+            self._clear_view_in_room_mask_cursor()
+
+    def _on_view_in_room_canvas_leave(self, _event: tk.Event) -> None:
+        self._clear_view_in_room_mask_cursor()
 
     def _render_view_in_room_canvas(self, *, update_preview: bool = True) -> None:
         room_img = self.view_in_room_room_image
@@ -2376,6 +2464,249 @@ class ToolApp(tk.Tk):
         self._draw_manual_overlay(scale)
         self._ensure_view_in_room_control_icons()
         self._update_view_in_room_mask_buttons()
+        self._update_large_preview_if_open()
+
+    def _open_large_preview_window(self) -> None:
+        if getattr(self, "view_in_room_large_window", None) and self.view_in_room_large_window.winfo_exists():
+            try:
+                self.view_in_room_large_window.deiconify()
+                self.view_in_room_large_window.lift()
+            except tk.TclError:
+                pass
+            self._render_view_in_room_large_canvas()
+            return
+        window = tk.Toplevel(self)
+        window.title("Large Room Preview")
+        window.transient(self)
+        window.resizable(True, True)
+        window.protocol("WM_DELETE_WINDOW", self._close_large_preview_window)
+
+        content = ttk.Frame(window, padding=8)
+        content.grid(row=0, column=0, sticky="nsew")
+        window.rowconfigure(0, weight=1)
+        window.columnconfigure(0, weight=1)
+        content.rowconfigure(0, weight=1)
+        content.columnconfigure(0, weight=1)
+
+        canvas_bg = self._get_canvas_background(window)
+        canvas = tk.Canvas(content, background=canvas_bg, highlightthickness=0, borderwidth=0)
+        canvas.grid(row=0, column=0, sticky="nsew")
+
+        button_frame = ttk.Frame(content)
+        button_frame.grid(row=1, column=0, sticky="e", pady=(8, 0))
+        close_button = ttk.Button(button_frame, text=self.tr("Close Preview"), command=self._close_large_preview_window)
+        close_button.pack(side="right")
+        self.register_widget(close_button, "Close Preview")
+
+        canvas.bind("<Button-1>", self._on_large_preview_left_click)
+        canvas.bind("<B1-Motion>", self._on_large_preview_left_drag)
+        canvas.bind("<ButtonRelease-1>", self._on_large_preview_left_release)
+        canvas.bind("<Button-3>", self._on_large_preview_right_click)
+        canvas.bind("<B3-Motion>", self._on_large_preview_right_drag)
+        canvas.bind("<ButtonRelease-3>", self._on_large_preview_right_release)
+        canvas.bind("<MouseWheel>", self._on_view_in_room_mouse_wheel)
+        canvas.bind("<Button-4>", lambda e: self._on_view_in_room_mouse_wheel(e, delta=120))
+        canvas.bind("<Button-5>", lambda e: self._on_view_in_room_mouse_wheel(e, delta=-120))
+        canvas.bind("<Motion>", self._on_large_preview_mouse_motion)
+
+        self.view_in_room_large_window = window
+        self.view_in_room_large_canvas = canvas
+        self.view_in_room_large_canvas_photo = None
+        self._render_view_in_room_large_canvas()
+
+    def _close_large_preview_window(self) -> None:
+        window = getattr(self, "view_in_room_large_window", None)
+        if window and window.winfo_exists():
+            try:
+                window.destroy()
+            except tk.TclError:
+                pass
+        self.view_in_room_large_window = None
+        self.view_in_room_large_canvas = None
+        self.view_in_room_large_canvas_photo = None
+        self.view_in_room_large_rug_display_bbox = None
+        self.view_in_room_large_rug_display_center = None
+
+    def _update_large_preview_if_open(self) -> None:
+        if (
+            getattr(self, "view_in_room_large_window", None)
+            and self.view_in_room_large_window.winfo_exists()
+            and getattr(self, "view_in_room_large_canvas", None)
+        ):
+            self._render_view_in_room_large_canvas()
+
+    def _render_view_in_room_large_canvas(self) -> None:
+        window = getattr(self, "view_in_room_large_window", None)
+        canvas = getattr(self, "view_in_room_large_canvas", None)
+        if not window or not canvas or not window.winfo_exists():
+            return
+        canvas.delete("all")
+        room_img = self.view_in_room_room_image
+        if room_img is None:
+            canvas.config(width=640, height=480)
+            canvas.create_text(
+                320,
+                240,
+                text=self.tr("Preview will appear here."),
+                fill="#666666",
+                width=480,
+                justify="center",
+            )
+            self.view_in_room_large_canvas_photo = None
+            self.view_in_room_large_rug_display_bbox = None
+            self.view_in_room_large_rug_display_center = None
+            return
+        screen_w = max(200, window.winfo_screenwidth())
+        screen_h = max(200, window.winfo_screenheight())
+        max_width = int(screen_w * 0.8)
+        max_height = int(screen_h * 0.8)
+        desired_width = int(room_img.width * 1.5)
+        desired_height = int(room_img.height * 1.5)
+        target_width = max(1, min(max_width, desired_width))
+        target_height = max(1, min(max_height, desired_height))
+        scale = min(target_width / room_img.width, target_height / room_img.height)
+        if scale <= 0:
+            scale = 1.0
+        display_width = max(1, int(round(room_img.width * scale)))
+        display_height = max(1, int(round(room_img.height * scale)))
+        self.view_in_room_large_display_scale = scale
+        canvas.config(width=display_width, height=display_height)
+
+        if self.view_in_room_preview_image is not None:
+            display_image = (
+                self.view_in_room_preview_image.resize((display_width, display_height), resample=getattr(Image, "Resampling", Image).LANCZOS)
+                if scale != 1.0
+                else self.view_in_room_preview_image.copy()
+            )
+        else:
+            resampling = getattr(Image, "Resampling", Image).LANCZOS
+            display_image = (
+                room_img.resize((display_width, display_height), resample=resampling)
+                if scale != 1.0
+                else room_img.copy()
+            )
+        if getattr(self, "view_in_room_mask_enabled_var", None) and self.view_in_room_mask_enabled_var.get():
+            overlay = self._get_view_in_room_mask_overlay((display_width, display_height))
+            if overlay is not None:
+                display_image = Image.alpha_composite(display_image.convert("RGBA"), overlay)
+
+        photo = ImageTk.PhotoImage(display_image)
+        self.view_in_room_large_canvas_photo = photo
+        canvas.create_image(0, 0, anchor="nw", image=photo)
+
+        base_scale = self.view_in_room_display_scale or 1.0
+        if base_scale <= 0:
+            base_scale = 1.0
+        if self.view_in_room_rug_display_bbox is not None:
+            x0, y0, x1, y1 = self.view_in_room_rug_display_bbox
+            actual_bbox = (
+                x0 / base_scale,
+                y0 / base_scale,
+                x1 / base_scale,
+                y1 / base_scale,
+            )
+            self.view_in_room_large_rug_display_bbox = tuple(coord * scale for coord in actual_bbox)
+        else:
+            self.view_in_room_large_rug_display_bbox = None
+        if self.view_in_room_rug_display_center is not None:
+            cx, cy = self.view_in_room_rug_display_center
+            actual_center = (cx / base_scale, cy / base_scale)
+            self.view_in_room_large_rug_display_center = (actual_center[0] * scale, actual_center[1] * scale)
+        else:
+            self.view_in_room_large_rug_display_center = None
+
+        if not self.view_in_room_preview_has_image:
+            canvas.create_text(
+                display_width // 2,
+                display_height // 2,
+                text=self.tr("Preview will appear here."),
+                fill="#666666",
+                width=min(600, display_width - 40),
+                justify="center",
+            )
+
+    def _on_large_preview_left_click(self, event: tk.Event) -> None:
+        if self.view_in_room_manual_active:
+            return
+        if getattr(self, "view_in_room_mask_enabled_var", None) and self.view_in_room_mask_enabled_var.get():
+            return
+        if not getattr(self, "view_in_room_preview_has_image", False):
+            return
+        bbox = getattr(self, "view_in_room_large_rug_display_bbox", None)
+        center = getattr(self, "view_in_room_large_rug_display_center", None)
+        if bbox is None or center is None:
+            return
+        x0, y0, x1, y1 = bbox
+        if x0 <= event.x <= x1 and y0 <= event.y <= y1:
+            self.view_in_room_drag_mode = "move"
+            self.view_in_room_drag_offset = (event.x - center[0], event.y - center[1])
+            self._set_view_in_room_rug_selected(True)
+            self._record_view_in_room_mouse_activity()
+        else:
+            self._set_view_in_room_rug_selected(False)
+
+    def _on_large_preview_left_drag(self, event: tk.Event) -> None:
+        if self.view_in_room_manual_active:
+            return
+        if self.view_in_room_drag_mode != "move":
+            return
+        scale = self.view_in_room_large_display_scale or 1.0
+        if scale <= 0:
+            scale = 1.0
+        offset_x, offset_y = self.view_in_room_drag_offset
+        new_center_display = (event.x - offset_x, event.y - offset_y)
+        new_center_actual = (new_center_display[0] / scale, new_center_display[1] / scale)
+        rug_size = self._get_current_rug_size()
+        self.view_in_room_rug_center = self._clamp_rug_center(new_center_actual, rug_size)
+        self._render_view_in_room_canvas()
+
+    def _on_large_preview_left_release(self, _event: tk.Event) -> None:
+        if self.view_in_room_drag_mode == "move":
+            self.view_in_room_drag_mode = None
+            self.view_in_room_drag_offset = (0.0, 0.0)
+            self._update_view_in_room_preview_image()
+
+    def _on_large_preview_right_click(self, event: tk.Event) -> None:
+        if self.view_in_room_manual_active:
+            return
+        if getattr(self, "view_in_room_mask_enabled_var", None) and self.view_in_room_mask_enabled_var.get():
+            return
+        if not getattr(self, "view_in_room_preview_has_image", False):
+            return
+        center = getattr(self, "view_in_room_large_rug_display_center", None)
+        bbox = getattr(self, "view_in_room_large_rug_display_bbox", None)
+        if center is None or bbox is None:
+            return
+        x0, y0, x1, y1 = bbox
+        if not (x0 <= event.x <= x1 and y0 <= event.y <= y1):
+            self._set_view_in_room_rug_selected(False)
+            return
+        cx, cy = center
+        self.view_in_room_drag_mode = "rotate"
+        self.view_in_room_rotation_reference = math.degrees(math.atan2(event.y - cy, event.x - cx))
+        self.view_in_room_rotation_start_angle = self.view_in_room_rug_angle
+        self._set_view_in_room_rug_selected(True)
+        self._record_view_in_room_mouse_activity()
+
+    def _on_large_preview_right_drag(self, event: tk.Event) -> None:
+        if self.view_in_room_drag_mode != "rotate":
+            return
+        center = getattr(self, "view_in_room_large_rug_display_center", None)
+        if center is None:
+            return
+        cx, cy = center
+        current_angle = math.degrees(math.atan2(event.y - cy, event.x - cx))
+        delta = current_angle - self.view_in_room_rotation_reference
+        self.view_in_room_rug_angle = (self.view_in_room_rotation_start_angle + delta) % 360
+        self._render_view_in_room_canvas()
+
+    def _on_large_preview_right_release(self, _event: tk.Event) -> None:
+        if self.view_in_room_drag_mode == "rotate":
+            self.view_in_room_drag_mode = None
+            self._update_view_in_room_preview_image()
+
+    def _on_large_preview_mouse_motion(self, _event: tk.Event) -> None:
+        self._record_view_in_room_mouse_activity()
 
     def _on_view_in_room_mask_toggle(self) -> None:
         if not hasattr(self, "view_in_room_mask_enabled_var"):
@@ -2390,8 +2721,11 @@ class ToolApp(tk.Tk):
         if enabled:
             self.view_in_room_drag_mode = None
             self._set_view_in_room_rug_selected(False)
+            if self.view_in_room_mask_cursor_position is not None:
+                self._update_view_in_room_mask_cursor(*self.view_in_room_mask_cursor_position)
         else:
             self._finish_view_in_room_mask_stroke()
+            self._clear_view_in_room_mask_cursor()
         self._render_view_in_room_canvas()
 
     def _ensure_view_in_room_mask_image(self) -> Optional[Image.Image]:
@@ -2408,7 +2742,6 @@ class ToolApp(tk.Tk):
         self.view_in_room_mask_has_strokes = False
         self.view_in_room_mask_last_point = None
         self.view_in_room_mask_drawing = False
-        self.view_in_room_mask_overlay_photo = None
         self._update_view_in_room_mask_buttons()
 
     def _on_view_in_room_clear_mask(self) -> None:
@@ -2417,6 +2750,28 @@ class ToolApp(tk.Tk):
         self._reset_view_in_room_mask()
         self._update_view_in_room_preview_image()
         self._render_view_in_room_canvas(update_preview=False)
+
+    def _on_view_in_room_brush_size_changed(self, _value: str) -> None:
+        radius = int(round(float(self.view_in_room_mask_brush_size_var.get())))
+        radius = max(5, min(100, radius))
+        if int(round(float(self.view_in_room_mask_brush_size_var.get()))) != radius:
+            self.view_in_room_mask_brush_size_var.set(radius)
+        self.view_in_room_mask_brush_radius = radius
+        self.view_in_room_mask_brush_value_var.set(f"{radius} px")
+        if (
+            getattr(self, "view_in_room_mask_enabled_var", None)
+            and self.view_in_room_mask_enabled_var.get()
+            and self.view_in_room_mask_cursor_position is not None
+        ):
+            self._update_view_in_room_mask_cursor(*self.view_in_room_mask_cursor_position)
+
+    def _on_view_in_room_brush_mode_changed(self) -> None:
+        if (
+            getattr(self, "view_in_room_mask_enabled_var", None)
+            and self.view_in_room_mask_enabled_var.get()
+            and self.view_in_room_mask_cursor_position is not None
+        ):
+            self._update_view_in_room_mask_cursor(*self.view_in_room_mask_cursor_position)
 
     def _update_view_in_room_mask_buttons(self) -> None:
         button = getattr(self, "view_in_room_clear_mask_button", None)
@@ -2437,6 +2792,53 @@ class ToolApp(tk.Tk):
         img_x = max(0, min(room_img.width - 1, img_x))
         img_y = max(0, min(room_img.height - 1, img_y))
         return (img_x, img_y)
+
+    def _update_view_in_room_mask_cursor(self, x: float, y: float) -> None:
+        canvas = getattr(self, "view_in_room_canvas", None)
+        if not canvas:
+            return
+        scale = self.view_in_room_display_scale or 1.0
+        if scale <= 0:
+            scale = 1.0
+        radius = int(round(self.view_in_room_mask_brush_radius * scale))
+        radius = max(3, radius)
+        color = "#ef4444"
+        mode_var = getattr(self, "view_in_room_mask_mode_var", None)
+        if mode_var is not None and mode_var.get() == "erase":
+            color = "#22c55e"
+        self.view_in_room_mask_cursor_position = (x, y)
+        x0 = x - radius
+        y0 = y - radius
+        x1 = x + radius
+        y1 = y + radius
+        if self.view_in_room_mask_cursor_item is None:
+            self.view_in_room_mask_cursor_item = canvas.create_oval(
+                x0,
+                y0,
+                x1,
+                y1,
+                outline=color,
+                width=2,
+                fill="",
+                tags="mask-cursor",
+                state="disabled",
+            )
+        else:
+            canvas.coords(self.view_in_room_mask_cursor_item, x0, y0, x1, y1)
+            canvas.itemconfigure(self.view_in_room_mask_cursor_item, outline=color)
+        canvas.tag_raise(self.view_in_room_mask_cursor_item)
+
+    def _clear_view_in_room_mask_cursor(self) -> None:
+        canvas = getattr(self, "view_in_room_canvas", None)
+        if not canvas:
+            return
+        if self.view_in_room_mask_cursor_item is not None:
+            try:
+                canvas.delete(self.view_in_room_mask_cursor_item)
+            except tk.TclError:
+                pass
+            self.view_in_room_mask_cursor_item = None
+        self.view_in_room_mask_cursor_position = None
 
     def _start_view_in_room_mask_stroke(self, event: tk.Event) -> None:
         if self._ensure_view_in_room_mask_image() is None:
@@ -2473,25 +2875,38 @@ class ToolApp(tk.Tk):
             return
         brush_radius = max(1, int(self.view_in_room_mask_brush_radius))
         draw = ImageDraw.Draw(mask_img)
+        mode = getattr(self, "view_in_room_mask_mode_var", None)
+        fill_value = 0 if mode is None or mode.get() == "paint" else 255
         if start == end:
             x, y = start
             bbox = (x - brush_radius, y - brush_radius, x + brush_radius, y + brush_radius)
-            draw.ellipse(bbox, fill=0)
+            draw.ellipse(bbox, fill=fill_value)
         else:
-            draw.line([start, end], fill=0, width=brush_radius * 2)
+            draw.line([start, end], fill=fill_value, width=brush_radius * 2)
             x0, y0 = start
             x1, y1 = end
-            draw.ellipse((x0 - brush_radius, y0 - brush_radius, x0 + brush_radius, y0 + brush_radius), fill=0)
-            draw.ellipse((x1 - brush_radius, y1 - brush_radius, x1 + brush_radius, y1 + brush_radius), fill=0)
-        self.view_in_room_mask_has_strokes = True
+            draw.ellipse(
+                (x0 - brush_radius, y0 - brush_radius, x0 + brush_radius, y0 + brush_radius),
+                fill=fill_value,
+            )
+            draw.ellipse(
+                (x1 - brush_radius, y1 - brush_radius, x1 + brush_radius, y1 + brush_radius),
+                fill=fill_value,
+            )
         self._on_view_in_room_mask_changed()
 
     def _on_view_in_room_mask_changed(self) -> None:
+        mask_img = getattr(self, "view_in_room_mask_image", None)
+        if mask_img is None:
+            self.view_in_room_mask_has_strokes = False
+        else:
+            extrema = mask_img.getextrema()
+            self.view_in_room_mask_has_strokes = bool(extrema and extrema[0] < 255)
         self._update_view_in_room_mask_buttons()
         self._update_view_in_room_preview_image()
         self._render_view_in_room_canvas(update_preview=False)
 
-    def _get_view_in_room_composite_mask(self) -> Optional[Image.Image]:
+    def _get_view_in_room_rug_mask(self) -> Optional[Image.Image]:
         mask_img = getattr(self, "view_in_room_mask_image", None)
         room_img = getattr(self, "view_in_room_room_image", None)
         if mask_img is None or room_img is None:
@@ -2501,17 +2916,17 @@ class ToolApp(tk.Tk):
         if mask_img.size != room_img.size:
             resampling = getattr(Image, "Resampling", Image).NEAREST
             mask_img = mask_img.resize(room_img.size, resample=resampling)
-        return ImageOps.invert(mask_img)
+        return mask_img
 
     def _get_view_in_room_mask_overlay(self, display_size: Tuple[int, int]) -> Optional[Image.Image]:
-        mask_img = getattr(self, "view_in_room_mask_image", None)
+        mask_img = self._get_view_in_room_rug_mask()
         if mask_img is None:
             return None
         inverted = ImageOps.invert(mask_img)
         if inverted.getbbox() is None:
             return None
-        alpha = inverted.point(lambda v: int(v * 0.5))
-        overlay = Image.new("RGBA", mask_img.size, (255, 0, 0, 0))
+        alpha = inverted.point(lambda v: int(v * 0.4))
+        overlay = Image.new("RGBA", mask_img.size, (239, 68, 68, 0))
         overlay.putalpha(alpha)
         if overlay.size != display_size:
             resampling = getattr(Image, "Resampling", Image).BILINEAR
@@ -2685,15 +3100,18 @@ class ToolApp(tk.Tk):
         if room_img is None or self.view_in_room_rug_original is None:
             self.view_in_room_preview_image = None
             self.view_in_room_preview_has_image = False
+            self._update_large_preview_if_open()
             return
         if self.view_in_room_rug_center is None:
             self.view_in_room_preview_image = None
             self.view_in_room_preview_has_image = False
+            self._update_large_preview_if_open()
             return
         rug_projection = self._get_transformed_rug(self.view_in_room_rug_scale)
         if rug_projection is None:
             self.view_in_room_preview_image = None
             self.view_in_room_preview_has_image = False
+            self._update_large_preview_if_open()
             return
         rug_image = rug_projection.image
         rug_size = rug_projection.size
@@ -2704,13 +3122,15 @@ class ToolApp(tk.Tk):
         top_left_y = int(round(center_y + offset_y))
         overlay = Image.new("RGBA", room_img.size, (0, 0, 0, 0))
         overlay.paste(rug_image, (top_left_x, top_left_y), rug_image)
-        mask = self._get_view_in_room_composite_mask()
+        mask = self._get_view_in_room_rug_mask()
         if mask is not None:
-            composed = Image.composite(room_img, overlay, mask)
-        else:
-            composed = Image.alpha_composite(room_img, overlay)
+            overlay_alpha = overlay.getchannel("A")
+            combined_alpha = ImageChops.multiply(overlay_alpha, mask)
+            overlay.putalpha(combined_alpha)
+        composed = Image.alpha_composite(room_img, overlay)
         self.view_in_room_preview_image = composed
         self.view_in_room_preview_has_image = True
+        self._update_large_preview_if_open()
 
     def _select_view_in_room_file(self, target: str) -> None:
         """Prompt the user for an image path and store it in the relevant variable."""
