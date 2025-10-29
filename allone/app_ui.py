@@ -732,6 +732,8 @@ class ToolApp(tk.Tk):
         self.view_in_room_drag_offset: Tuple[float, float] = (0.0, 0.0)
         self.view_in_room_rotation_reference: float = 0.0
         self.view_in_room_rotation_start_angle: float = 0.0
+        self.view_in_room_scale_reference_distance: float = 0.0
+        self.view_in_room_scale_start_value: float = 1.0
         self.view_in_room_rug_display_bbox: Optional[Tuple[float, float, float, float]] = None
         self.view_in_room_rug_display_center: Optional[Tuple[float, float]] = None
         self.view_in_room_display_size: Tuple[int, int] = (720, 540)
@@ -1701,6 +1703,14 @@ class ToolApp(tk.Tk):
         self.view_in_room_canvas.bind("<MouseWheel>", self._on_view_in_room_mouse_wheel)
         self.view_in_room_canvas.bind("<Button-4>", lambda e: self._on_view_in_room_mouse_wheel(e, delta=120))
         self.view_in_room_canvas.bind("<Button-5>", lambda e: self._on_view_in_room_mouse_wheel(e, delta=-120))
+        self.view_in_room_canvas.bind("<Motion>", self._on_view_in_room_mouse_motion)
+
+        self.view_in_room_rug_selected = False
+        self.view_in_room_controls_hidden = True
+        self.view_in_room_control_icon_size = 26
+        self.view_in_room_control_items = {"rotate": (), "scale": ()}
+        self.view_in_room_icon_bounds = {}
+        self.view_in_room_hide_icons_job = None
 
         self.view_in_room_preview_has_image = False
         self._show_view_in_room_message(self.tr("Preview will appear here."))
@@ -1736,6 +1746,7 @@ class ToolApp(tk.Tk):
         self.view_in_room_canvas_rug_photo = None
         self.view_in_room_rug_display_bbox = None
         self.view_in_room_rug_display_center = None
+        self._clear_view_in_room_selection()
         self.view_in_room_preview_image = None
         self.view_in_room_drag_mode = None
         self.view_in_room_drag_offset = (0.0, 0.0)
@@ -1824,6 +1835,137 @@ class ToolApp(tk.Tk):
         clamped_y = min(max(center[1], half_h), max_y)
         return (clamped_x, clamped_y)
 
+    def _clear_view_in_room_selection(self) -> None:
+        self.view_in_room_rug_selected = False
+        self._hide_view_in_room_control_icons()
+
+    def _set_view_in_room_rug_selected(self, selected: bool) -> None:
+        if selected:
+            if not self.view_in_room_rug_selected:
+                self.view_in_room_rug_selected = True
+            self._show_view_in_room_control_icons()
+        else:
+            if self.view_in_room_rug_selected:
+                self.view_in_room_rug_selected = False
+            self._hide_view_in_room_control_icons()
+
+    def _show_view_in_room_control_icons(self) -> None:
+        if self.view_in_room_controls_hidden:
+            self.view_in_room_controls_hidden = False
+        self._ensure_view_in_room_control_icons()
+        self._schedule_view_in_room_icon_hide()
+
+    def _hide_view_in_room_control_icons(self) -> None:
+        self.view_in_room_controls_hidden = True
+        self._remove_view_in_room_control_icons()
+        self._cancel_view_in_room_icon_hide()
+
+    def _remove_view_in_room_control_icons(self) -> None:
+        if not hasattr(self, "view_in_room_canvas"):
+            return
+        for items in self.view_in_room_control_items.values():
+            for item in items or ():
+                if item:
+                    self.view_in_room_canvas.delete(item)
+        self.view_in_room_control_items = {"rotate": (), "scale": ()}
+        self.view_in_room_icon_bounds = {}
+
+    def _ensure_view_in_room_control_icons(self) -> None:
+        if (
+            not getattr(self, "view_in_room_canvas", None)
+            or not self.view_in_room_rug_selected
+            or self.view_in_room_controls_hidden
+        ):
+            self._remove_view_in_room_control_icons()
+            return
+        if self.view_in_room_rug_display_bbox is None:
+            self._remove_view_in_room_control_icons()
+            return
+        x0, y0, x1, y1 = self.view_in_room_rug_display_bbox
+        icon_size = self.view_in_room_control_icon_size
+        radius = icon_size / 2.0
+        margin = max(6, radius)
+
+        positions = {
+            "rotate": (x0 + margin, y0 + margin, "↻"),
+            "scale": (x1 - margin, y1 - margin, "⤡"),
+        }
+
+        for name, (cx, cy, symbol) in positions.items():
+            x_start = cx - radius
+            y_start = cy - radius
+            x_end = cx + radius
+            y_end = cy + radius
+            items = self.view_in_room_control_items.get(name)
+            if items and len(items) == 2 and all(items):
+                bg_id, text_id = items
+                self.view_in_room_canvas.coords(bg_id, x_start, y_start, x_end, y_end)
+                self.view_in_room_canvas.coords(text_id, cx, cy)
+            else:
+                bg_id = self.view_in_room_canvas.create_oval(
+                    x_start,
+                    y_start,
+                    x_end,
+                    y_end,
+                    fill="#ffffff",
+                    outline="#4a4a4a",
+                    width=1,
+                )
+                text_id = self.view_in_room_canvas.create_text(
+                    cx,
+                    cy,
+                    text=symbol,
+                    fill="#333333",
+                    font=("Segoe UI", 10, "bold"),
+                )
+                self.view_in_room_control_items[name] = (bg_id, text_id)
+            self.view_in_room_icon_bounds[name] = (x_start, y_start, x_end, y_end)
+            self.view_in_room_canvas.tag_raise(self.view_in_room_control_items[name][0])
+            self.view_in_room_canvas.tag_raise(self.view_in_room_control_items[name][1])
+
+    def _schedule_view_in_room_icon_hide(self) -> None:
+        if not getattr(self, "view_in_room_canvas", None):
+            return
+        self._cancel_view_in_room_icon_hide()
+        if not self.view_in_room_rug_selected:
+            return
+        self.view_in_room_hide_icons_job = self.view_in_room_canvas.after(
+            10000, self._hide_view_in_room_control_icons_due_to_inactivity
+        )
+
+    def _cancel_view_in_room_icon_hide(self) -> None:
+        if self.view_in_room_hide_icons_job and getattr(self, "view_in_room_canvas", None):
+            try:
+                self.view_in_room_canvas.after_cancel(self.view_in_room_hide_icons_job)
+            except tk.TclError:
+                pass
+        self.view_in_room_hide_icons_job = None
+
+    def _hide_view_in_room_control_icons_due_to_inactivity(self) -> None:
+        self.view_in_room_hide_icons_job = None
+        if not self.view_in_room_rug_selected:
+            return
+        self.view_in_room_controls_hidden = True
+        self._remove_view_in_room_control_icons()
+
+    def _record_view_in_room_mouse_activity(self) -> None:
+        if not self.view_in_room_rug_selected:
+            return
+        if self.view_in_room_controls_hidden:
+            self.view_in_room_controls_hidden = False
+        self._ensure_view_in_room_control_icons()
+        self._schedule_view_in_room_icon_hide()
+
+    def _view_in_room_icon_hit_test(self, name: str, x: float, y: float) -> bool:
+        bounds = self.view_in_room_icon_bounds.get(name)
+        if not bounds:
+            return False
+        x0, y0, x1, y1 = bounds
+        return x0 <= x <= x1 and y0 <= y <= y1
+
+    def _on_view_in_room_mouse_motion(self, _event: tk.Event) -> None:
+        self._record_view_in_room_mouse_activity()
+
     def _render_view_in_room_canvas(self) -> None:
         room_img = self.view_in_room_room_image
         if room_img is None:
@@ -1861,6 +2003,7 @@ class ToolApp(tk.Tk):
             self.view_in_room_rug_display_bbox = None
             self.view_in_room_rug_display_center = None
             self.view_in_room_preview_has_image = False
+            self._clear_view_in_room_selection()
             return
         display_scale = self.view_in_room_rug_scale * scale
         rug_display = self._get_transformed_rug(display_scale)
@@ -1870,6 +2013,7 @@ class ToolApp(tk.Tk):
             self.view_in_room_rug_display_bbox = None
             self.view_in_room_rug_display_center = None
             self.view_in_room_preview_has_image = False
+            self._clear_view_in_room_selection()
             return
         center_x = self.view_in_room_rug_center[0] * scale
         center_y = self.view_in_room_rug_center[1] * scale
@@ -1892,11 +2036,32 @@ class ToolApp(tk.Tk):
         self.view_in_room_rug_display_center = (center_x, center_y)
         self.view_in_room_preview_has_image = True
         self._update_view_in_room_preview_image()
+        self._ensure_view_in_room_control_icons()
 
     def _on_view_in_room_canvas_left_click(self, event: tk.Event) -> None:
         if not getattr(self, "view_in_room_preview_has_image", False):
             return
         if self.view_in_room_rug_display_bbox is None or self.view_in_room_rug_display_center is None:
+            return
+        if self._view_in_room_icon_hit_test("rotate", event.x, event.y):
+            center_x, center_y = self.view_in_room_rug_display_center
+            self.view_in_room_drag_mode = "rotate_icon"
+            self.view_in_room_rotation_reference = math.degrees(
+                math.atan2(event.y - center_y, event.x - center_x)
+            )
+            self.view_in_room_rotation_start_angle = self.view_in_room_rug_angle
+            self._set_view_in_room_rug_selected(True)
+            self._record_view_in_room_mouse_activity()
+            return
+        if self._view_in_room_icon_hit_test("scale", event.x, event.y):
+            center_x, center_y = self.view_in_room_rug_display_center
+            self.view_in_room_drag_mode = "scale"
+            self.view_in_room_scale_reference_distance = math.hypot(
+                event.x - center_x, event.y - center_y
+            )
+            self.view_in_room_scale_start_value = self.view_in_room_rug_scale
+            self._set_view_in_room_rug_selected(True)
+            self._record_view_in_room_mouse_activity()
             return
         x0, y0, x1, y1 = self.view_in_room_rug_display_bbox
         if x0 <= event.x <= x1 and y0 <= event.y <= y1:
@@ -1905,22 +2070,61 @@ class ToolApp(tk.Tk):
             self.view_in_room_drag_offset = (event.x - center_x, event.y - center_y)
             if self.view_in_room_canvas_rug_item is not None:
                 self.view_in_room_canvas.tag_raise(self.view_in_room_canvas_rug_item)
+            self._set_view_in_room_rug_selected(True)
+            self._record_view_in_room_mouse_activity()
+        else:
+            self._set_view_in_room_rug_selected(False)
 
     def _on_view_in_room_canvas_left_drag(self, event: tk.Event) -> None:
-        if self.view_in_room_drag_mode != "move":
+        if self.view_in_room_drag_mode not in {"move", "scale", "rotate_icon"}:
             return
-        scale = self.view_in_room_display_scale or 1.0
-        offset_x, offset_y = self.view_in_room_drag_offset
-        new_center_display = (event.x - offset_x, event.y - offset_y)
-        new_center_actual = (new_center_display[0] / scale, new_center_display[1] / scale)
-        rug_size = self._get_current_rug_size()
-        self.view_in_room_rug_center = self._clamp_rug_center(new_center_actual, rug_size)
+        self._record_view_in_room_mouse_activity()
+        if self.view_in_room_drag_mode == "move":
+            scale = self.view_in_room_display_scale or 1.0
+            offset_x, offset_y = self.view_in_room_drag_offset
+            new_center_display = (event.x - offset_x, event.y - offset_y)
+            new_center_actual = (new_center_display[0] / scale, new_center_display[1] / scale)
+            rug_size = self._get_current_rug_size()
+            self.view_in_room_rug_center = self._clamp_rug_center(new_center_actual, rug_size)
+        elif self.view_in_room_drag_mode == "scale":
+            if self.view_in_room_rug_display_center is None:
+                return
+            center_x, center_y = self.view_in_room_rug_display_center
+            start_distance = self.view_in_room_scale_reference_distance
+            if start_distance <= 0:
+                return
+            current_distance = math.hypot(event.x - center_x, event.y - center_y)
+            if current_distance <= 0:
+                return
+            ratio = current_distance / start_distance
+            new_scale = self.view_in_room_scale_start_value * ratio
+            new_scale = max(0.2, min(new_scale, 3.0))
+            self.view_in_room_rug_scale = new_scale
+            rug_size = self._get_current_rug_size()
+            if self.view_in_room_rug_center is not None:
+                self.view_in_room_rug_center = self._clamp_rug_center(
+                    self.view_in_room_rug_center, rug_size
+                )
+        elif self.view_in_room_drag_mode == "rotate_icon":
+            if self.view_in_room_rug_display_center is None:
+                return
+            center_x, center_y = self.view_in_room_rug_display_center
+            current_angle = math.degrees(math.atan2(event.y - center_y, event.x - center_x))
+            delta = current_angle - self.view_in_room_rotation_reference
+            self.view_in_room_rug_angle = (self.view_in_room_rotation_start_angle + delta) % 360
         self._render_view_in_room_canvas()
 
     def _on_view_in_room_canvas_left_release(self, _event: tk.Event) -> None:
         if self.view_in_room_drag_mode == "move":
             self.view_in_room_drag_mode = None
             self.view_in_room_drag_offset = (0.0, 0.0)
+            self._update_view_in_room_preview_image()
+        elif self.view_in_room_drag_mode == "scale":
+            self.view_in_room_drag_mode = None
+            self.view_in_room_scale_reference_distance = 0.0
+            self._update_view_in_room_preview_image()
+        elif self.view_in_room_drag_mode == "rotate_icon":
+            self.view_in_room_drag_mode = None
             self._update_view_in_room_preview_image()
 
     def _on_view_in_room_canvas_right_click(self, event: tk.Event) -> None:
@@ -1930,11 +2134,14 @@ class ToolApp(tk.Tk):
             return
         x0, y0, x1, y1 = self.view_in_room_rug_display_bbox
         if not (x0 <= event.x <= x1 and y0 <= event.y <= y1):
+            self._set_view_in_room_rug_selected(False)
             return
         center_x, center_y = self.view_in_room_rug_display_center
         self.view_in_room_drag_mode = "rotate"
         self.view_in_room_rotation_reference = math.degrees(math.atan2(event.y - center_y, event.x - center_x))
         self.view_in_room_rotation_start_angle = self.view_in_room_rug_angle
+        self._set_view_in_room_rug_selected(True)
+        self._record_view_in_room_mouse_activity()
 
     def _on_view_in_room_canvas_right_drag(self, event: tk.Event) -> None:
         if self.view_in_room_drag_mode != "rotate":
@@ -1945,6 +2152,7 @@ class ToolApp(tk.Tk):
         current_angle = math.degrees(math.atan2(event.y - center_y, event.x - center_x))
         delta = current_angle - self.view_in_room_rotation_reference
         self.view_in_room_rug_angle = (self.view_in_room_rotation_start_angle + delta) % 360
+        self._record_view_in_room_mouse_activity()
         self._render_view_in_room_canvas()
 
     def _on_view_in_room_canvas_right_release(self, _event: tk.Event) -> None:
@@ -1955,6 +2163,7 @@ class ToolApp(tk.Tk):
     def _on_view_in_room_mouse_wheel(self, event: tk.Event, delta: Optional[int] = None) -> None:
         if not getattr(self, "view_in_room_preview_has_image", False):
             return
+        self._record_view_in_room_mouse_activity()
         wheel_delta = delta if delta is not None else getattr(event, "delta", 0)
         if wheel_delta == 0:
             return
