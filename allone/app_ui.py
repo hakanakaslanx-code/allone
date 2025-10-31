@@ -220,6 +220,7 @@ translations = {
         "Generate Rinven Tag": "Generate Rinven Tag",
         "Preview unavailable": "Preview unavailable",
         "Barcode data missing; barcode will be skipped.": "Barcode data missing; barcode will be skipped.",
+        "Font not found, default font used.": "Font not found, default font used.",
         "Barcode could not be rendered and was skipped.": "Barcode could not be rendered and was skipped.",
         "Unable to render Rinven preview.": "Unable to render Rinven preview.",
         "Nothing to export yet. Add at least one field.": "Nothing to export yet. Add at least one field.",
@@ -548,6 +549,7 @@ translations = {
         "Generate Rinven Tag": "Rinven Etiketi Oluştur",
         "Preview unavailable": "Önizleme kullanılamıyor",
         "Barcode data missing; barcode will be skipped.": "Barkod verisi eksik; barkod atlanacak.",
+        "Font not found, default font used.": "Yazı tipi bulunamadı, varsayılan yazı tipi kullanıldı.",
         "Barcode could not be rendered and was skipped.": "Barkod oluşturulamadı ve atlandı.",
         "Unable to render Rinven preview.": "Rinven önizlemesi oluşturulamadı.",
         "Nothing to export yet. Add at least one field.": "Henüz dışa aktarılacak bir şey yok. En az bir alan ekleyin.",
@@ -5088,6 +5090,9 @@ class ToolApp(tk.Tk):
 
             if warning_code == "barcode_missing":
                 messages.append(self.tr("Barcode data missing; barcode will be skipped."))
+            elif warning_code == "barcode_font_warning":
+                message_text = warning_message or "Font not found, default font used."
+                messages.append(self.tr(message_text))
             elif warning_code == "barcode_error":
                 details = warning_message or self.tr("Barcode rendering failed.")
                 stack = (warning_stack or "").strip()

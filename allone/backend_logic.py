@@ -22,6 +22,54 @@ except Exception as exc:  # pragma: no cover - handled at runtime for user feedb
     ImageWriter = None  # type: ignore[assignment]
     _BARCODE_IMPORT_ERROR = exc
 
+
+if ImageWriter is not None:
+
+    class _SafeImageWriter(ImageWriter):
+        """Image writer that falls back to PIL's default font when unavailable.
+
+        The python-barcode ``ImageWriter`` attempts to load a TrueType font for
+        rendering the human readable text under the barcode. In minimal
+        environments the bundled DejaVu fonts may be missing which would
+        normally raise an :class:`OSError`. The application should keep
+        rendering the barcode even in that scenario, therefore this helper
+        wraps the font loading logic to gracefully fall back to Pillow's
+        default bitmap font and records a user-friendly warning message.
+        """
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.font_fallback_used = False
+            self.font_warning_message: Optional[str] = None
+
+        def _load_font(self, font_path=None, size=10):  # type: ignore[override]
+            candidates = []
+            if font_path:
+                candidates.append(font_path)
+
+            for candidate in candidates:
+                try:
+                    return ImageFont.truetype(candidate, size=size)
+                except OSError:
+                    logging.debug("Unable to load barcode font '%s'", candidate)
+                    continue
+
+            try:
+                font = ImageFont.truetype("DejaVuSans.ttf", size=size)
+            except OSError:
+                self.font_fallback_used = True
+                self.font_warning_message = "Font not found, default font used."
+                logging.warning(self.font_warning_message)
+                font = ImageFont.load_default()
+            return font
+
+else:  # pragma: no cover - barcode library unavailable
+
+    class _SafeImageWriter:  # type: ignore[too-few-public-methods]
+        font_fallback_used = False
+        font_warning_message: Optional[str] = None
+
+
 # This file contains no Tkinter code.
 
 # --- Helper Functions ---
@@ -504,15 +552,35 @@ def generate_barcode_task(data, fname, bc_format, output_type, dymo_size_info, b
         return (f"Error generating barcode: {dependency_issue}", None)
 
     try:
-        BarcodeClass = barcode.get_barcode_class(bc_format)
+        fallback_message: Optional[str] = None
         if output_type == "PNG":
-            saved_fname = BarcodeClass(data, writer=ImageWriter()).save(fname.replace('.png',''))
-            return (f"✅ Barcode saved as '{saved_fname}'", f"Barcode saved to:\n{os.path.abspath(saved_fname)}")
-        else: # Dymo
-            barcode_pil_img = BarcodeClass(data, writer=ImageWriter()).render()
+            barcode_img, writer = _render_barcode_image(data, bc_format)
+            fallback_message = getattr(writer, "font_warning_message", None)
+            saved_fname = fname
+            if not saved_fname.lower().endswith(".png"):
+                saved_fname = f"{saved_fname}.png"
+            barcode_img.save(saved_fname)
+            log_message = f"✅ Barcode saved as '{saved_fname}'"
+            detail_message = f"Barcode saved to:\n{os.path.abspath(saved_fname)}"
+        else:  # Dymo
+            barcode_pil_img, writer = _render_barcode_image(
+                data,
+                bc_format,
+                writer_options={
+                    "module_height": int(0.7 * 300),
+                    "quiet_zone": 6,
+                },
+            )
+            fallback_message = getattr(writer, "font_warning_message", None)
             label_image = create_label_image(barcode_pil_img, dymo_size_info, bottom_text)
             label_image.save(fname)
-            return (f"✅ Dymo Label saved as '{fname}'", f"Dymo Label saved to:\n{os.path.abspath(fname)}")
+            log_message = f"✅ Dymo Label saved as '{fname}'"
+            detail_message = f"Dymo Label saved to:\n{os.path.abspath(fname)}"
+
+        if fallback_message:
+            log_message = f"⚠️ {fallback_message}\n{log_message}"
+
+        return (log_message, detail_message)
     except Exception as e:
         return (f"Error generating barcode: {e}", None)
 
@@ -611,8 +679,28 @@ def _select_rinven_barcode_formats(data: str) -> List[str]:
     return candidates
 
 
-def _render_rinven_barcode(data: str, dpi: int) -> Tuple[Image.Image, str]:
-    """Render the barcode image for Rinven tags and return it with the format used."""
+def _render_barcode_image(
+    data: str,
+    bc_format: str,
+    writer_options: Optional[Dict[str, object]] = None,
+) -> Tuple[Image.Image, _SafeImageWriter]:
+    """Render a barcode image using the safe writer helper."""
+
+    if barcode is None or ImageWriter is None:  # pragma: no cover - defensive guard
+        raise RuntimeError("Barcode dependencies are unavailable")
+
+    writer = _SafeImageWriter()
+    barcode_instance = barcode.get_barcode_class(bc_format)(data, writer=writer)
+    barcode_img = barcode_instance.render(writer_options=writer_options)
+    return barcode_img, writer
+
+
+def _render_rinven_barcode(data: str, dpi: int) -> Tuple[Image.Image, str, Optional[str]]:
+    """Render the barcode image for Rinven tags.
+
+    Returns a tuple of ``(image, format_name, font_warning_message)`` where the
+    warning entry is ``None`` when the preferred TrueType font was available.
+    """
 
     dependency_issue = _verify_barcode_dependencies()
     if dependency_issue is not None:
@@ -621,17 +709,16 @@ def _render_rinven_barcode(data: str, dpi: int) -> Tuple[Image.Image, str]:
     errors: List[Dict[str, str]] = []
     for bc_format in _select_rinven_barcode_formats(data):
         try:
-            BarcodeClass = barcode.get_barcode_class(bc_format)
-            barcode_img = BarcodeClass(
+            barcode_img, writer = _render_barcode_image(
                 data,
-                writer=ImageWriter(),
-            ).render(
+                bc_format,
                 writer_options={
                     "module_height": int(0.7 * dpi),
                     "quiet_zone": 6,
-                }
+                },
             )
-            return barcode_img, bc_format
+            warning_message = getattr(writer, "font_warning_message", None)
+            return barcode_img, bc_format, warning_message
         except Exception as exc:  # noqa: BLE001 - external library
             message, stack = _exception_details(exc)
             errors.append({"format": bc_format, "message": message, "stack": stack})
@@ -789,11 +876,23 @@ def build_rinven_tag_image(
         barcode_format_used: Optional[str] = None
         if barcode_enabled:
             try:
-                raw_barcode, barcode_format_used = _render_rinven_barcode(
+                raw_barcode, barcode_format_used, font_warning_message = _render_rinven_barcode(
                     normalized_barcode,
                     DPI,
                 )
                 barcode_img = raw_barcode.convert("RGB")
+                if font_warning_message:
+                    has_font_warning = any(
+                        isinstance(entry, dict) and entry.get("code") == "barcode_font_warning"
+                        for entry in warnings
+                    )
+                    if not has_font_warning:
+                        warnings.append(
+                            {
+                                "code": "barcode_font_warning",
+                                "message": font_warning_message,
+                            }
+                        )
             except Exception as exc:  # pragma: no cover - GUI feedback
                 message, stack = _exception_details(exc)
                 logging.error(
