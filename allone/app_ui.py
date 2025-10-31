@@ -31,7 +31,13 @@ translations = {
         "Combined Utility Tool": "Combined Utility Tool",
         "Welcome to the Combined Utility Tool!": "Welcome to the Combined Utility Tool!",
         "File & Image Tools": "File & Image Tools",
-        "Data & Calculation": "Data & Calculation",
+        "Utility": "Utility",
+        "menu.utility": "Utility",
+        "menu.utility.rugno_formatter": "RugNo Column Formatter",
+        "menu.utility.bulk_size_processor": "Bulk Rug Size Processor",
+        "menu.utility.single_size_calculator": "Single Rug Size Calculator",
+        "menu.utility.unit_converter": "Multi-Unit Converter",
+        "menu.utility.wayfair_mapper": "Wayfair Mapper",
         "Code Generators": "Code Generators",
         "Help & About": "Help & About",
         "Language": "Language",
@@ -126,16 +132,17 @@ translations = {
         "Manual Prompt 3": "Click the bottom-right corner where the rug should sit on the floor.",
         "Manual Prompt 4": "Click the bottom-left corner where the rug should sit on the floor.",
         "Manual Placement Complete": "Rug placed. You can drag, scale, or rotate.",
-        "4. Format Numbers from File": "4. Format Numbers from File",
+        "RugNo Column Formatter": "RugNo Column Formatter",
         "Excel/CSV/TXT File:": "Excel/CSV/TXT File:",
         "Format": "Format",
-        "5. Rug Size Calculator (Single)": "5. Rug Size Calculator (Single)",
+        "Single Rug Size Calculator": "Single Rug Size Calculator",
         "Dimension (e.g., 5'2\" x 8'):": "Dimension (e.g., 5'2\" x 8'):",
         "Calculate": "Calculate",
-        "6. BULK Process Rug Sizes from File": "6. BULK Process Rug Sizes from File",
+        "Bulk Rug Size Processor": "Bulk Rug Size Processor",
         "Excel/CSV File:": "Excel/CSV File:",
         "Column Name/Letter:": "Column Name/Letter:",
         "Process File": "Process File",
+        "Wayfair Mapper": "Wayfair Mapper",
         "Rug No Checker": "Rug No Checker",
         "Mode:": "Mode:",
         "Batch Comparison": "Batch Comparison",
@@ -171,7 +178,10 @@ translations = {
         "Could not find a Rug No column in the selected file.": "Could not find a Rug No column in the selected file.",
         "Could not read the selected file: {error}": "Could not read the selected file: {error}",
         "Rug No control completed.": "Rug No control completed.",
-        "7. Unit Converter": "7. Unit Converter",
+        "Multi-Unit Converter": "Multi-Unit Converter",
+        "Centimeters (cm):": "Centimeters (cm):",
+        "Inches (in):": "Inches (in):",
+        "Feet (ft/in):": "Feet (ft/in):",
         "Conversion:": "Conversion:",
         "182 cm to ft": "182 cm to ft",
         "8. Match Image Links": "8. Match Image Links",
@@ -307,14 +317,14 @@ translations = {
             "   Converts Apple's HEIC format images to the universal JPG format.\n"
             "3. Batch Image Resizer:\n"
             "   Resizes images by a fixed width or by a percentage of the original dimensions.\n"
-            "4. Format Numbers from File:\n"
-            "   Formats items from a file's first column into a single, comma-separated line.\n"
-            "5. Rug Size Calculator (Single):\n"
-            "   Calculates dimensions in inches and square feet from a text entry (e.g., \"5'2\\\" x 8'\").\n"
-            "6. BULK Process Rug Sizes from File:\n"
-            "   Processes a column of dimensions in an Excel/CSV file, adding calculated width, height, and area.\n"
-            "7. Unit Converter:\n"
-            "   Quickly converts between units like cm, m, ft, and inches.\n"
+            "4. RugNo Column Formatter:\n"
+            "   Format rug numbers from Excel or CSV files by adding the 'RugNo' prefix to each value inside the selected column.\n"
+            "5. Single Rug Size Calculator:\n"
+            "   Calculate the exact area for a single rug size. Enter dimensions such as '5'2\" x 8'' to get square feet and square meters instantly.\n"
+            "6. Bulk Rug Size Processor:\n"
+            "   Process and normalize multiple rug sizes from an Excel or CSV file. Select the column that contains dimensions, and automatically calculate square feet and square meters for all rows.\n"
+            "7. Multi-Unit Converter:\n"
+            "   Convert between cm, inches, and feet using three separate input boxes. Type a value in any field to automatically update the others in real time.\n"
             "8. Match Image Links:\n"
             "   Matches image links from a separate file to a key column in an Excel/CSV file and adds them as new columns.\n"
             "---------------------------------\n"
@@ -325,7 +335,13 @@ translations = {
         "Combined Utility Tool": "Birleşik Araç Aracı",
         "Welcome to the Combined Utility Tool!": "Birleşik Araç Aracına hoş geldiniz!",
         "File & Image Tools": "Dosya ve Görsel Araçları",
-        "Data & Calculation": "Veri ve Hesaplama",
+        "Utility": "Araçlar",
+        "menu.utility": "Araçlar",
+        "menu.utility.rugno_formatter": "RugNo Sütun Biçimlendirici",
+        "menu.utility.bulk_size_processor": "Toplu Halı Ölçü İşleyici",
+        "menu.utility.single_size_calculator": "Tek Halı Ölçü Hesaplayıcı",
+        "menu.utility.unit_converter": "Çoklu Birim Dönüştürücü",
+        "menu.utility.wayfair_mapper": "Wayfair Eşleştirici",
         "Code Generators": "Kod Üreteçleri",
         "Help & About": "Yardım ve Hakkında",
         "Language": "Dil",
@@ -420,16 +436,17 @@ translations = {
         "Manual Prompt 3": "Click the bottom-right corner where the rug should sit on the floor.",
         "Manual Prompt 4": "Click the bottom-left corner where the rug should sit on the floor.",
         "Manual Placement Complete": "Rug placed. You can drag, scale, or rotate.",
-        "4. Format Numbers from File": "4. Dosyadan Numaraları Biçimlendir",
+        "RugNo Column Formatter": "RugNo Sütun Biçimlendirici",
         "Excel/CSV/TXT File:": "Excel/CSV/TXT Dosyası:",
         "Format": "Biçimlendir",
-        "5. Rug Size Calculator (Single)": "5. Halı Boyutu Hesaplayıcı (Tek)",
+        "Single Rug Size Calculator": "Tek Halı Ölçü Hesaplayıcı",
         "Dimension (e.g., 5'2\" x 8'):": "Ölçü (örn. 5'2\" x 8'):",
         "Calculate": "Hesapla",
-        "6. BULK Process Rug Sizes from File": "6. Dosyadan Toplu Halı Ölçüsü İşle",
+        "Bulk Rug Size Processor": "Toplu Halı Ölçü İşleyici",
         "Excel/CSV File:": "Excel/CSV Dosyası:",
         "Column Name/Letter:": "Sütun Adı/Harf:",
         "Process File": "Dosyayı İşle",
+        "Wayfair Mapper": "Wayfair Eşleştirici",
         "Rug No Checker": "Rug No Kontrolü",
         "Rug No Check": "Rug No Kontrol",
         "Mode:": "Mod:",
@@ -465,7 +482,10 @@ translations = {
         "Could not find a Rug No column in the selected file.": "Seçilen dosyada bir Halı No sütunu bulunamadı.",
         "Could not read the selected file: {error}": "Seçilen dosya okunamadı: {error}",
         "Rug No control completed.": "Rug No kontrolü tamamlandı.",
-        "7. Unit Converter": "7. Birim Dönüştürücü",
+        "Multi-Unit Converter": "Çoklu Birim Dönüştürücü",
+        "Centimeters (cm):": "Santimetre (cm):",
+        "Inches (in):": "İnç (in):",
+        "Feet (ft/in):": "Ayak (ft/in):",
         "Conversion:": "Dönüşüm:",
         "182 cm to ft": "182 cm'yi ft'ye",
         "8. Match Image Links": "8. Görsel Bağlantılarını Eşleştir",
@@ -673,16 +693,16 @@ PANEL_INFO = {
         "2. Convert HEIC to JPG": "Convert entire folders of HEIC photos into widely compatible JPG images.",
         "3. Batch Image Resizer": "Resize and compress images in bulk using width- or percentage-based rules.",
         "View in Room": "Preview rugs inside a selected room photo with scaling and transparency controls.",
-        "4. Format Numbers from File": "Clean and format numbers from Excel, CSV or text files for exports.",
-        "5. Rug Size Calculator (Single)": "Calculate exact square footage and square meters for a single rug size.",
-        "6. BULK Process Rug Sizes from File": "Normalize every rug size inside a spreadsheet using your chosen column.",
+        "RugNo Column Formatter": "Format rug numbers from Excel or CSV files by adding the 'RugNo' prefix to each value inside the selected column.",
+        "Single Rug Size Calculator": "Calculate the exact area for a single rug size. Enter dimensions such as '5'2\" x 8'' to get square feet and square meters instantly.",
+        "Bulk Rug Size Processor": "Process and normalize multiple rug sizes from an Excel or CSV file. Select the column that contains dimensions, and automatically calculate square feet and square meters for all rows.",
         "Rug No Checker": "Compare sold and master lists or search manually to verify rug numbers.",
         "Rug No Check": "Check sold rug numbers against an inventory file and report their availability.",
-        "7. Unit Converter": "Convert between popular measurements such as centimeters, inches and feet.",
+        "Multi-Unit Converter": "Convert between cm, inches, and feet using three separate input boxes. Type a value in any field to automatically update the others in real time.",
         "8. Match Image Links": "Attach hosted image URLs to product rows by matching a shared key column.",
         "8. QR Code Generator": "Generate QR codes for web links or label printers in just a few clicks.",
         "9. Barcode Generator": "Create printable barcodes in multiple formats, including DYMO labels.",
-        "Wayfair Export Formatter": "Prepare a Wayfair-ready Excel file by mapping columns and validating required fields.",
+        "Wayfair Mapper": "Prepare a Wayfair-ready Excel export by mapping local columns to required Wayfair fields and validating missing or incorrect values.",
         "Rinven Tag": "Design branded Rinven tags with collection details and optional barcode.",
         "Shared Label Printer": "Share your local DYMO printer securely with other devices on the network.",
         "Help & About": "Review update status, helpful links and support information for the app.",
@@ -692,16 +712,16 @@ PANEL_INFO = {
         "2. Convert HEIC to JPG": "Tüm HEIC fotoğraflarını tek seferde yaygın kullanılan JPG formatına dönüştürür.",
         "3. Batch Image Resizer": "Görselleri genişliğe ya da yüzdeye göre toplu biçimde yeniden boyutlandırıp sıkıştırır.",
         "View in Room": "Seçtiğiniz oda fotoğrafında halıyı ölçek ve saydamlıkla yerleştirerek önizleyin.",
-        "4. Format Numbers from File": "Excel, CSV veya TXT dosyalarındaki sayıları dışa aktarıma uygun biçimde temizler.",
-        "5. Rug Size Calculator (Single)": "Tek bir halı ölçüsünün metrekare ve fit değerlerini anında hesaplar.",
-        "6. BULK Process Rug Sizes from File": "Seçtiğiniz sütundaki tüm halı ölçülerini standart forma dönüştürür.",
+        "RugNo Column Formatter": "Excel veya CSV dosyalarındaki halı numaralarını seçtiğiniz sütundaki her değere 'RugNo' öneki ekleyerek biçimlendirin.",
+        "Single Rug Size Calculator": "Tek bir halı ölçüsünün alanını hesaplayın. '5'2\" x 8'' gibi değerler girerek metrekare ve fit sonuçlarını hemen görün.",
+        "Bulk Rug Size Processor": "Excel veya CSV dosyasındaki çoklu halı ölçülerini seçtiğiniz sütuna göre normalize edip tüm satırlar için metrekare ve fit kare hesaplarını otomatik oluşturur.",
         "Rug No Checker": "Satış ve ana listeleri karşılaştırarak halı numaralarını doğrular veya manuel arama yapar.",
         "Rug No Check": "Satılan halı numaralarını envanter dosyasıyla hızlıca karşılaştırıp durumlarını raporlar.",
-        "7. Unit Converter": "Sık kullanılan ölçü birimlerini (cm, inç, feet vb.) hızlıca çevirir.",
+        "Multi-Unit Converter": "Santimetre, inç ve ayak değerlerini üç ayrı kutuda dönüştürün; herhangi birine yazdığınızda diğerleri anında güncellensin.",
         "8. Match Image Links": "Paylaşılan anahtar sütunu kullanarak ürün satırlarına görsel bağlantıları ekler.",
         "8. QR Code Generator": "Web bağlantıları veya etiket yazıcıları için birkaç tıklamayla QR kodu üretir.",
         "9. Barcode Generator": "PNG veya DYMO dahil birden çok formatta baskıya hazır barkod oluşturur.",
-        "Wayfair Export Formatter": "Wayfair'e uygun Excel çıktısını sütun eşleştirme ve doğrulama ile hazırlayın.",
+        "Wayfair Mapper": "Yerel sütunları gerekli Wayfair alanlarına eşleştirip eksik veya hatalı değerleri doğrulayarak Wayfair'e hazır Excel çıktısı hazırlayın.",
         "Rinven Tag": "Koleksiyon bilgileri ve isteğe bağlı barkod içeren Rinven etiketleri tasarlar.",
         "Shared Label Printer": "Yerel DYMO yazıcınızı ağdaki diğer cihazlarla güvenle paylaşmanızı sağlar.",
         "Help & About": "Uygulama sürümünü, rehberleri ve destek bağlantılarını tek yerde gösterir.",
@@ -896,7 +916,7 @@ class ToolApp(tk.Tk):
         for title in (
             "File & Image Tools",
             "View in Room",
-            "Data & Calculation",
+            "Utility",
             "Rug No Check",
             "Code Generators",
             "Rinven Tag",
@@ -920,7 +940,7 @@ class ToolApp(tk.Tk):
 
         self.create_file_image_panels(self.section_frames["File & Image Tools"])
         self.create_view_in_room_tab(self.section_frames["View in Room"])
-        self.create_data_calc_panels(self.section_frames["Data & Calculation"])
+        self.create_data_calc_panels(self.section_frames["Utility"])
         self.create_rug_no_control_tab(self.section_frames["Rug No Check"])
         self.create_code_gen_panels(self.section_frames["Code Generators"])
         self.create_rinven_tag_panel(self.section_frames["Rinven Tag"])
@@ -3734,7 +3754,7 @@ class ToolApp(tk.Tk):
         parent.columnconfigure(1, weight=1)
 
         self.format_file = tk.StringVar()
-        format_card = self.create_section_card(parent, "4. Format Numbers from File")
+        format_card = self.create_section_card(parent, "RugNo Column Formatter")
         format_card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
         format_frame = format_card.body
         format_frame.columnconfigure(1, weight=1)
@@ -3756,7 +3776,7 @@ class ToolApp(tk.Tk):
 
         self.rug_dim_input = tk.StringVar()
         self.rug_result_label = tk.StringVar()
-        single_rug_card = self.create_section_card(parent, "5. Rug Size Calculator (Single)")
+        single_rug_card = self.create_section_card(parent, "Single Rug Size Calculator")
         single_rug_card.grid(row=0, column=1, sticky="nsew", padx=8, pady=8)
         single_rug_frame = single_rug_card.body
         single_rug_frame.columnconfigure(1, weight=1)
@@ -3779,7 +3799,7 @@ class ToolApp(tk.Tk):
 
         self.bulk_rug_file = tk.StringVar()
         self.bulk_rug_col = tk.StringVar(value="Size")
-        bulk_rug_card = self.create_section_card(parent, "6. BULK Process Rug Sizes from File")
+        bulk_rug_card = self.create_section_card(parent, "Bulk Rug Size Processor")
         bulk_rug_card.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
         bulk_rug_frame = bulk_rug_card.body
         bulk_rug_frame.columnconfigure(1, weight=1)
@@ -3804,31 +3824,33 @@ class ToolApp(tk.Tk):
         bulk_process.grid(row=1, column=2, padx=6, pady=6)
         self.register_widget(bulk_process, "Process File")
 
-        unit_card = self.create_section_card(parent, "7. Unit Converter")
+        unit_card = self.create_section_card(parent, "Multi-Unit Converter")
         unit_card.grid(row=1, column=1, sticky="nsew", padx=8, pady=8)
         unit_frame = unit_card.body
         unit_frame.columnconfigure(1, weight=1)
 
-        self.unit_input = tk.StringVar(value=self.tr("182 cm to ft"))
-        self.unit_result_label = tk.StringVar()
+        self.unit_cm_var = tk.StringVar()
+        self.unit_in_var = tk.StringVar()
+        self.unit_ft_var = tk.StringVar()
+        self._unit_update_in_progress = False
 
-        conversion_label = ttk.Label(unit_frame, text=self.tr("Conversion:"))
-        conversion_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
-        self.register_widget(conversion_label, "Conversion:")
-        ttk.Entry(unit_frame, textvariable=self.unit_input, width=20).grid(row=0, column=1, padx=6, pady=6, sticky="we")
-        convert_button = ttk.Button(unit_frame, text=self.tr("Convert"), command=self.convert_units)
-        convert_button.grid(row=0, column=2, padx=6, pady=6)
-        self.register_widget(convert_button, "Convert")
-        ttk.Label(unit_frame, textvariable=self.unit_result_label, font=("Helvetica", 10, "bold")).grid(
-            row=1,
-            column=0,
-            columnspan=3,
-            sticky="w",
-            padx=6,
-            pady=(4, 0),
-        )
+        unit_rows = [
+            ("Centimeters (cm):", self.unit_cm_var, "cm"),
+            ("Inches (in):", self.unit_in_var, "in"),
+            ("Feet (ft/in):", self.unit_ft_var, "ft"),
+        ]
+        for row_index, (label_key, var, unit_key) in enumerate(unit_rows):
+            label = ttk.Label(unit_frame, text=self.tr(label_key))
+            label.grid(row=row_index, column=0, sticky="w", padx=6, pady=6)
+            self.register_widget(label, label_key)
+            entry = ttk.Entry(unit_frame, textvariable=var)
+            entry.grid(row=row_index, column=1, sticky="we", padx=6, pady=6)
+            entry.bind("<KeyRelease>", lambda _event, key=unit_key: self._on_unit_field_change(key))
+            entry.bind("<FocusOut>", lambda _event, key=unit_key: self._on_unit_field_change(key))
+            entry.bind("<<Paste>>", lambda _event, key=unit_key: self._on_unit_field_change(key))
+            entry.bind("<<Cut>>", lambda _event, key=unit_key: self._on_unit_field_change(key))
 
-        wayfair_card = self.create_section_card(parent, "Wayfair Export Formatter")
+        wayfair_card = self.create_section_card(parent, "Wayfair Mapper")
         wayfair_card.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
         wayfair_frame = wayfair_card.body
         wayfair_frame.columnconfigure(0, weight=1)
@@ -4758,10 +4780,62 @@ class ToolApp(tk.Tk):
         else:
             self.rug_manual_history_var.set(self.tr("No recent searches yet."))
 
-    def convert_units(self):
-        input_str = self.unit_input.get()
-        result_str = backend.convert_units_logic(input_str)
-        self.unit_result_label.set(result_str)
+    def _on_unit_field_change(self, source_unit: str) -> None:
+        """Synchronize unit inputs when one of the fields changes."""
+
+        if getattr(self, "_unit_update_in_progress", False):
+            return
+
+        var_map = {
+            "cm": getattr(self, "unit_cm_var", None),
+            "in": getattr(self, "unit_in_var", None),
+            "ft": getattr(self, "unit_ft_var", None),
+        }
+
+        source_var = var_map.get(source_unit)
+        if source_var is None:
+            return
+
+        value = source_var.get().strip()
+        if not value:
+            self._unit_update_in_progress = True
+            try:
+                for key, var in var_map.items():
+                    if var is None or key == source_unit:
+                        continue
+                    var.set("")
+            finally:
+                self._unit_update_in_progress = False
+            return
+
+        try:
+            if source_unit == "cm":
+                cm_value = float(value)
+            elif source_unit == "in":
+                cm_value = float(value) * 2.54
+            else:
+                feet_value = backend.parse_feet_inches(value)
+                if feet_value is None:
+                    feet_value = float(value)
+                cm_value = feet_value * 30.48
+        except Exception:
+            return
+
+        inches_total = cm_value / 2.54
+        feet_total = inches_total / 12.0
+
+        self._unit_update_in_progress = True
+        try:
+            if source_unit != "cm" and var_map["cm"] is not None:
+                var_map["cm"].set(f"{cm_value:.2f}")
+            if source_unit != "in" and var_map["in"] is not None:
+                var_map["in"].set(f"{inches_total:.2f}")
+            if source_unit != "ft" and var_map["ft"] is not None:
+                whole_feet = int(feet_total // 1)
+                remaining_inches = inches_total - (whole_feet * 12)
+                var_map["ft"].set(f"{whole_feet}' {remaining_inches:.2f}\"")
+        finally:
+            self._unit_update_in_progress = False
 
     def start_add_image_links(self):
         input_path = self.input_excel_file.get()

@@ -20,7 +20,7 @@ def main() -> None:
     """Run the Wayfair formatter widget in a standalone Tkinter window."""
 
     root = tk.Tk()
-    root.title("AllOne - Wayfair Export Formatter")
+    root.title("AllOne - Wayfair Mapper")
     root.geometry("900x700")
 
     notebook = ttk.Notebook(root)
