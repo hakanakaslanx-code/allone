@@ -5051,26 +5051,50 @@ class ToolApp(tk.Tk):
         if include_barcode_flag and not should_draw_barcode:
             metadata = dict(metadata or {})
             warnings = list(metadata.get("warnings", []))
-            if "barcode_missing" not in warnings:
-                warnings.append("barcode_missing")
+
+            def _has_warning(code: str) -> bool:
+                for entry in warnings:
+                    if isinstance(entry, str) and entry == code:
+                        return True
+                    if isinstance(entry, dict) and entry.get("code") == code:
+                        return True
+                return False
+
+            if not _has_warning("barcode_missing"):
+                warnings.append({"code": "barcode_missing"})
             metadata["warnings"] = warnings
         self.rinven_preview_metadata = metadata
         self._apply_rinven_warnings(metadata)
 
     def _apply_rinven_warnings(self, metadata: Optional[Dict[str, object]]):
-        warnings: List[str] = []
+        warnings: List[object] = []
         has_content = False
         if metadata:
             warnings = list(metadata.get("warnings", []))  # type: ignore[arg-type]
             has_content = bool(metadata.get("has_content"))
 
         messages: List[str] = []
-        for code in warnings:
-            if code == "barcode_missing":
+        for entry in warnings:
+            warning_code: Optional[str] = None
+            warning_message: Optional[str] = None
+            warning_stack: Optional[str] = None
+
+            if isinstance(entry, str):
+                warning_code = entry
+            elif isinstance(entry, dict):
+                warning_code = entry.get("code")  # type: ignore[arg-type]
+                warning_message = entry.get("message")  # type: ignore[arg-type]
+                warning_stack = entry.get("stack")  # type: ignore[arg-type]
+
+            if warning_code == "barcode_missing":
                 messages.append(self.tr("Barcode data missing; barcode will be skipped."))
-            elif code == "barcode_error":
-                messages.append(self.tr("Barcode could not be rendered and was skipped."))
-            elif code == "render_error":
+            elif warning_code == "barcode_error":
+                details = warning_message or self.tr("Barcode rendering failed.")
+                stack = (warning_stack or "").strip()
+                if stack:
+                    details = f"{details}\n{stack}"
+                messages.append(details)
+            elif warning_code == "render_error":
                 messages.append(self.tr("Unable to render Rinven preview."))
 
         if not has_content:
