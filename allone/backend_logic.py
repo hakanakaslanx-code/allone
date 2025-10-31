@@ -5,7 +5,7 @@ import sys
 import logging
 import shutil
 from pathlib import Path
-from typing import Iterable, List, Optional, Set
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
@@ -551,8 +551,69 @@ def _fit_font(draw, text, preferred_names, max_width, initial_size, min_size):
     return _load_font(preferred_names, size=min_size), min_size
 
 
-def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
-    """Creates a Rinven tag label sized for a portrait Dymo 30256 (2.31" x 4") label."""
+def _normalize_tag_value(value: Optional[str]) -> str:
+    """Normalize text for Rinven tag rendering by trimming and collapsing spaces."""
+
+    if value is None:
+        return ""
+
+    text = str(value).replace("\u00a0", " ")
+    collapsed = " ".join(text.split())
+    return collapsed.strip()
+
+
+def _prepare_rinven_fields(
+    details: Dict[str, str], only_filled_fields: bool
+) -> Tuple[Dict[str, str], List[Tuple[str, str]], List[str]]:
+    """Return normalized details and ordered field/value pairs for rendering."""
+
+    normalized_details: Dict[str, str] = {}
+    for key, value in details.items():
+        normalized_details[key] = _normalize_tag_value(value)
+
+    field_order: List[Tuple[str, str]] = [
+        ("design", "Design"),
+        ("color", "Color"),
+        ("size", "Size"),
+        ("origin", "Origin"),
+        ("style", "Style"),
+        ("content", "Content"),
+        ("type", "Type"),
+        ("rug_no", "Rug #"),
+    ]
+
+    included_keys: List[str] = []
+    field_entries: List[Tuple[str, str]] = []
+
+    for key, label in field_order:
+        value = normalized_details.get(key, "")
+        if value:
+            field_entries.append((label, value))
+            included_keys.append(key)
+        elif not only_filled_fields:
+            field_entries.append((label, ""))
+
+    return normalized_details, field_entries, included_keys
+
+
+def build_rinven_tag_image(
+    details: Dict[str, str],
+    include_barcode: bool,
+    barcode_data: Optional[str],
+    only_filled_fields: bool = True,
+):
+    """Render the Rinven tag image and return it with rendering metadata."""
+
+    normalized_details, field_entries, included_keys = _prepare_rinven_fields(
+        details, only_filled_fields
+    )
+
+    normalized_barcode = _normalize_tag_value(barcode_data)
+    barcode_enabled = bool(include_barcode and normalized_barcode)
+
+    warnings: List[str] = []
+    if include_barcode and not normalized_barcode:
+        warnings.append("barcode_missing")
 
     DPI = 300
     width_in = 2.3125
@@ -587,7 +648,9 @@ def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
 
         if template_image is not None:
             if template_image.size != (width_px, height_px):
-                template_image = template_image.resize((width_px, height_px), Image.Resampling.LANCZOS)
+                template_image = template_image.resize(
+                    (width_px, height_px), Image.Resampling.LANCZOS
+                )
             canvas = template_image.copy()
         else:
             canvas = Image.new("RGB", (width_px, height_px), "white")
@@ -613,12 +676,14 @@ def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
         current_y = padding + top_extra_padding
 
         barcode_img = None
-        if include_barcode and barcode_data:
+        if barcode_enabled:
             last_barcode_error: Optional[Exception] = None
             for bc_format in ("code128", "code39"):
                 try:
                     BarcodeClass = barcode.get_barcode_class(bc_format)
-                    barcode_img = BarcodeClass(barcode_data, writer=ImageWriter()).render(
+                    barcode_img = BarcodeClass(
+                        normalized_barcode, writer=ImageWriter()
+                    ).render(
                         writer_options={"module_height": int(0.7 * DPI), "quiet_zone": 6}
                     )
                     break
@@ -630,16 +695,19 @@ def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
                     "Skipping barcode rendering for Rinven tag due to error: %s",
                     last_barcode_error,
                 )
+                warnings.append("barcode_error")
 
         if barcode_img is not None:
             max_barcode_width = width_px - (padding * 2)
             max_barcode_height = int(height_px * 0.26)
-            barcode_img.thumbnail((max_barcode_width, max_barcode_height), Image.Resampling.LANCZOS)
+            barcode_img.thumbnail(
+                (max_barcode_width, max_barcode_height), Image.Resampling.LANCZOS
+            )
             barcode_x = (width_px - barcode_img.width) // 2
             canvas.paste(barcode_img, (barcode_x, current_y))
             current_y += barcode_img.height + int(0.05 * DPI)
 
-        collection_name = details.get("collection", "").strip()
+        collection_name = normalized_details.get("collection", "")
         if collection_name:
             title_max_width = width_px - (padding * 2)
             min_title_size = max(int(0.1 * DPI), 30)
@@ -661,61 +729,54 @@ def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
         field_padding_top = max(current_y, padding)
         current_y = field_padding_top
 
-        fields = [
-            ("Design", details.get("design", "")),
-            ("Color", details.get("color", "")),
-            ("Size", details.get("size", "")),
-            ("Origin", details.get("origin", "")),
-            ("Style", details.get("style", "")),
-            ("Content", details.get("content", "")),
-            ("Type", details.get("type", "")),
-            ("Rug #", details.get("rug_no", "")),
-        ]
-
         base_colon_gap = int(0.035 * DPI)
         base_value_gap = int(0.06 * DPI)
         available_line_width = width_px - (padding * 2)
         available_height = height_px - padding - current_y
         min_text_size = max(int(0.06 * DPI), 18)
 
-        def gap_values(font_size):
-            colon_gap = max(base_colon_gap, int(font_size * 0.2))
-            value_gap = max(base_value_gap, int(font_size * 0.4))
-            return colon_gap, value_gap
+        max_label_width = colon_width = line_height = colon_gap = value_gap = 0
 
-        def measurements(font, font_size):
-            colon_gap, value_gap = gap_values(font_size)
-            colon_bbox = draw.textbbox((0, 0), ":", font=font)
-            colon_width = colon_bbox[2] - colon_bbox[0]
-            line_height = int(font_size * 1.35)
-            widest_label = 0
-            fits_width = True
-            for label, value in fields:
-                label_bbox = draw.textbbox((0, 0), label, font=font)
-                label_width = label_bbox[2] - label_bbox[0]
-                value_text = value.strip()
-                value_bbox = draw.textbbox((0, 0), value_text, font=font)
-                value_width = value_bbox[2] - value_bbox[0]
-                line_width = label_width + colon_gap + colon_width + value_gap + value_width
-                if line_width > available_line_width:
-                    fits_width = False
-                    break
-                widest_label = max(widest_label, label_width)
-            return fits_width, widest_label, colon_width, line_height, colon_gap, value_gap
+        if field_entries:
 
-        text_font = _load_font(text_pref_fonts, size=text_font_size)
-        (
-            fits_width,
-            max_label_width,
-            colon_width,
-            line_height,
-            colon_gap,
-            value_gap,
-        ) = measurements(text_font, text_font_size)
-        total_height = line_height * len(fields)
+            def gap_values(font_size):
+                local_colon_gap = max(base_colon_gap, int(font_size * 0.2))
+                local_value_gap = max(base_value_gap, int(font_size * 0.4))
+                return local_colon_gap, local_value_gap
 
-        while (not fits_width or total_height > available_height) and text_font_size > min_text_size:
-            text_font_size -= 1
+            def measurements(font, font_size):
+                local_colon_gap, local_value_gap = gap_values(font_size)
+                colon_bbox = draw.textbbox((0, 0), ":", font=font)
+                local_colon_width = colon_bbox[2] - colon_bbox[0]
+                local_line_height = int(font_size * 1.35)
+                widest_label = 0
+                fits_width = True
+                for label, value in field_entries:
+                    label_bbox = draw.textbbox((0, 0), label, font=font)
+                    label_width = label_bbox[2] - label_bbox[0]
+                    value_text = value.strip()
+                    value_bbox = draw.textbbox((0, 0), value_text, font=font)
+                    value_width = value_bbox[2] - value_bbox[0]
+                    line_width = (
+                        label_width
+                        + local_colon_gap
+                        + local_colon_width
+                        + local_value_gap
+                        + value_width
+                    )
+                    if line_width > available_line_width:
+                        fits_width = False
+                        break
+                    widest_label = max(widest_label, label_width)
+                return (
+                    fits_width,
+                    widest_label,
+                    local_colon_width,
+                    local_line_height,
+                    local_colon_gap,
+                    local_value_gap,
+                )
+
             text_font = _load_font(text_pref_fonts, size=text_font_size)
             (
                 fits_width,
@@ -725,45 +786,103 @@ def generate_rinven_tag_label(details, fname, include_barcode, barcode_data):
                 colon_gap,
                 value_gap,
             ) = measurements(text_font, text_font_size)
-            total_height = line_height * len(fields)
+            total_height = line_height * len(field_entries)
 
-        if not fits_width or total_height > available_height:
-            text_font, text_font_size = _fit_font(
-                draw,
-                max((value.strip() for _, value in fields), key=len, default=""),
-                text_pref_fonts,
-                available_line_width,
-                text_font_size,
-                min_text_size,
-            )
-            (
-                fits_width,
-                max_label_width,
-                colon_width,
-                line_height,
-                colon_gap,
-                value_gap,
-            ) = measurements(text_font, text_font_size)
-            total_height = line_height * len(fields)
+            while (not fits_width or total_height > available_height) and text_font_size > min_text_size:
+                text_font_size -= 1
+                text_font = _load_font(text_pref_fonts, size=text_font_size)
+                (
+                    fits_width,
+                    max_label_width,
+                    colon_width,
+                    line_height,
+                    colon_gap,
+                    value_gap,
+                ) = measurements(text_font, text_font_size)
+                total_height = line_height * len(field_entries)
 
-        for label, value in fields:
-            label_text = label
-            value_text = value.strip()
-            draw.text((padding, current_y), label_text, fill="black", font=text_font)
-            colon_x = padding + max_label_width + colon_gap
-            draw.text((colon_x, current_y), ":", fill="black", font=text_font)
-            value_x = colon_x + colon_width + value_gap
-            draw.text((value_x, current_y), value_text, fill="black", font=text_font)
-            current_y += line_height
+            if not fits_width or total_height > available_height:
+                longest_value = max(
+                    (value.strip() for _, value in field_entries),
+                    key=len,
+                    default="",
+                )
+                text_font, text_font_size = _fit_font(
+                    draw,
+                    longest_value,
+                    text_pref_fonts,
+                    available_line_width,
+                    text_font_size,
+                    min_text_size,
+                )
+                (
+                    fits_width,
+                    max_label_width,
+                    colon_width,
+                    line_height,
+                    colon_gap,
+                    value_gap,
+                ) = measurements(text_font, text_font_size)
+                total_height = line_height * len(field_entries)
+
+            for label, value in field_entries:
+                label_text = label
+                value_text = value.strip()
+                draw.text((padding, current_y), label_text, fill="black", font=text_font)
+                colon_x = padding + max_label_width + colon_gap
+                draw.text((colon_x, current_y), ":", fill="black", font=text_font)
+                value_x = colon_x + colon_width + value_gap
+                draw.text((value_x, current_y), value_text, fill="black", font=text_font)
+                current_y += line_height
+
+        has_content = bool(
+            collection_name or barcode_enabled or any(value for _, value in field_entries)
+        )
+
+        metadata = {
+            "normalized_details": normalized_details,
+            "included_field_keys": included_keys,
+            "warnings": warnings,
+            "barcode_used": barcode_enabled,
+            "has_content": has_content,
+        }
+
+        return canvas, metadata
+
+    except Exception:
+        logging.exception("Error rendering Rinven tag")
+        raise
+
+
+def generate_rinven_tag_label(
+    details,
+    fname,
+    include_barcode,
+    barcode_data,
+    only_filled_fields: bool = True,
+):
+    """Creates a Rinven tag label sized for a portrait Dymo 30256 (2.31" x 4") label."""
+
+    try:
+        canvas, metadata = build_rinven_tag_image(
+            details,
+            include_barcode,
+            barcode_data,
+            only_filled_fields=only_filled_fields,
+        )
+
+        if not metadata.get("has_content"):
+            return ("⚠️ No content available to export.", None, metadata)
 
         canvas.save(fname)
         return (
             f"✅ Rinven tag saved as '{fname}'",
             f"Rinven tag saved to:\n{os.path.abspath(fname)}",
+            metadata,
         )
-    except Exception as exc:
+    except Exception as exc:  # pragma: no cover - GUI feedback
         logging.exception("Error generating Rinven tag")
-        return (f"Error generating Rinven tag: {exc}", None)
+        return (f"Error generating Rinven tag: {exc}", None, {"warnings": ["render_error"]})
 
 def add_image_links_task(input_path, links_path, key_col, log_callback, completion_callback):
     log_callback("Starting process to add image links...")

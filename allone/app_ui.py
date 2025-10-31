@@ -214,8 +214,32 @@ translations = {
         "Type:": "Type:",
         "Rug #:": "Rug #:",
         "Include Barcode": "Include Barcode",
+        "Include Only Filled Fields": "Include Only Filled Fields",
+        "Live Preview": "Live Preview",
         "Barcode Data:": "Barcode Data:",
         "Generate Rinven Tag": "Generate Rinven Tag",
+        "Preview unavailable": "Preview unavailable",
+        "Barcode data missing; barcode will be skipped.": "Barcode data missing; barcode will be skipped.",
+        "Barcode could not be rendered and was skipped.": "Barcode could not be rendered and was skipped.",
+        "Unable to render Rinven preview.": "Unable to render Rinven preview.",
+        "Nothing to export yet. Add at least one field.": "Nothing to export yet. Add at least one field.",
+        "Map this field": "Map this field",
+        "Compliance Panel": "Compliance Panel",
+        "Export Only Mapped Fields": "Export Only Mapped Fields",
+        "Export Compliant File": "Export Compliant File",
+        "Field not selected.": "Field not selected.",
+        "Mapping not selected.": "Mapping not selected.",
+        "Width and Length must be selected.": "Width and Length must be selected.",
+        "Contains empty cells.": "Contains empty cells.",
+        "Load an Excel file to evaluate compliance.": "Load an Excel file to evaluate compliance.",
+        "Enable mappings to begin validation.": "Enable mappings to begin validation.",
+        "All required fields mapped and filled.": "All required fields mapped and filled.",
+        "Required fields needing attention:": "Required fields needing attention:",
+        "Export cancelled: missing required mappings.": "Export cancelled: missing required mappings.",
+        "Export cancelled: required fields contain empty values.": "Export cancelled: required fields contain empty values.",
+        "No fields selected to export.": "No fields selected to export.",
+        "Export summary: {rows} rows | {fields} fields exported | Skipped: {skipped}": "Export summary: {rows} rows | {fields} fields exported | Skipped: {skipped}",
+        "None": "None",
         "Shared Label Printer": "Shared Label Printer",
         "SHARED_PRINTER_DESCRIPTION": (
             "Expose the locally connected DYMO LabelWriter 450 to other computers on your Wi-Fi/LAN.\n"
@@ -518,8 +542,32 @@ translations = {
         "Type:": "Tür:",
         "Rug #:": "Halı No:",
         "Include Barcode": "Barkodu Dahil Et",
+        "Include Only Filled Fields": "Yalnızca dolu alanları dahil et",
+        "Live Preview": "Canlı Önizleme",
         "Barcode Data:": "Barkod Verisi:",
         "Generate Rinven Tag": "Rinven Etiketi Oluştur",
+        "Preview unavailable": "Önizleme kullanılamıyor",
+        "Barcode data missing; barcode will be skipped.": "Barkod verisi eksik; barkod atlanacak.",
+        "Barcode could not be rendered and was skipped.": "Barkod oluşturulamadı ve atlandı.",
+        "Unable to render Rinven preview.": "Rinven önizlemesi oluşturulamadı.",
+        "Nothing to export yet. Add at least one field.": "Henüz dışa aktarılacak bir şey yok. En az bir alan ekleyin.",
+        "Map this field": "Bu alanı eşle",
+        "Compliance Panel": "Uygunluk Paneli",
+        "Export Only Mapped Fields": "Yalnızca eşlenen alanları dışa aktar",
+        "Export Compliant File": "Uygun dışa aktar",
+        "Field not selected.": "Alan seçilmedi.",
+        "Mapping not selected.": "Eşleme seçilmedi.",
+        "Width and Length must be selected.": "Genişlik ve uzunluk seçilmelidir.",
+        "Contains empty cells.": "Boş hücreler içeriyor.",
+        "Load an Excel file to evaluate compliance.": "Uygunluğu değerlendirmek için bir Excel dosyası yükleyin.",
+        "Enable mappings to begin validation.": "Doğrulamayı başlatmak için eşlemeleri etkinleştirin.",
+        "All required fields mapped and filled.": "Gerekli tüm alanlar eşlendi ve dolduruldu.",
+        "Required fields needing attention:": "Dikkat gerektiren zorunlu alanlar:",
+        "Export cancelled: missing required mappings.": "Dışa aktarma iptal edildi: zorunlu eşlemeler eksik.",
+        "Export cancelled: required fields contain empty values.": "Dışa aktarma iptal edildi: zorunlu alanlar boş değer içeriyor.",
+        "No fields selected to export.": "Dışa aktarılacak alan seçilmedi.",
+        "Export summary: {rows} rows | {fields} fields exported | Skipped: {skipped}": "Dışa aktarma özeti: {rows} satır | {fields} alan aktarıldı | Atlanan: {skipped}",
+        "None": "Yok",
         "Shared Label Printer": "Paylaşılan Etiket Yazıcısı",
         "SHARED_PRINTER_DESCRIPTION": (
             "Yerel olarak bağlı DYMO LabelWriter 450 yazıcısını Wi-Fi/LAN üzerindeki diğer bilgisayarlarla paylaşın.\n"
@@ -773,6 +821,9 @@ class ToolApp(tk.Tk):
         self.view_in_room_preview_photo: Optional[ImageTk.PhotoImage] = None
         self.view_in_room_preview_image: Optional[Image.Image] = None
         self.view_in_room_preview_has_image = False
+        self.rinven_preview_photo: Optional[ImageTk.PhotoImage] = None
+        self.rinven_preview_metadata: Optional[dict] = None
+        self._rinven_preview_after: Optional[str] = None
         self.view_in_room_room_image: Optional[Image.Image] = None
         self.view_in_room_rug_original: Optional[Image.Image] = None
         self.view_in_room_rug_processed_cache: Dict[str, Image.Image] = {}
@@ -4439,6 +4490,8 @@ class ToolApp(tk.Tk):
         self.rinven_barcode_data = tk.StringVar()
         self.rinven_filename = tk.StringVar(value="rinven_tag.png")
         self.rinven_include_barcode = tk.BooleanVar(value=False)
+        self.rinven_only_filled = tk.BooleanVar(value=True)
+        self.rinven_warning_var = tk.StringVar()
 
         self.rinven_field_widgets = {}
 
@@ -4470,37 +4523,81 @@ class ToolApp(tk.Tk):
 
         row_offset = len(fields)
 
+        only_filled_check = ttk.Checkbutton(
+            frame,
+            text=self.tr("Include Only Filled Fields"),
+            variable=self.rinven_only_filled,
+            command=self._queue_rinven_preview_update,
+        )
+        only_filled_check.grid(row=row_offset, column=0, columnspan=2, sticky="w", padx=6, pady=(10, 4))
+        self.register_widget(only_filled_check, "Include Only Filled Fields")
+        row_offset += 1
+
         barcode_check = ttk.Checkbutton(
             frame,
             text=self.tr("Include Barcode"),
             variable=self.rinven_include_barcode,
             command=self.toggle_rinven_barcode,
         )
-        barcode_check.grid(row=row_offset, column=0, columnspan=2, sticky="w", padx=6, pady=(12, 4))
+        barcode_check.grid(row=row_offset, column=0, columnspan=2, sticky="w", padx=6, pady=(4, 4))
         self.register_widget(barcode_check, "Include Barcode")
+        row_offset += 1
 
         barcode_label = ttk.Label(frame, text=self.tr("Barcode Data:"))
-        barcode_label.grid(row=row_offset + 1, column=0, sticky="e", padx=6, pady=4)
+        barcode_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
         self.register_widget(barcode_label, "Barcode Data:")
 
         self.rinven_barcode_entry = ttk.Entry(frame, textvariable=self.rinven_barcode_data, state="disabled")
-        self.rinven_barcode_entry.grid(row=row_offset + 1, column=1, sticky="we", padx=6, pady=4)
+        self.rinven_barcode_entry.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
+        row_offset += 1
+
+        preview_frame = ttk.LabelFrame(frame, text=self.tr("Live Preview"))
+        self.register_widget(preview_frame, "Live Preview")
+        preview_frame.grid(row=row_offset, column=0, columnspan=2, sticky="nsew", padx=6, pady=(8, 4))
+        preview_frame.columnconfigure(0, weight=1)
+
+        self.rinven_preview_label = ttk.Label(preview_frame)
+        self.rinven_preview_label.grid(row=0, column=0, padx=6, pady=6)
+        row_offset += 1
+
+        self.rinven_warning_label = tk.Label(
+            frame,
+            textvariable=self.rinven_warning_var,
+            fg="#7a5d00",
+            bg="#fff4cc",
+            anchor="w",
+            justify="left",
+            wraplength=360,
+            relief="flat",
+        )
+        self.rinven_warning_label.grid(
+            row=row_offset, column=0, columnspan=2, sticky="we", padx=6, pady=(0, 4)
+        )
+        self.rinven_warning_label.grid_remove()
+        row_offset += 1
 
         filename_label = ttk.Label(frame, text=self.tr("Filename:"))
-        filename_label.grid(row=row_offset + 2, column=0, sticky="e", padx=6, pady=4)
+        filename_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
         self.register_widget(filename_label, "Filename:")
 
         ttk.Entry(frame, textvariable=self.rinven_filename).grid(
-            row=row_offset + 2, column=1, sticky="we", padx=6, pady=4
+            row=row_offset, column=1, sticky="we", padx=6, pady=4
         )
+        row_offset += 1
 
         generate_button = ttk.Button(
             frame,
             text=self.tr("Generate Rinven Tag"),
             command=self.start_generate_rinven_tag,
         )
-        generate_button.grid(row=row_offset + 3, column=0, columnspan=2, pady=(12, 6))
+        generate_button.grid(row=row_offset, column=0, columnspan=2, pady=(12, 6))
         self.register_widget(generate_button, "Generate Rinven Tag")
+
+        for _, _, var in fields:
+            var.trace_add("write", self._queue_rinven_preview_update)
+        self.rinven_barcode_data.trace_add("write", self._queue_rinven_preview_update)
+
+        self._queue_rinven_preview_update()
 
     def create_about_panel(self, parent: ttk.Frame):
         parent.columnconfigure(0, weight=1)
@@ -4894,6 +4991,91 @@ class ToolApp(tk.Tk):
         else:
             self.rinven_barcode_entry.config(state="disabled")
             self.rinven_barcode_data.set("")
+        self._queue_rinven_preview_update()
+
+    def _normalize_rinven_value(self, value: str) -> str:
+        if value is None:
+            return ""
+        text = str(value).replace("\u00a0", " ")
+        return " ".join(text.split()).strip()
+
+    def _collect_rinven_details(self) -> Dict[str, str]:
+        return {
+            "collection": self._normalize_rinven_value(self.rinven_collection.get()),
+            "design": self._normalize_rinven_value(self.rinven_design.get()),
+            "color": self._normalize_rinven_value(self.rinven_color.get()),
+            "size": self._normalize_rinven_value(self.rinven_size.get()),
+            "origin": self._normalize_rinven_value(self.rinven_origin.get()),
+            "style": self._normalize_rinven_value(self.rinven_style.get()),
+            "content": self._normalize_rinven_value(self.rinven_content.get()),
+            "type": self._normalize_rinven_value(self.rinven_type.get()),
+            "rug_no": self._normalize_rinven_value(self.rinven_rug_no.get()),
+        }
+
+    def _queue_rinven_preview_update(self, *_args):
+        if self._rinven_preview_after is not None:
+            try:
+                self.after_cancel(self._rinven_preview_after)
+            except tk.TclError:
+                pass
+        self._rinven_preview_after = self.after(120, self._update_rinven_preview)
+
+    def _update_rinven_preview(self):
+        self._rinven_preview_after = None
+        details = self._collect_rinven_details()
+        include_barcode = self.rinven_include_barcode.get()
+        barcode_value = self._normalize_rinven_value(self.rinven_barcode_data.get())
+        only_filled = self.rinven_only_filled.get()
+
+        try:
+            image, metadata = backend.build_rinven_tag_image(
+                details,
+                include_barcode,
+                barcode_value,
+                only_filled_fields=only_filled,
+            )
+        except Exception:
+            self.rinven_preview_photo = None
+            self.rinven_preview_label.configure(image="", text=self.tr("Preview unavailable"))
+            self._apply_rinven_warnings({"warnings": ["render_error"], "has_content": False})
+            self.rinven_preview_metadata = {"warnings": ["render_error"], "has_content": False}
+            return
+
+        preview_image = image.copy()
+        preview_image.thumbnail((280, 480), Image.Resampling.LANCZOS)
+        self.rinven_preview_photo = ImageTk.PhotoImage(preview_image)
+        self.rinven_preview_label.configure(image=self.rinven_preview_photo, text="")
+        self.rinven_preview_metadata = metadata
+        self._apply_rinven_warnings(metadata)
+
+    def _apply_rinven_warnings(self, metadata: Optional[Dict[str, object]]):
+        warnings: List[str] = []
+        has_content = False
+        if metadata:
+            warnings = list(metadata.get("warnings", []))  # type: ignore[arg-type]
+            has_content = bool(metadata.get("has_content"))
+
+        messages: List[str] = []
+        for code in warnings:
+            if code == "barcode_missing":
+                messages.append(self.tr("Barcode data missing; barcode will be skipped."))
+            elif code == "barcode_error":
+                messages.append(self.tr("Barcode could not be rendered and was skipped."))
+            elif code == "render_error":
+                messages.append(self.tr("Unable to render Rinven preview."))
+
+        if not has_content:
+            messages.append(self.tr("Nothing to export yet. Add at least one field."))
+
+        self._set_rinven_warning(messages)
+
+    def _set_rinven_warning(self, messages: List[str]):
+        if messages:
+            self.rinven_warning_var.set("\n".join(dict.fromkeys(messages)))
+            self.rinven_warning_label.grid()
+        else:
+            self.rinven_warning_var.set("")
+            self.rinven_warning_label.grid_remove()
 
     def update_rinven_history(self, details: dict):
         history = self.settings.setdefault("rinven_history", {})
@@ -4923,43 +5105,41 @@ class ToolApp(tk.Tk):
                 combobox["values"] = history.get(key, [])
 
     def start_generate_rinven_tag(self):
-        details = {
-            "collection": self.rinven_collection.get().strip(),
-            "design": self.rinven_design.get().strip(),
-            "color": self.rinven_color.get().strip(),
-            "size": self.rinven_size.get().strip(),
-            "origin": self.rinven_origin.get().strip(),
-            "style": self.rinven_style.get().strip(),
-            "content": self.rinven_content.get().strip(),
-            "type": self.rinven_type.get().strip(),
-            "rug_no": self.rinven_rug_no.get().strip(),
-        }
-
-        if not all(details.values()):
-            messagebox.showerror(self.tr("Error"), self.tr("Please fill in all Rinven Tag fields."))
-            return
+        details = self._collect_rinven_details()
+        include_barcode = self.rinven_include_barcode.get()
+        barcode_value = self._normalize_rinven_value(self.rinven_barcode_data.get())
+        only_filled = self.rinven_only_filled.get()
 
         filename = self.rinven_filename.get().strip()
         if not filename:
             messagebox.showerror(self.tr("Error"), self.tr("Filename is required."))
             return
 
-        include_barcode = self.rinven_include_barcode.get()
-        barcode_value = self.rinven_barcode_data.get().strip()
+        if self._rinven_preview_after is not None:
+            try:
+                self.after_cancel(self._rinven_preview_after)
+            except tk.TclError:
+                pass
+            self._rinven_preview_after = None
+        self._update_rinven_preview()
+        metadata = self.rinven_preview_metadata or {"warnings": [], "has_content": False}
 
-        if include_barcode and not barcode_value:
-            messagebox.showerror(self.tr("Error"), self.tr("Barcode data is required when barcode is enabled."))
+        if not metadata.get("has_content"):
+            self._apply_rinven_warnings(metadata)
+            self.log(self.tr("Nothing to export yet. Add at least one field."))
             return
 
         self.update_rinven_history(details)
 
-        log_msg, success_msg = backend.generate_rinven_tag_label(
+        log_msg, success_msg, export_metadata = backend.generate_rinven_tag_label(
             details,
             filename,
             include_barcode,
             barcode_value,
+            only_filled_fields=only_filled,
         )
         self.log(log_msg)
+        self._apply_rinven_warnings(export_metadata)
         if success_msg:
             self.task_completion_popup("Success", success_msg)
         else:

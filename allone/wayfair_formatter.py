@@ -50,9 +50,13 @@ class WayfairFormatter(ttk.Frame):
         self._column_names: List[str] = []
 
         self.mapping_widgets: Dict[str, ttk.Combobox] = {}
+        self.field_enable_vars: Dict[str, tk.BooleanVar] = {}
 
         self.size_width_var = tk.StringVar()
         self.size_length_var = tk.StringVar()
+        self.compliance_message_var = tk.StringVar()
+
+        self._suppress_compliance_update = False
 
         self._translator: Callable[[str], str] = translator or (lambda key: key)
         self._translatable_widgets: List[Tuple[tk.Widget, str, str]] = []
@@ -97,53 +101,101 @@ class WayfairFormatter(ttk.Frame):
         self._register(mapping_frame, "text", "3. Map Wayfair Fields")
         mapping_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
 
-        for row, field in enumerate(self.REQUIRED_FIELDS):
-            ttk.Label(mapping_frame, text=field).grid(
-                row=row, column=0, sticky=tk.W, padx=10, pady=5
-            )
+        placeholder = self._tr(self.SELECTION_PLACEHOLDER_KEY)
 
-            combo = ttk.Combobox(mapping_frame, state="readonly")
+        for row, field in enumerate(self.REQUIRED_FIELDS):
+            label = ttk.Label(mapping_frame, text=field)
+            label.grid(row=row, column=0, sticky=tk.W, padx=10, pady=5)
+
+            combo = ttk.Combobox(mapping_frame, state="disabled")
             combo.grid(row=row, column=1, sticky=tk.EW, padx=10, pady=5)
-            placeholder = self._tr(self.SELECTION_PLACEHOLDER_KEY)
             combo.configure(values=[placeholder])
             combo.set(placeholder)
+            combo.bind("<<ComboboxSelected>>", lambda _event, f=field: self._on_mapping_change(f))
             self.mapping_widgets[field] = combo
+
+            toggle_var = tk.BooleanVar(value=False)
+            self.field_enable_vars[field] = toggle_var
+            toggle = ttk.Checkbutton(
+                mapping_frame,
+                text=self._tr("Map this field"),
+                variable=toggle_var,
+                command=lambda f=field: self._on_field_toggle(f),
+            )
+            toggle.grid(row=row, column=2, sticky=tk.W, padx=10, pady=5)
+            self._register(toggle, "text", "Map this field")
 
         mapping_frame.columnconfigure(1, weight=1)
 
         size_frame = ttk.Frame(mapping_frame)
-        size_frame.grid(row=self.REQUIRED_FIELDS.index("Size"), column=2, padx=10, pady=5)
+        size_frame.grid(row=self.REQUIRED_FIELDS.index("Size"), column=3, padx=10, pady=5, sticky=tk.W)
 
         width_label = ttk.Label(size_frame, text=self._tr("Width:"))
         width_label.grid(row=0, column=0, padx=(0, 5))
         self._register(width_label, "text", "Width:")
-        self.size_width_combo = ttk.Combobox(size_frame, state="readonly", textvariable=self.size_width_var)
+        self.size_width_combo = ttk.Combobox(size_frame, state="disabled", textvariable=self.size_width_var)
         self.size_width_combo.grid(row=0, column=1, padx=(0, 10))
+        self.size_width_combo.bind("<<ComboboxSelected>>", lambda _event: self._update_compliance_panel())
 
         length_label = ttk.Label(size_frame, text=self._tr("Length:"))
         length_label.grid(row=0, column=2, padx=(0, 5))
         self._register(length_label, "text", "Length:")
-        self.size_length_combo = ttk.Combobox(size_frame, state="readonly", textvariable=self.size_length_var)
+        self.size_length_combo = ttk.Combobox(size_frame, state="disabled", textvariable=self.size_length_var)
         self.size_length_combo.grid(row=0, column=3)
+        self.size_length_combo.bind("<<ComboboxSelected>>", lambda _event: self._update_compliance_panel())
+
+        self.size_width_var.set(placeholder)
+        self.size_length_var.set(placeholder)
 
         button_frame = ttk.Frame(self)
         button_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
 
         load_button = ttk.Button(button_frame, text=self._tr("Load Mapping"), command=self._load_mapping)
-        load_button.pack(
-            side=tk.LEFT, padx=5
-        )
+        load_button.pack(side=tk.LEFT, padx=5)
         self._register(load_button, "text", "Load Mapping")
+
         save_button = ttk.Button(button_frame, text=self._tr("Save Mapping"), command=self._save_mapping)
-        save_button.pack(
-            side=tk.LEFT, padx=5
-        )
+        save_button.pack(side=tk.LEFT, padx=5)
         self._register(save_button, "text", "Save Mapping")
-        create_button = ttk.Button(button_frame, text=self._tr("Create File"), command=self._generate_file)
-        create_button.pack(
-            side=tk.RIGHT, padx=5
+
+        compliance_frame = ttk.LabelFrame(self, text=self._tr("Compliance Panel"))
+        self._register(compliance_frame, "text", "Compliance Panel")
+        compliance_frame.pack(fill=tk.BOTH, expand=False, padx=10, pady=(0, 10))
+
+        self.compliance_message = ttk.Label(
+            compliance_frame,
+            textvariable=self.compliance_message_var,
+            anchor=tk.W,
+            wraplength=500,
         )
-        self._register(create_button, "text", "Create File")
+        self.compliance_message.pack(fill=tk.X, padx=10, pady=(8, 4))
+
+        self.compliance_details = tk.Text(
+            compliance_frame,
+            height=5,
+            state=tk.DISABLED,
+            wrap=tk.WORD,
+        )
+        self.compliance_details.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 8))
+
+        export_button_frame = ttk.Frame(compliance_frame)
+        export_button_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        partial_button = ttk.Button(
+            export_button_frame,
+            text=self._tr("Export Only Mapped Fields"),
+            command=lambda: self._export_file(compliant=False),
+        )
+        partial_button.pack(side=tk.LEFT, padx=5)
+        self._register(partial_button, "text", "Export Only Mapped Fields")
+
+        compliant_button = ttk.Button(
+            export_button_frame,
+            text=self._tr("Export Compliant File"),
+            command=lambda: self._export_file(compliant=True),
+        )
+        compliant_button.pack(side=tk.LEFT, padx=5)
+        self._register(compliant_button, "text", "Export Compliant File")
 
         status_frame = ttk.Frame(self)
         status_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
@@ -154,6 +206,8 @@ class WayfairFormatter(ttk.Frame):
         ttk.Label(status_frame, textvariable=self.missing_var, foreground="#8B0000").pack(
             fill=tk.X
         )
+
+        self._update_compliance_panel()
 
     # ------------------------------------------------------------------
     # Translation helpers
@@ -203,6 +257,209 @@ class WayfairFormatter(ttk.Frame):
             self.missing_var.set("")
             return
         self.missing_var.set(self._tr(self._missing_key).format(**self._missing_kwargs))
+
+    # ------------------------------------------------------------------
+    # Mapping helpers
+    # ------------------------------------------------------------------
+    def _on_field_toggle(self, field: str) -> None:
+        if field not in self.mapping_widgets:
+            return
+        enabled = self.field_enable_vars[field].get()
+        if not enabled:
+            self.mapping_widgets[field].set(self._tr(self.SELECTION_PLACEHOLDER_KEY))
+        self._set_field_state(field)
+        self._update_compliance_panel()
+
+    def _on_mapping_change(self, _field: str) -> None:
+        if not self._suppress_compliance_update:
+            self._update_compliance_panel()
+
+    def _set_field_state(self, field: str) -> None:
+        widget = self.mapping_widgets[field]
+        if self.field_enable_vars[field].get():
+            widget.configure(state="readonly")
+        else:
+            widget.configure(state="disabled")
+            widget.set(self._tr(self.SELECTION_PLACEHOLDER_KEY))
+        if field == "Size":
+            self._refresh_size_inputs()
+
+    def _refresh_field_states(self) -> None:
+        for field in self.mapping_widgets:
+            self._set_field_state(field)
+
+    def _refresh_size_inputs(self) -> None:
+        placeholder = self._tr(self.SELECTION_PLACEHOLDER_KEY)
+        size_enabled = self.field_enable_vars.get("Size")
+        enabled = bool(size_enabled.get()) if size_enabled else False
+        state = "readonly" if enabled else "disabled"
+        self.size_width_combo.configure(state=state)
+        self.size_length_combo.configure(state=state)
+        if not enabled:
+            self.size_width_var.set(placeholder)
+            self.size_length_var.set(placeholder)
+
+    def _collect_mapping_state(self) -> Dict[str, Dict[str, object]]:
+        states: Dict[str, Dict[str, object]] = {}
+        for field, widget in self.mapping_widgets.items():
+            enabled = self.field_enable_vars[field].get()
+            raw_value = widget.get()
+            normalized = self._normalize_selection(raw_value)
+            state: Dict[str, object] = {
+                "enabled": enabled,
+                "raw_value": raw_value,
+                "selection": normalized,
+                "valid": False,
+                "reason": "disabled" if not enabled else "",
+            }
+            if not enabled:
+                states[field] = state
+                continue
+
+            if not normalized:
+                state["reason"] = "mapping_missing"
+                states[field] = state
+                continue
+
+            if field == "Size" and normalized == self.SIZE_COMBINE_LABEL_KEY:
+                width_val = self.size_width_var.get()
+                length_val = self.size_length_var.get()
+                if self._is_placeholder(width_val) or self._is_placeholder(length_val):
+                    state["reason"] = "size_components_missing"
+                else:
+                    state["valid"] = True
+                    state["width"] = width_val
+                    state["length"] = length_val
+            else:
+                if normalized in self._column_names:
+                    state["valid"] = True
+                else:
+                    state["reason"] = "mapping_missing"
+
+            states[field] = state
+
+        return states
+
+    def _analyze_states(
+        self, states: Dict[str, Dict[str, object]], fields: List[str]
+    ) -> Tuple[List[Tuple[str, pd.Series]], List[Tuple[str, str]], List[Tuple[str, str]], List[str]]:
+        included: List[Tuple[str, pd.Series]] = []
+        skipped: List[Tuple[str, str]] = []
+        invalid_required: List[Tuple[str, str]] = []
+        empty_required: List[str] = []
+
+        for field in fields:
+            state = states.get(field, {})
+            enabled = bool(state.get("enabled"))
+            valid = bool(state.get("valid"))
+            reason = str(state.get("reason", ""))
+            if not enabled or not valid:
+                reason_code = reason or ("disabled" if not enabled else "mapping_missing")
+                skipped.append((field, reason_code))
+                if field in self.REQUIRED_FIELDS:
+                    invalid_required.append((field, reason_code))
+                continue
+
+            series = self._get_series_for_state(field, state)
+            included.append((field, series))
+            if (
+                field in self.REQUIRED_FIELDS
+                and self._dataframe is not None
+                and self._series_has_missing(series)
+            ):
+                empty_required.append(field)
+
+        return included, skipped, invalid_required, empty_required
+
+    def _get_series_for_state(self, field: str, state: Dict[str, object]) -> pd.Series:
+        if self._dataframe is None:
+            return pd.Series(dtype=object)
+
+        selection = state.get("selection", "")
+        if field == "Size" and selection == self.SIZE_COMBINE_LABEL_KEY:
+            width_col = str(state.get("width", ""))
+            length_col = str(state.get("length", ""))
+            return self._build_size_column(width_col, length_col)
+
+        if selection and selection in self._dataframe.columns:
+            return self._get_clean_series(str(selection))
+
+        return pd.Series(dtype=object)
+
+    def _get_clean_series(self, column: str) -> pd.Series:
+        if self._dataframe is None:
+            return pd.Series(dtype=object)
+        series = self._dataframe.get(column, pd.Series(dtype=object))
+        return self._clean_series(series)
+
+    def _clean_series(self, series: pd.Series) -> pd.Series:
+        if series.empty:
+            return series.copy()
+
+        def normalize(value):
+            if pd.isna(value):
+                return ""
+            if isinstance(value, str):
+                return " ".join(value.replace("\u00a0", " ").split()).strip()
+            return value
+
+        return series.apply(normalize)
+
+    def _series_has_missing(self, series: pd.Series) -> bool:
+        if series.isna().any():
+            return True
+        if series.dtype == object:
+            return series.eq("").any()
+        return False
+
+    def _describe_reason(self, reason: str) -> str:
+        mapping = {
+            "disabled": self._tr("Field not selected."),
+            "mapping_missing": self._tr("Mapping not selected."),
+            "size_components_missing": self._tr("Width and Length must be selected."),
+        }
+        return mapping.get(reason, self._tr("Mapping not selected."))
+
+    def _update_compliance_panel(self) -> None:
+        if self._suppress_compliance_update:
+            return
+
+        states = self._collect_mapping_state()
+        fields = list(self.mapping_widgets.keys())
+        included, skipped, invalid_required, empty_required = self._analyze_states(states, fields)
+
+        self.compliance_details.configure(state=tk.NORMAL)
+        self.compliance_details.delete("1.0", tk.END)
+
+        messages: List[str] = []
+
+        for field, reason in invalid_required:
+            messages.append(f"☐ {field} — {self._describe_reason(reason)}")
+
+        for field in empty_required:
+            messages.append(f"☐ {field} — {self._tr('Contains empty cells.')}")
+
+        if not messages:
+            if self._dataframe is None and not included:
+                self.compliance_message_var.set(self._tr("Load an Excel file to evaluate compliance."))
+                self.compliance_details.insert(
+                    tk.END, f"• {self._tr('Enable mappings to begin validation.')}\n"
+                )
+            else:
+                self.compliance_message_var.set(self._tr("All required fields mapped and filled."))
+                for field, _series in included:
+                    if field in self.REQUIRED_FIELDS:
+                        self.compliance_details.insert(tk.END, f"• ☑ {field}\n")
+        else:
+            self.compliance_message_var.set(self._tr("Required fields needing attention:"))
+            for line in messages:
+                self.compliance_details.insert(tk.END, f"• {line}\n")
+
+        self.compliance_details.configure(state=tk.DISABLED)
+
+    # ------------------------------------------------------------------
+    # Actions
+    # ------------------------------------------------------------------
 
     def _is_placeholder(self, value: str) -> bool:
         return (not value) or (value in self._placeholder_history)
@@ -265,6 +522,7 @@ class WayfairFormatter(ttk.Frame):
 
         self._set_status("{count} columns loaded.", count=len(self._column_names))
         self._set_missing_info(None)
+        self._update_compliance_panel()
 
     def _refresh_columns_display(self) -> None:
         """Show the available column names in the text widget."""
@@ -282,30 +540,37 @@ class WayfairFormatter(ttk.Frame):
         size_label = self._tr(self.SIZE_COMBINE_LABEL_KEY)
         base_columns = [col for col in self._column_names if isinstance(col, str)]
 
-        for field, widget in self.mapping_widgets.items():
-            current = widget.get()
-            if field == "Size":
-                values = [placeholder, size_label] + base_columns
-            else:
-                values = [placeholder] + base_columns
-            widget.configure(values=values)
-            if self._is_placeholder(current) or current not in values:
-                widget.set(placeholder)
+        self._suppress_compliance_update = True
+        try:
+            for field, widget in self.mapping_widgets.items():
+                current = widget.get()
+                if field == "Size":
+                    values = [placeholder, size_label] + base_columns
+                else:
+                    values = [placeholder] + base_columns
+                widget.configure(values=values)
+                if self._is_placeholder(current) or current not in values:
+                    widget.set(placeholder)
 
-        combo_values = ["" if placeholder == "" else placeholder] + base_columns
+            combo_values = ["" if placeholder == "" else placeholder] + base_columns
 
-        width_current = self.size_width_var.get()
-        self.size_width_combo.configure(values=combo_values)
-        if self._is_placeholder(width_current) or width_current not in combo_values:
-            self.size_width_var.set("" if placeholder == "" else placeholder)
+            width_current = self.size_width_var.get()
+            self.size_width_combo.configure(values=combo_values)
+            if self._is_placeholder(width_current) or width_current not in combo_values:
+                self.size_width_var.set("" if placeholder == "" else placeholder)
 
-        length_current = self.size_length_var.get()
-        self.size_length_combo.configure(values=combo_values)
-        if self._is_placeholder(length_current) or length_current not in combo_values:
-            self.size_length_var.set("" if placeholder == "" else placeholder)
+            length_current = self.size_length_var.get()
+            self.size_length_combo.configure(values=combo_values)
+            if self._is_placeholder(length_current) or length_current not in combo_values:
+                self.size_length_var.set("" if placeholder == "" else placeholder)
+        finally:
+            self._suppress_compliance_update = False
 
-    def _generate_file(self) -> None:
-        """Create the formatted Wayfair Excel file based on the mapping."""
+        self._refresh_field_states()
+        self._update_compliance_panel()
+
+    def _export_file(self, compliant: bool) -> None:
+        """Export a Wayfair-ready file either partially or with full compliance."""
 
         if self._dataframe is None:
             messagebox.showwarning(
@@ -314,52 +579,37 @@ class WayfairFormatter(ttk.Frame):
             )
             return
 
-        mapping: Dict[str, str] = {}
-        for field, widget in self.mapping_widgets.items():
-            value = widget.get()
-            if self._is_placeholder(value):
-                mapping[field] = ""
-            elif field == "Size" and self._is_size_label(value):
-                mapping[field] = self.SIZE_COMBINE_LABEL_KEY
-            else:
-                mapping[field] = value
+        states = self._collect_mapping_state()
+        fields = list(self.mapping_widgets.keys())
+        included, skipped, invalid_required, empty_required = self._analyze_states(states, fields)
 
-        missing_fields = [field for field, column in mapping.items() if not column]
+        if compliant:
+            if invalid_required:
+                self._set_status("Export cancelled: missing required mappings.")
+                self._update_compliance_panel()
+                return
+            if empty_required:
+                self._set_status("Export cancelled: required fields contain empty values.")
+                self._update_compliance_panel()
+                return
+            ordered_fields = [
+                field for field in self.REQUIRED_FIELDS if any(f == field for f, _series in included)
+            ]
+        else:
+            ordered_fields = [field for field, _series in included]
 
-        combine_selected = mapping.get("Size") == self.SIZE_COMBINE_LABEL_KEY
-        width_value = self.size_width_var.get()
-        length_value = self.size_length_var.get()
-        if combine_selected:
-            if self._is_placeholder(width_value) or self._is_placeholder(length_value):
-                missing_fields.append("Size (Width/Length must be selected)")
-
-        if missing_fields:
-            self._update_missing_fields(missing_fields)
-            messagebox.showwarning(
-                self._tr("Missing Fields"),
-                self._tr("Please map the following fields:\n{fields}").format(
-                    fields="\n".join(self._format_missing_list(missing_fields))
-                ),
-            )
+        if not ordered_fields:
+            self._set_status("No fields selected to export.")
             return
 
-        output_df = pd.DataFrame()
-
-        for field, selection in mapping.items():
-            if selection == self.SIZE_COMBINE_LABEL_KEY:
-                width_col = self.size_width_var.get()
-                length_col = self.size_length_var.get()
-                output_df[field] = self._build_size_column(width_col, length_col)
-            elif selection in self._dataframe.columns:
-                output_df[field] = self._dataframe[selection]
-            else:
-                output_df[field] = ""
-
-        missing_cells = self._detect_missing_cells(output_df)
+        data = {field: series for field, series in included if field in ordered_fields}
+        output_df = pd.DataFrame(data, columns=ordered_fields)
 
         try:
-            source_dir = Path(self.file_path.get()).parent
-            output_path = source_dir / "wayfair_ready.xlsx"
+            source_path = self.file_path.get()
+            source_dir = Path(source_path).parent if source_path else Path.cwd()
+            output_name = "wayfair_ready.xlsx" if compliant else "wayfair_partial.xlsx"
+            output_path = source_dir / output_name
             output_df.to_excel(output_path, index=False)
         except Exception as exc:  # pragma: no cover - guarded by GUI
             messagebox.showerror(
@@ -368,45 +618,46 @@ class WayfairFormatter(ttk.Frame):
             )
             return
 
-        self._set_status("Wayfair formatted file saved to {path}.", path=output_path)
-        self._update_missing_fields(missing_cells)
+        rows = len(output_df.index)
+        mapped_fields = len(ordered_fields)
+        skipped_names = [field for field, _reason in skipped if field not in ordered_fields]
+        skipped_display = ", ".join(dict.fromkeys(skipped_names)) if skipped_names else self._tr("None")
 
-        if missing_cells:
-            messagebox.showwarning(
-                self._tr("Missing Required Cells"),
-                self._tr("Some required cells are empty. See below for details."),
-            )
-        else:
-            messagebox.showinfo(
-                self._tr("Success"),
-                self._tr("Wayfair formatted file is ready."),
-            )
+        self._set_status(
+            "Export summary: {rows} rows | {fields} fields exported | Skipped: {skipped}",
+            rows=rows,
+            fields=mapped_fields,
+            skipped=skipped_display,
+        )
+        self._set_missing_info(None)
+        messagebox.showinfo(
+            self._tr("Success"),
+            self._tr("Wayfair formatted file saved to {path}.").format(path=output_path),
+        )
+        self._update_compliance_panel()
 
     def _build_size_column(self, width_col: str, length_col: str) -> pd.Series:
         """Create the combined Size column from width and length columns."""
 
-        width_series = self._dataframe.get(width_col, pd.Series(dtype=object))
-        length_series = self._dataframe.get(length_col, pd.Series(dtype=object))
+        width_series = self._get_clean_series(width_col)
+        length_series = self._get_clean_series(length_col)
 
-        return width_series.astype(str).str.strip() + " x " + length_series.astype(str).str.strip()
+        if self._dataframe is not None:
+            width_series = width_series.reindex(self._dataframe.index, fill_value="")
+            length_series = length_series.reindex(self._dataframe.index, fill_value="")
 
-    def _detect_missing_cells(self, dataframe: pd.DataFrame) -> List[str]:
-        """Detect required fields with empty values."""
+        combined: List[str] = []
+        for w, l in zip(width_series.tolist(), length_series.tolist()):
+            w_text = str(w).strip()
+            l_text = str(l).strip()
+            if not w_text or not l_text:
+                combined.append("")
+            else:
+                combined.append(f"{w_text} x {l_text}")
 
-        missing = []
-        for field in self.REQUIRED_FIELDS:
-            if dataframe[field].isna().any() or (dataframe[field] == "").any():
-                missing.append(field)
-        return missing
-
-    def _update_missing_fields(self, missing_fields: List[str]) -> None:
-        """Update the UI with missing required field information."""
-
-        if missing_fields:
-            details = ", ".join(self._format_missing_list(missing_fields))
-            self._set_missing_info("Missing fields: {fields}", fields=details)
-        else:
-            self._set_missing_info("All required fields look filled.")
+        if self._dataframe is not None:
+            return pd.Series(combined, index=self._dataframe.index)
+        return pd.Series(combined)
 
     # ------------------------------------------------------------------
     # Mapping persistence
@@ -426,6 +677,7 @@ class WayfairFormatter(ttk.Frame):
             "mapping": mapping,
             "size_width": self._normalize_selection(self.size_width_var.get()),
             "size_length": self._normalize_selection(self.size_length_var.get()),
+            "enabled_fields": {field: var.get() for field, var in self.field_enable_vars.items()},
         }
 
         save_path = filedialog.asksaveasfilename(
@@ -474,34 +726,50 @@ class WayfairFormatter(ttk.Frame):
         mapping: Dict[str, str] = payload.get("mapping", {})
         size_width = payload.get("size_width", "")
         size_length = payload.get("size_length", "")
+        enabled_fields = payload.get("enabled_fields", {})
 
-        for field, widget in self.mapping_widgets.items():
-            value = mapping.get(field, "")
-            if not value:
-                widget.set(self._tr(self.SELECTION_PLACEHOLDER_KEY))
-                continue
-
-            if field == "Size":
-                self._size_label_history.add(value)
-                if self._is_size_label(value):
-                    widget.set(self._tr(self.SIZE_COMBINE_LABEL_KEY))
+        self._suppress_compliance_update = True
+        try:
+            for field, widget in self.mapping_widgets.items():
+                self.field_enable_vars[field].set(bool(enabled_fields.get(field, False)))
+                value = mapping.get(field, "")
+                if not value:
+                    widget.set(self._tr(self.SELECTION_PLACEHOLDER_KEY))
+                    self._set_field_state(field)
                     continue
 
-            current_values = widget.cget("values")
-            options = list(current_values) if isinstance(current_values, tuple) else list(current_values)
-            if value in options:
-                widget.set(value)
-            else:
-                widget.set(self._tr(self.SELECTION_PLACEHOLDER_KEY))
+                if field == "Size":
+                    self._size_label_history.add(value)
+                    if self._is_size_label(value):
+                        widget.set(self._tr(self.SIZE_COMBINE_LABEL_KEY))
+                        self._set_field_state(field)
+                        continue
 
-        if size_width and not self._is_placeholder(size_width):
-            self.size_width_var.set(size_width)
-        else:
-            self.size_width_var.set(self._tr(self.SELECTION_PLACEHOLDER_KEY))
-        if size_length and not self._is_placeholder(size_length):
-            self.size_length_var.set(size_length)
-        else:
-            self.size_length_var.set(self._tr(self.SELECTION_PLACEHOLDER_KEY))
+                current_values = widget.cget("values")
+                options = (
+                    list(current_values)
+                    if isinstance(current_values, tuple)
+                    else list(current_values)
+                )
+                if value in options:
+                    widget.set(value)
+                else:
+                    widget.set(self._tr(self.SELECTION_PLACEHOLDER_KEY))
+                self._set_field_state(field)
+
+            if size_width and not self._is_placeholder(size_width):
+                self.size_width_var.set(size_width)
+            else:
+                self.size_width_var.set(self._tr(self.SELECTION_PLACEHOLDER_KEY))
+            if size_length and not self._is_placeholder(size_length):
+                self.size_length_var.set(size_length)
+            else:
+                self.size_length_var.set(self._tr(self.SELECTION_PLACEHOLDER_KEY))
+        finally:
+            self._suppress_compliance_update = False
+
+        self._refresh_field_states()
+        self._update_compliance_panel()
 
         linked_file = payload.get("file")
         if linked_file and not self.file_path.get():
