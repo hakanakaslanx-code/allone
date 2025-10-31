@@ -4487,7 +4487,7 @@ class ToolApp(tk.Tk):
         self.rinven_content = tk.StringVar()
         self.rinven_type = tk.StringVar()
         self.rinven_rug_no = tk.StringVar()
-        self.rinven_barcode_data = tk.StringVar()
+        self.rinven_barcode_var = tk.StringVar()
         self.rinven_filename = tk.StringVar(value="rinven_tag.png")
         self.rinven_include_barcode = tk.BooleanVar(value=False)
         self.rinven_only_filled = tk.BooleanVar(value=True)
@@ -4537,7 +4537,7 @@ class ToolApp(tk.Tk):
             frame,
             text=self.tr("Include Barcode"),
             variable=self.rinven_include_barcode,
-            command=self.toggle_rinven_barcode,
+            command=self._on_rinven_include_barcode_toggle,
         )
         barcode_check.grid(row=row_offset, column=0, columnspan=2, sticky="w", padx=6, pady=(4, 4))
         self.register_widget(barcode_check, "Include Barcode")
@@ -4547,7 +4547,7 @@ class ToolApp(tk.Tk):
         barcode_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
         self.register_widget(barcode_label, "Barcode Data:")
 
-        self.rinven_barcode_entry = ttk.Entry(frame, textvariable=self.rinven_barcode_data, state="disabled")
+        self.rinven_barcode_entry = ttk.Entry(frame, textvariable=self.rinven_barcode_var, state="disabled")
         self.rinven_barcode_entry.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
         row_offset += 1
 
@@ -4595,7 +4595,8 @@ class ToolApp(tk.Tk):
 
         for _, _, var in fields:
             var.trace_add("write", self._queue_rinven_preview_update)
-        self.rinven_barcode_data.trace_add("write", self._queue_rinven_preview_update)
+        self.rinven_include_barcode.trace_add("write", self._queue_rinven_preview_update)
+        self.rinven_barcode_var.trace_add("write", self._queue_rinven_preview_update)
 
         self._queue_rinven_preview_update()
 
@@ -4985,12 +4986,12 @@ class ToolApp(tk.Tk):
         else:
             messagebox.showerror(self.tr("Error"), log_msg)
 
-    def toggle_rinven_barcode(self):
+    def _on_rinven_include_barcode_toggle(self):
         if self.rinven_include_barcode.get():
             self.rinven_barcode_entry.config(state="normal")
         else:
             self.rinven_barcode_entry.config(state="disabled")
-            self.rinven_barcode_data.set("")
+            self.rinven_barcode_var.set("")
         self._queue_rinven_preview_update()
 
     def _normalize_rinven_value(self, value: str) -> str:
@@ -5023,15 +5024,17 @@ class ToolApp(tk.Tk):
     def _update_rinven_preview(self):
         self._rinven_preview_after = None
         details = self._collect_rinven_details()
-        include_barcode = self.rinven_include_barcode.get()
-        barcode_value = self._normalize_rinven_value(self.rinven_barcode_data.get())
+        include_barcode_flag = self.rinven_include_barcode.get()
+        barcode_text = self.rinven_barcode_var.get()
+        barcode_value = self._normalize_rinven_value(barcode_text)
+        should_draw_barcode = include_barcode_flag and bool(barcode_value)
         only_filled = self.rinven_only_filled.get()
 
         try:
             image, metadata = backend.build_rinven_tag_image(
                 details,
-                include_barcode,
-                barcode_value,
+                should_draw_barcode,
+                barcode_value if should_draw_barcode else "",
                 only_filled_fields=only_filled,
             )
         except Exception:
@@ -5045,6 +5048,12 @@ class ToolApp(tk.Tk):
         preview_image.thumbnail((280, 480), Image.Resampling.LANCZOS)
         self.rinven_preview_photo = ImageTk.PhotoImage(preview_image)
         self.rinven_preview_label.configure(image=self.rinven_preview_photo, text="")
+        if include_barcode_flag and not should_draw_barcode:
+            metadata = dict(metadata or {})
+            warnings = list(metadata.get("warnings", []))
+            if "barcode_missing" not in warnings:
+                warnings.append("barcode_missing")
+            metadata["warnings"] = warnings
         self.rinven_preview_metadata = metadata
         self._apply_rinven_warnings(metadata)
 
@@ -5107,7 +5116,7 @@ class ToolApp(tk.Tk):
     def start_generate_rinven_tag(self):
         details = self._collect_rinven_details()
         include_barcode = self.rinven_include_barcode.get()
-        barcode_value = self._normalize_rinven_value(self.rinven_barcode_data.get())
+        barcode_value = self._normalize_rinven_value(self.rinven_barcode_var.get())
         only_filled = self.rinven_only_filled.get()
 
         filename = self.rinven_filename.get().strip()
