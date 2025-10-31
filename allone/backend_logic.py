@@ -698,6 +698,7 @@ def build_rinven_tag_image(
                 warnings.append("barcode_error")
 
         if barcode_img is not None:
+            # Draw the barcode before any text so it remains visually on top of the canvas.
             max_barcode_width = width_px - (padding * 2)
             max_barcode_height = int(height_px * 0.26)
             barcode_img.thumbnail(
