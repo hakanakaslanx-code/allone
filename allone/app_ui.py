@@ -20,7 +20,13 @@ from PIL import Image, ImageTk, ImageDraw, ImageFilter, ImageOps, ImageChops
 from print_service import SharedLabelPrinterServer, resolve_local_ip
 
 from settings_manager import load_settings, save_settings
-from updater import check_for_updates
+from updater import (
+    UpdateInfo,
+    check_for_updates,
+    cleanup_update_artifacts,
+    consume_update_success_message,
+    perform_update_installation,
+)
 import backend_logic as backend
 from wayfair_formatter import WayfairFormatter
 
@@ -48,6 +54,18 @@ translations = {
         "Advanced Settings": "Advanced Settings",
         "Show Sidebar": "Show Sidebar",
         "Hide Sidebar": "Hide Sidebar",
+        "Update Available": "Update Available",
+        "Update": "Update",
+        "Auto-update on startup": "Auto-update on startup",
+        "UpdatePromptMessage": "A new version ({version}) is ready to install. Unsaved work will be saved automatically.",
+        "UpdatePromptCountdown": "Updating automatically in {seconds}s…",
+        "Update now": "Update now",
+        "Update cancelled.": "Update cancelled.",
+        "Preparing update…": "Preparing update…",
+        "Update in progress…": "Update in progress…",
+        "Update failed, try again later.": "Update failed, try again later.",
+        "Unsaved work saved automatically before update.": "Unsaved work saved automatically before update.",
+        "Updated to v{version}": "Updated to v{version}",
         "Sections": "Sections",
         "Automatic compact mode enabled for small screens.": "Automatic compact mode enabled for small screens.",
         "Language changed to {language}.": "Language changed to {language}.",
@@ -377,6 +395,18 @@ translations = {
         "Advanced Settings": "Gelişmiş Ayarlar",
         "Show Sidebar": "Yan Paneli Göster",
         "Hide Sidebar": "Yan Paneli Gizle",
+        "Update Available": "Güncelleme Mevcut",
+        "Update": "Güncelleme",
+        "Auto-update on startup": "Başlangıçta otomatik güncelle",
+        "UpdatePromptMessage": "Yeni bir sürüm ({version}) hazır. Güncelleme öncesinde kaydedilmemiş çalışmalar otomatik kaydedilecek.",
+        "UpdatePromptCountdown": "{seconds} sn sonra otomatik güncellenecek…",
+        "Update now": "Şimdi güncelle",
+        "Update cancelled.": "Güncelleme iptal edildi.",
+        "Preparing update…": "Güncelleme hazırlanıyor…",
+        "Update in progress…": "Güncelleme uygulanıyor…",
+        "Update failed, try again later.": "Güncelleme başarısız oldu, lütfen daha sonra tekrar deneyin.",
+        "Unsaved work saved automatically before update.": "Güncelleme öncesinde kaydedilmemiş çalışmalar otomatik kaydedildi.",
+        "Updated to v{version}": "v{version} sürümüne güncellendi",
         "Sections": "Bölümler",
         "Automatic compact mode enabled for small screens.": "Küçük ekranlar için otomatik kompakt mod etkinleştirildi.",
         "Language changed to {language}.": "Dil {language} olarak değiştirildi.",
@@ -800,6 +830,9 @@ class ToolApp(tk.Tk):
     def __init__(self):
         super().__init__()
 
+        cleanup_update_artifacts()
+        self._pending_update_metadata = consume_update_success_message() or {}
+
         self.settings = load_settings()
         self.settings.setdefault("rinven_history", {})
         legacy_print = self.settings.get("print_server", {})
@@ -814,6 +847,10 @@ class ToolApp(tk.Tk):
         self.language = self.settings.get("language", "en")
         if self.language not in translations:
             self.language = "en"
+
+        self.update_settings = self.settings.setdefault("updates", {})
+        auto_update_default = bool(self.update_settings.get("auto_update_on_startup", True))
+        self.auto_update_var = tk.BooleanVar(value=auto_update_default)
 
         self.translatable_widgets = []
         self.section_descriptions = []
@@ -1013,10 +1050,17 @@ class ToolApp(tk.Tk):
             self.log(self.tr("Automatic compact mode enabled for small screens."))
             self._auto_compact_message = False
 
+        self._background_threads: Set[threading.Thread] = set()
+        self._thread_lock = threading.RLock()
+        self._shutdown_event = threading.Event()
+        self._update_dialog: Optional[tk.Toplevel] = None
+        self._update_in_progress = False
+
         self.run_in_thread(check_for_updates, self, self.log, __version__, silent=True)
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.after(0, self._maybe_auto_start_shared_printer)
+        self.after(1200, self._show_pending_update_notice)
 
     def _parse_zoom_level(self, value: str) -> float:
         mapping = {"80%": 0.8, "100%": 1.0, "120%": 1.2}
@@ -1115,6 +1159,10 @@ class ToolApp(tk.Tk):
         self._apply_sidebar_visibility()
         self._save_ui_preferences()
 
+    def _on_toggle_auto_update(self) -> None:
+        self.update_settings["auto_update_on_startup"] = bool(self.auto_update_var.get())
+        save_settings(self.settings)
+
     def _on_toggle_compact(self) -> None:
         self.compact_mode = bool(self.compact_var.get())
         self._update_named_fonts()
@@ -1197,10 +1245,163 @@ class ToolApp(tk.Tk):
                     messagebox.showerror(self.tr("Error"), str(exc))
 
                 self.after(0, report)
+            finally:
+                with self._thread_lock:
+                    self._background_threads.discard(threading.current_thread())
 
         thread = threading.Thread(target=worker, daemon=daemon)
+        with self._thread_lock:
+            self._background_threads.add(thread)
         thread.start()
         return thread
+
+    def is_auto_update_enabled(self) -> bool:
+        return bool(self.auto_update_var.get())
+
+    def begin_update_prompt(self, update_info: UpdateInfo) -> None:
+        if self._update_in_progress:
+            return
+
+        prompt_message = self.tr("UpdatePromptMessage").format(version=update_info.version)
+        self.log(prompt_message)
+
+        def on_confirm() -> None:
+            self._dismiss_update_dialog()
+            self._start_update_flow(update_info)
+
+        def on_cancel() -> None:
+            self._dismiss_update_dialog()
+            self.log(self.tr("Update cancelled."))
+
+        self._dismiss_update_dialog()
+        self._update_dialog = UpdateCountdownDialog(
+            self,
+            update_info,
+            translator=self.tr,
+            on_confirm=on_confirm,
+            on_cancel=on_cancel,
+        )
+
+    def _dismiss_update_dialog(self) -> None:
+        if self._update_dialog is not None:
+            dialog = self._update_dialog
+            self._update_dialog = None
+            try:
+                dialog.close()
+            except Exception:
+                try:
+                    dialog.destroy()
+                except Exception:
+                    pass
+
+    def _start_update_flow(self, update_info: UpdateInfo) -> None:
+        if self._update_in_progress:
+            return
+        self._update_in_progress = True
+        self.log(self.tr("Preparing update…"))
+        self.prepare_for_update()
+        self.run_in_thread(self._execute_update_install, update_info)
+
+    def _execute_update_install(self, update_info: UpdateInfo) -> None:
+        try:
+            perform_update_installation(self, update_info, self.log)
+        except Exception as exc:
+            self.after(0, lambda: self._handle_update_failure(exc))
+            return
+        self.after(0, self._exit_for_update)
+
+    def _handle_update_failure(self, error: Exception) -> None:
+        self._update_in_progress = False
+        self._shutdown_event.clear()
+        cleanup_update_artifacts()
+        message = self.tr("Update failed, try again later.")
+        self.log(message)
+        messagebox.showerror(self.tr("Update"), f"{message}\n\n{error}")
+
+    def _exit_for_update(self) -> None:
+        self.log(self.tr("Update in progress…"))
+        self.after(200, self.on_close)
+
+    def prepare_for_update(self) -> None:
+        if self._shutdown_event.is_set():
+            return
+        self._shutdown_event.set()
+        try:
+            self._persist_view_preferences()
+        except Exception:
+            pass
+        try:
+            self.update_settings["auto_update_on_startup"] = bool(self.auto_update_var.get())
+            save_settings(self.settings)
+        except Exception:
+            pass
+        if self.shared_printer_server.is_running():
+            try:
+                self.shared_printer_server.stop()
+            except Exception as exc:
+                self.log(f"{self.tr('Error')}: {exc}")
+        self._join_background_threads()
+        self.log(self.tr("Unsaved work saved automatically before update."))
+
+    def _join_background_threads(self, timeout: float = 5.0) -> None:
+        deadline = time.time() + timeout
+        while True:
+            with self._thread_lock:
+                threads = [thread for thread in self._background_threads if thread.is_alive()]
+            if not threads or time.time() >= deadline:
+                break
+            for thread in threads:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    break
+                thread.join(timeout=min(0.5, max(0.1, remaining)))
+
+    def show_toast(self, message: str, duration: int = 4000) -> None:
+        if not message:
+            return
+
+        toast = tk.Toplevel(self)
+        toast.withdraw()
+        toast.overrideredirect(True)
+        toast.attributes("-topmost", True)
+        toast.configure(bg=self.theme_colors.get("card_bg", "#111c2e"))
+
+        label = tk.Label(
+            toast,
+            text=message,
+            bg=self.theme_colors.get("card_bg", "#111c2e"),
+            fg=self.theme_colors.get("text_primary", "#f1f5f9"),
+            padx=12,
+            pady=8,
+            wraplength=280,
+            font=("Helvetica", self._scaled_size(10)),
+        )
+        label.pack()
+
+        toast.update_idletasks()
+        x = self.winfo_rootx() + self.winfo_width() - toast.winfo_width() - 20
+        y = self.winfo_rooty() + self.winfo_height() - toast.winfo_height() - 40
+        x = max(self.winfo_rootx() + 10, x)
+        y = max(self.winfo_rooty() + 10, y)
+        toast.geometry(f"+{int(x)}+{int(y)}")
+        toast.deiconify()
+        toast.after(duration, toast.destroy)
+
+    def _show_pending_update_notice(self) -> None:
+        data = getattr(self, "_pending_update_metadata", {}) or {}
+        if not data:
+            cleanup_update_artifacts()
+            return
+
+        version = data.get("version")
+        if version:
+            message = self.tr("Updated to v{version}").format(version=version)
+        else:
+            message = self.tr("Update in progress…")
+        self.log(message)
+        self.show_toast(message)
+        self._pending_update_metadata = {}
+        cleanup_update_artifacts()
 
     def task_completion_popup(self, status: str, message: str) -> None:
         """Display a completion dialog from background tasks on the main thread."""
@@ -4611,9 +4812,22 @@ class ToolApp(tk.Tk):
         top_frame = ttk.Frame(frame, style="PanelBody.TFrame")
         top_frame.pack(fill="x", padx=0, pady=5)
 
-        update_button = ttk.Button(top_frame, text=self.tr("Check for Updates"), command=lambda: self.run_in_thread(check_for_updates, self, self.log, __version__, silent=False))
+        update_button = ttk.Button(
+            top_frame,
+            text=self.tr("Check for Updates"),
+            command=lambda: self.run_in_thread(check_for_updates, self, self.log, __version__, silent=False),
+        )
         update_button.pack(side="left")
         self.register_widget(update_button, "Check for Updates")
+
+        auto_update_toggle = ttk.Checkbutton(
+            top_frame,
+            text=self.tr("Auto-update on startup"),
+            variable=self.auto_update_var,
+            command=self._on_toggle_auto_update,
+        )
+        auto_update_toggle.pack(side="left", padx=(12, 0))
+        self.register_widget(auto_update_toggle, "Auto-update on startup")
 
         self.help_text_area = ScrolledText(
             frame,
@@ -5183,6 +5397,121 @@ class ToolApp(tk.Tk):
         else:
             messagebox.showerror(self.tr("Error"), log_msg)
 
+
+class UpdateCountdownDialog(tk.Toplevel):
+    """Modal dialog presenting a countdown before starting the updater."""
+
+    def __init__(
+        self,
+        master: tk.Misc,
+        update_info: UpdateInfo,
+        translator: Callable[[str], str],
+        on_confirm: Callable[[], None],
+        on_cancel: Callable[[], None],
+        countdown: int = 10,
+    ) -> None:
+        super().__init__(master)
+        self._translator = translator
+        self._on_confirm = on_confirm
+        self._on_cancel = on_cancel
+        self._seconds = max(0, int(countdown))
+        self._timer_id: Optional[str] = None
+        self._closed = False
+
+        self.title(translator("Update Available"))
+        self.transient(master)
+        self.resizable(False, False)
+        self.protocol("WM_DELETE_WINDOW", self._cancel)
+
+        container = ttk.Frame(self, padding=16, style="PanelBody.TFrame")
+        container.pack(fill="both", expand=True)
+
+        message = translator("UpdatePromptMessage").format(version=update_info.version)
+        ttk.Label(container, text=message, wraplength=340, justify="left").pack(anchor="w")
+
+        self.countdown_var = tk.StringVar(
+            value=translator("UpdatePromptCountdown").format(seconds=self._seconds)
+        )
+        ttk.Label(container, textvariable=self.countdown_var, style="Secondary.TLabel").pack(
+            anchor="w", pady=(8, 12)
+        )
+
+        buttons = ttk.Frame(container)
+        buttons.pack(fill="x")
+
+        self.confirm_button = ttk.Button(
+            buttons,
+            text=translator("Update now"),
+            command=self._confirm,
+            default="active",
+        )
+        self.confirm_button.pack(side="left")
+
+        ttk.Button(buttons, text=translator("Cancel"), command=self._cancel).pack(
+            side="left", padx=(8, 0)
+        )
+
+        self.bind("<Return>", self._confirm)
+        self.bind("<Escape>", self._cancel)
+
+        self.grab_set()
+        self.confirm_button.focus_set()
+        self._schedule_tick()
+        self.after(100, self._lift_modal)
+
+    def _lift_modal(self) -> None:
+        try:
+            self.lift()
+            self.attributes("-topmost", True)
+            self.after(100, lambda: self.attributes("-topmost", False))
+        except tk.TclError:
+            pass
+
+    def _schedule_tick(self) -> None:
+        if self._seconds <= 0:
+            self._confirm()
+            return
+        self.countdown_var.set(
+            self._translator("UpdatePromptCountdown").format(seconds=self._seconds)
+        )
+        self._seconds -= 1
+        self._timer_id = self.after(1000, self._schedule_tick)
+
+    def _confirm(self, _event=None) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self.close()
+        try:
+            self._on_confirm()
+        except Exception:
+            pass
+
+    def _cancel(self, _event=None) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self.close()
+        try:
+            self._on_cancel()
+        except Exception:
+            pass
+
+    def close(self) -> None:
+        if self._timer_id is not None:
+            try:
+                self.after_cancel(self._timer_id)
+            except tk.TclError:
+                pass
+            self._timer_id = None
+        try:
+            self.grab_release()
+        except tk.TclError:
+            pass
+        try:
+            self.destroy()
+        except tk.TclError:
+            pass
 
 def get_rug_no_control_functions() -> Tuple[Callable, Callable, Callable]:
     """Return helper callables for the Rug No Control tab."""
