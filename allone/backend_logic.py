@@ -4,6 +4,7 @@ import re
 import sys
 import logging
 import shutil
+import traceback
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
@@ -11,8 +12,15 @@ import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import pillow_heif
 import qrcode
-import barcode
-from barcode.writer import ImageWriter
+
+try:
+    import barcode  # type: ignore
+    from barcode.writer import ImageWriter  # type: ignore
+    _BARCODE_IMPORT_ERROR: Optional[Exception] = None
+except Exception as exc:  # pragma: no cover - handled at runtime for user feedback
+    barcode = None  # type: ignore[assignment]
+    ImageWriter = None  # type: ignore[assignment]
+    _BARCODE_IMPORT_ERROR = exc
 
 # This file contains no Tkinter code.
 
@@ -491,6 +499,10 @@ def generate_qr_task(data, fname, output_type, dymo_size_info, bottom_text):
 
 def generate_barcode_task(data, fname, bc_format, output_type, dymo_size_info, bottom_text):
     """Generates a barcode as a PNG or Dymo label image."""
+    dependency_issue = _verify_barcode_dependencies()
+    if dependency_issue is not None:
+        return (f"Error generating barcode: {dependency_issue}", None)
+
     try:
         BarcodeClass = barcode.get_barcode_class(bc_format)
         if output_type == "PNG":
@@ -549,6 +561,104 @@ def _fit_font(draw, text, preferred_names, max_width, initial_size, min_size):
         size -= 1
 
     return _load_font(preferred_names, size=min_size), min_size
+
+
+def _exception_details(exc: BaseException) -> Tuple[str, str]:
+    """Return a ``(message, stack)`` tuple for the provided exception."""
+
+    message = f"{exc.__class__.__name__}: {exc}"
+    stack = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    return message, stack
+
+
+def _verify_barcode_dependencies() -> Optional[str]:
+    """Return ``None`` if barcode dependencies are available, else an error message."""
+
+    dependency_hint = "Install Pillow, python-barcode, and reportlab if needed."
+
+    if _BARCODE_IMPORT_ERROR is not None:
+        message, _stack = _exception_details(_BARCODE_IMPORT_ERROR)
+        return f"python-barcode unavailable ({message}). {dependency_hint}"
+
+    if barcode is None or ImageWriter is None:  # pragma: no cover - defensive guard
+        return f"python-barcode ImageWriter is not available. {dependency_hint}"
+
+    try:
+        ImageWriter()
+    except Exception as exc:  # pragma: no cover - initialization edge case
+        message, _stack = _exception_details(exc)
+        return f"Unable to initialize python-barcode ImageWriter ({message}). {dependency_hint}"
+
+    return None
+
+
+def _select_rinven_barcode_formats(data: str) -> List[str]:
+    """Return candidate barcode symbologies for Rinven tags."""
+
+    candidates: List[str] = []
+    digits_only = data.isdigit()
+    if digits_only:
+        length = len(data)
+        if length == 8:
+            candidates.append("ean8")
+        elif length == 12:
+            candidates.append("upca")
+        elif length == 13:
+            candidates.append("ean13")
+
+    # Code128 is the default symbology and always attempted as the fallback.
+    candidates.append("code128")
+    return candidates
+
+
+def _render_rinven_barcode(data: str, dpi: int) -> Tuple[Image.Image, str]:
+    """Render the barcode image for Rinven tags and return it with the format used."""
+
+    dependency_issue = _verify_barcode_dependencies()
+    if dependency_issue is not None:
+        raise RuntimeError(dependency_issue)
+
+    errors: List[Dict[str, str]] = []
+    for bc_format in _select_rinven_barcode_formats(data):
+        try:
+            BarcodeClass = barcode.get_barcode_class(bc_format)
+            barcode_img = BarcodeClass(
+                data,
+                writer=ImageWriter(),
+            ).render(
+                writer_options={
+                    "module_height": int(0.7 * dpi),
+                    "quiet_zone": 6,
+                }
+            )
+            return barcode_img, bc_format
+        except Exception as exc:  # noqa: BLE001 - external library
+            message, stack = _exception_details(exc)
+            errors.append({"format": bc_format, "message": message, "stack": stack})
+
+    if not errors:
+        raise RuntimeError("Barcode rendering failed for an unknown reason")
+
+    # Log all errors for transparency before raising the final exception.
+    for entry in errors:
+        logging.error(
+            "Failed to render %s barcode for Rinven tag: %s\n%s",
+            entry.get("format", "unknown"),
+            entry.get("message", ""),
+            entry.get("stack", ""),
+        )
+
+    first_error = errors[0]
+    summary = first_error.get("message", "Barcode rendering failed")
+    format_name = first_error.get("format")
+    if format_name:
+        summary = f"{format_name}: {summary}"
+    combined_stack = first_error.get("stack", "")
+    detailed_message = summary
+    if combined_stack:
+        detailed_message = f"{summary}\n{combined_stack}"
+
+    raise RuntimeError(detailed_message)
 
 
 def _normalize_tag_value(value: Optional[str]) -> str:
@@ -611,9 +721,9 @@ def build_rinven_tag_image(
     normalized_barcode = _normalize_tag_value(barcode_data)
     barcode_enabled = bool(include_barcode and normalized_barcode)
 
-    warnings: List[str] = []
+    warnings: List[Dict[str, str]] = []
     if include_barcode and not normalized_barcode:
-        warnings.append("barcode_missing")
+        warnings.append({"code": "barcode_missing"})
 
     DPI = 300
     width_in = 2.3125
@@ -675,35 +785,65 @@ def build_rinven_tag_image(
 
         current_y = padding + top_extra_padding
 
-        barcode_img = None
+        barcode_img: Optional[Image.Image] = None
+        barcode_format_used: Optional[str] = None
         if barcode_enabled:
-            last_barcode_error: Optional[Exception] = None
-            for bc_format in ("code128", "code39"):
-                try:
-                    BarcodeClass = barcode.get_barcode_class(bc_format)
-                    barcode_img = BarcodeClass(
-                        normalized_barcode, writer=ImageWriter()
-                    ).render(
-                        writer_options={"module_height": int(0.7 * DPI), "quiet_zone": 6}
-                    )
-                    break
-                except Exception as exc:  # noqa: BLE001 - barcode library raises generic exceptions
-                    last_barcode_error = exc
-                    logging.debug("Failed to render %s barcode: %s", bc_format, exc)
-            if barcode_img is None and last_barcode_error is not None:
-                logging.warning(
-                    "Skipping barcode rendering for Rinven tag due to error: %s",
-                    last_barcode_error,
+            try:
+                raw_barcode, barcode_format_used = _render_rinven_barcode(
+                    normalized_barcode,
+                    DPI,
                 )
-                warnings.append("barcode_error")
+                barcode_img = raw_barcode.convert("RGB")
+            except Exception as exc:  # pragma: no cover - GUI feedback
+                message, stack = _exception_details(exc)
+                logging.error(
+                    "Unable to render barcode for Rinven tag: %s\n%s",
+                    message,
+                    stack,
+                )
+                warnings.append(
+                    {
+                        "code": "barcode_error",
+                        "message": message,
+                        "stack": stack,
+                    }
+                )
 
         if barcode_img is not None:
             # Draw the barcode before any text so it remains visually on top of the canvas.
             max_barcode_width = width_px - (padding * 2)
             max_barcode_height = int(height_px * 0.26)
-            barcode_img.thumbnail(
-                (max_barcode_width, max_barcode_height), Image.Resampling.LANCZOS
+            min_barcode_width = 300
+            min_barcode_height = 120
+
+            width = max(barcode_img.width, 1)
+            height = max(barcode_img.height, 1)
+
+            scale_up = max(
+                min_barcode_width / width,
+                min_barcode_height / height,
+                1.0,
             )
+            if scale_up > 1.0:
+                new_size = (
+                    int(round(width * scale_up)),
+                    int(round(height * scale_up)),
+                )
+                barcode_img = barcode_img.resize(new_size, Image.Resampling.LANCZOS)
+                width, height = barcode_img.size
+
+            scale_down = min(
+                max_barcode_width / max(width, 1),
+                max_barcode_height / max(height, 1),
+                1.0,
+            )
+            if scale_down < 1.0:
+                new_size = (
+                    int(round(width * scale_down)),
+                    int(round(height * scale_down)),
+                )
+                barcode_img = barcode_img.resize(new_size, Image.Resampling.LANCZOS)
+
             barcode_x = (width_px - barcode_img.width) // 2
             canvas.paste(barcode_img, (barcode_x, current_y))
             current_y += barcode_img.height + int(0.05 * DPI)
@@ -837,14 +977,15 @@ def build_rinven_tag_image(
                 current_y += line_height
 
         has_content = bool(
-            collection_name or barcode_enabled or any(value for _, value in field_entries)
+            collection_name or (barcode_img is not None) or any(value for _, value in field_entries)
         )
 
         metadata = {
             "normalized_details": normalized_details,
             "included_field_keys": included_keys,
             "warnings": warnings,
-            "barcode_used": barcode_enabled,
+            "barcode_used": bool(barcode_img),
+            "barcode_format": barcode_format_used,
             "has_content": has_content,
         }
 
