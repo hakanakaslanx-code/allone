@@ -399,25 +399,49 @@ def process_files_task(src, tgt, nums_f, action, log_callback, completion_callba
 
 
 def convert_heic_task(folder, log_callback, completion_callback):
-    """Converts all HEIC files in a folder to JPG."""
-    log_callback("Starting HEIC to JPG conversion...")
+    """Converts all HEIC and WEBP files in a folder to JPG."""
+    log_callback("Starting HEIC/WEBP to JPG conversion...")
     try:
-        files = [f for f in os.listdir(folder) if f.lower().endswith(".heic")]
+        files = [
+            f
+            for f in os.listdir(folder)
+            if os.path.isfile(os.path.join(folder, f))
+            and os.path.splitext(f)[1].lower() in {".heic", ".webp"}
+        ]
         if not files:
-            log_callback("No HEIC files found."); return
-        
+            log_callback("No HEIC or WEBP files found."); return
+
         total_files = len(files)
         for i, f in enumerate(files):
             log_callback(f"Converting ({i+1}/{total_files}): {f}")
             src, dst = os.path.join(folder, f), f"{os.path.splitext(os.path.join(folder, f))[0]}.jpg"
             try:
-                heif = pillow_heif.read_heif(src)
-                img = Image.frombytes(heif.mode, heif.size, heif.data, "raw")
+                img = None
+                ext = os.path.splitext(f)[1].lower()
+                if ext == ".heic":
+                    heif = pillow_heif.read_heif(src)
+                    img = Image.frombytes(heif.mode, heif.size, heif.data, "raw")
+                else:
+                    with Image.open(src) as opened:
+                        if opened.mode not in ("RGB", "L"):
+                            img = opened.convert("RGB")
+                        else:
+                            img = opened.copy()
+
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+
                 img.save(dst, "JPEG")
             except Exception as e: log_callback(f"Error converting '{f}': {e}")
-        
+            finally:
+                if img is not None:
+                    try:
+                        img.close()
+                    except Exception:
+                        pass
+
         log_callback("\n✅ Conversion complete.")
-        completion_callback("Success", "HEIC conversion is complete.")
+        completion_callback("Success", "HEIC/WEBP conversion is complete.")
     except Exception as e:
         log_callback(f"An error occurred: {e}")
         completion_callback("Error", f"An error occurred: {e}")
