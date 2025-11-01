@@ -110,8 +110,8 @@ translations = {
         "Copy Files": "Copy Files",
         "Move Files": "Move Files",
         "Save Settings": "Save Settings",
-        "2. Convert HEIC to JPG": "2. Convert HEIC to JPG",
-        "Folder with HEIC files:": "Folder with HEIC files:",
+        "2. Convert HEIC/WEBP to JPG": "2. Convert HEIC/WEBP to JPG",
+        "Folder with HEIC/WEBP files:": "Folder with HEIC/WEBP files:",
         "Convert": "Convert",
         "3. Batch Image Resizer": "3. Batch Image Resizer",
         "Image Folder:": "Image Folder:",
@@ -356,8 +356,8 @@ translations = {
             "--- FEATURES ---\n"
             "1. Copy/Move Files by List:\n"
             "   Finds and copies or moves image files based on a list in an Excel or text file.\n"
-            "2. Convert HEIC to JPG:\n"
-            "   Converts Apple's HEIC format images to the universal JPG format.\n"
+            "2. Convert HEIC/WEBP to JPG:\n"
+            "   Converts Apple's HEIC format images and WEBP pictures to the universal JPG format.\n"
             "3. Batch Image Resizer:\n"
             "   Resizes images by a fixed width or by a percentage of the original dimensions.\n"
             "4. RugNo Column Formatter:\n"
@@ -451,8 +451,8 @@ translations = {
         "Copy Files": "Dosyaları Kopyala",
         "Move Files": "Dosyaları Taşı",
         "Save Settings": "Ayarları Kaydet",
-        "2. Convert HEIC to JPG": "2. HEIC'i JPG'ye Dönüştür",
-        "Folder with HEIC files:": "HEIC dosyalarının olduğu klasör:",
+        "2. Convert HEIC/WEBP to JPG": "2. HEIC/WEBP'yi JPG'ye Dönüştür",
+        "Folder with HEIC/WEBP files:": "HEIC/WEBP dosyalarının olduğu klasör:",
         "Convert": "Dönüştür",
         "3. Batch Image Resizer": "3. Toplu Görsel Boyutlandırıcı",
         "Image Folder:": "Görsel Klasörü:",
@@ -697,8 +697,8 @@ translations = {
             "--- ÖZELLİKLER ---\n"
             "1. Listeye Göre Dosya Kopyala/Taşı:\n"
             "   Excel veya metin dosyasındaki bir listeye göre görsel dosyaları bulur ve kopyalar/taşır.\n"
-            "2. HEIC'i JPG'ye Dönüştür:\n"
-            "   Apple'ın HEIC formatındaki görsellerini evrensel JPG formatına dönüştürür.\n"
+            "2. HEIC/WEBP'yi JPG'ye Dönüştür:\n"
+            "   Apple'ın HEIC formatındaki görsellerini ve WEBP resimlerini evrensel JPG formatına dönüştürür.\n"
             "3. Toplu Görsel Boyutlandırıcı:\n"
             "   Görselleri sabit bir genişliğe veya orijinal boyutların yüzdesine göre yeniden boyutlandırır.\n"
             "4. Dosyadan Numaraları Biçimlendir:\n"
@@ -770,7 +770,7 @@ class ScrollableTab(ttk.Frame):
 PANEL_INFO = {
     "en": {
         "1. Copy/Move Files by List": "Quickly copy or move files referenced by a spreadsheet of item numbers.",
-        "2. Convert HEIC to JPG": "Convert entire folders of HEIC photos into widely compatible JPG images.",
+        "2. Convert HEIC/WEBP to JPG": "Convert entire folders of HEIC or WEBP photos into widely compatible JPG images.",
         "3. Batch Image Resizer": "Resize and compress images in bulk using width- or percentage-based rules.",
         "View in Room": "Preview rugs inside a selected room photo with scaling and transparency controls.",
         "RugNo Column Formatter": "Format rug numbers from Excel or CSV files by adding the 'RugNo' prefix to each value inside the selected column.",
@@ -789,7 +789,7 @@ PANEL_INFO = {
     },
     "tr": {
         "1. Copy/Move Files by List": "Numara listesindeki kayıtlara göre dosyaları hızlıca kopyalayın veya taşıyın.",
-        "2. Convert HEIC to JPG": "Tüm HEIC fotoğraflarını tek seferde yaygın kullanılan JPG formatına dönüştürür.",
+        "2. Convert HEIC/WEBP to JPG": "HEIC veya WEBP fotoğraflarını tek seferde yaygın kullanılan JPG formatına dönüştürür.",
         "3. Batch Image Resizer": "Görselleri genişliğe ya da yüzdeye göre toplu biçimde yeniden boyutlandırıp sıkıştırır.",
         "View in Room": "Seçtiğiniz oda fotoğrafında halıyı ölçek ve saydamlıkla yerleştirerek önizleyin.",
         "RugNo Column Formatter": "Excel veya CSV dosyalarındaki halı numaralarını seçtiğiniz sütundaki her değere 'RugNo' öneki ekleyerek biçimlendirin.",
@@ -1837,15 +1837,15 @@ class ToolApp(tk.Tk):
         save_button.pack(side="left", padx=(8, 0))
         self.register_widget(save_button, "Save Settings")
 
-        heic_card = self.create_section_card(parent, "2. Convert HEIC to JPG")
+        heic_card = self.create_section_card(parent, "2. Convert HEIC/WEBP to JPG")
         heic_card.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
         heic_frame = heic_card.body
         heic_frame.columnconfigure(1, weight=1)
 
         self.heic_folder = tk.StringVar()
-        heic_label = ttk.Label(heic_frame, text=self.tr("Folder with HEIC files:"))
+        heic_label = ttk.Label(heic_frame, text=self.tr("Folder with HEIC/WEBP files:"))
         heic_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
-        self.register_widget(heic_label, "Folder with HEIC files:")
+        self.register_widget(heic_label, "Folder with HEIC/WEBP files:")
         ttk.Entry(heic_frame, textvariable=self.heic_folder).grid(row=0, column=1, sticky="we", padx=6, pady=6)
         heic_browse = ttk.Button(
             heic_frame,
