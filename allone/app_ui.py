@@ -241,6 +241,9 @@ translations = {
         "Font not found, default font used.": "Font not found, default font used.",
         "Barcode could not be rendered and was skipped.": "Barcode could not be rendered and was skipped.",
         "Unable to render Rinven preview.": "Unable to render Rinven preview.",
+        "Barcode support": "Barcode Support",
+        "Barcode support is unavailable.": "Barcode support is unavailable.",
+        "Barcode feature requires additional libraries.": "Barcode feature requires additional libraries.",
         "Nothing to export yet. Add at least one field.": "Nothing to export yet. Add at least one field.",
         "Map this field": "Map this field",
         "Compliance Panel": "Compliance Panel",
@@ -582,6 +585,9 @@ translations = {
         "Font not found, default font used.": "Yazı tipi bulunamadı, varsayılan yazı tipi kullanıldı.",
         "Barcode could not be rendered and was skipped.": "Barkod oluşturulamadı ve atlandı.",
         "Unable to render Rinven preview.": "Rinven önizlemesi oluşturulamadı.",
+        "Barcode support": "Barkod Desteği",
+        "Barcode support is unavailable.": "Barkod özelliği kullanılamıyor.",
+        "Barcode feature requires additional libraries.": "Barkod özelliği ek kütüphaneler gerektirir.",
         "Nothing to export yet. Add at least one field.": "Henüz dışa aktarılacak bir şey yok. En az bir alan ekleyin.",
         "Map this field": "Bu alanı eşle",
         "Compliance Panel": "Uygunluk Paneli",
@@ -5204,6 +5210,15 @@ class ToolApp(tk.Tk):
 
     def _on_rinven_include_barcode_toggle(self):
         if self.rinven_include_barcode.get():
+            dependency_issue = backend.rinven_barcode_dependency_issue()
+            if dependency_issue:
+                self.rinven_include_barcode.set(False)
+                self._show_barcode_dependency_error(dependency_issue)
+                self.log(f"Barcode support unavailable: {dependency_issue}")
+                self.rinven_barcode_entry.config(state="disabled")
+                self.rinven_barcode_var.set("")
+                self._queue_rinven_preview_update()
+                return
             self.rinven_barcode_entry.config(state="normal")
         else:
             self.rinven_barcode_entry.config(state="disabled")
@@ -5244,6 +5259,11 @@ class ToolApp(tk.Tk):
         barcode_text = self.rinven_barcode_var.get()
         barcode_value = self._normalize_rinven_value(barcode_text)
         should_draw_barcode = include_barcode_flag and bool(barcode_value)
+        dependency_issue = None
+        if should_draw_barcode:
+            dependency_issue = backend.rinven_barcode_dependency_issue()
+            if dependency_issue:
+                should_draw_barcode = False
         only_filled = self.rinven_only_filled.get()
 
         try:
@@ -5278,6 +5298,13 @@ class ToolApp(tk.Tk):
 
             if not _has_warning("barcode_missing"):
                 warnings.append({"code": "barcode_missing"})
+            if dependency_issue and not _has_warning("barcode_dependency"):
+                warnings.append(
+                    {
+                        "code": "barcode_dependency",
+                        "message": dependency_issue,
+                    }
+                )
             metadata["warnings"] = warnings
         self.rinven_preview_metadata = metadata
         self._apply_rinven_warnings(metadata)
@@ -5313,6 +5340,19 @@ class ToolApp(tk.Tk):
                 if stack:
                     details = f"{details}\n{stack}"
                 messages.append(details)
+            elif warning_code == "barcode_dependency":
+                details = warning_message or ""
+                messages.append(
+                    "\n\n".join(
+                        filter(
+                            None,
+                            [
+                                self.tr("Barcode support is unavailable."),
+                                details,
+                            ],
+                        )
+                    )
+                )
             elif warning_code == "render_error":
                 messages.append(self.tr("Unable to render Rinven preview."))
 
@@ -5358,8 +5398,18 @@ class ToolApp(tk.Tk):
 
     def start_generate_rinven_tag(self):
         details = self._collect_rinven_details()
-        include_barcode = self.rinven_include_barcode.get()
+        include_barcode_flag = self.rinven_include_barcode.get()
         barcode_value = self._normalize_rinven_value(self.rinven_barcode_var.get())
+        should_draw_barcode = include_barcode_flag and bool(barcode_value)
+        dependency_issue = None
+        if should_draw_barcode:
+            dependency_issue = backend.rinven_barcode_dependency_issue()
+            if dependency_issue:
+                should_draw_barcode = False
+                self.rinven_include_barcode.set(False)
+                self.rinven_barcode_entry.config(state="disabled")
+                self._show_barcode_dependency_error(dependency_issue)
+                self.log(f"Barcode generation skipped: {dependency_issue}")
         only_filled = self.rinven_only_filled.get()
 
         filename = self.rinven_filename.get().strip()
@@ -5386,12 +5436,29 @@ class ToolApp(tk.Tk):
         log_msg, success_msg, export_metadata = backend.generate_rinven_tag_label(
             details,
             filename,
-            include_barcode,
-            barcode_value,
+            should_draw_barcode,
+            barcode_value if should_draw_barcode else "",
             only_filled_fields=only_filled,
         )
+        if dependency_issue:
+            export_metadata = dict(export_metadata or {})
+            warnings = list(export_metadata.get("warnings", []))
+            warnings.append({"code": "barcode_dependency", "message": dependency_issue})
+            export_metadata["warnings"] = warnings
         self.log(log_msg)
         self._apply_rinven_warnings(export_metadata)
+
+    def _show_barcode_dependency_error(self, dependency_issue: str) -> None:
+        message = "\n\n".join(
+            filter(
+                None,
+                [
+                    self.tr("Barcode support is unavailable."),
+                    f"{self.tr('Barcode feature requires additional libraries.')}:\n{dependency_issue}",
+                ],
+            )
+        )
+        messagebox.showerror(self.tr("Barcode support"), message)
         if success_msg:
             self.task_completion_popup("Success", success_msg)
         else:

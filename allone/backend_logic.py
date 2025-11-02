@@ -120,6 +120,12 @@ def get_resource_path(*path_parts: str) -> Optional[str]:
 
     return None
 
+
+def rinven_barcode_dependency_issue() -> Optional[str]:
+    """Return a human friendly description if barcode generation is unavailable."""
+
+    return _verify_barcode_dependencies()
+
 def clean_file_path(file_path: str) -> str:
     """Cleans quotes and spaces from the file path string."""
     return file_path.strip().strip('"').strip("'")
