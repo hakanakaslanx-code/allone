@@ -19,10 +19,13 @@ from typing import Callable, Dict, Optional
 import shutil
 
 import requests
+from requests import HTTPError
 from tkinter import messagebox
 
 OWNER = "hakanakaslanx-code"
 REPO = "allone"
+
+USER_AGENT = "AllOneUpdateClient/1.0"
 
 CHECK_TIMEOUT_SILENT = 3
 CHECK_TIMEOUT_INTERACTIVE = 10
@@ -73,20 +76,37 @@ def _paths() -> Dict[str, Path]:
 
 
 def _download_text(url: str, timeout: int) -> str:
-    response = requests.get(url, timeout=timeout, headers={"Accept": "text/plain"})
+    headers = {
+        "Accept": "text/plain",
+        "User-Agent": USER_AGENT,
+    }
+    response = requests.get(url, timeout=timeout, headers=headers)
     response.raise_for_status()
     return response.text
 
 
 def _fetch_latest_release_asset(owner: str, repo: str, timeout: int) -> UpdateInfo:
     api_url = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
-    response = requests.get(
-        api_url,
-        headers={"Accept": "application/vnd.github+json"},
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    release_info = response.json()
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": USER_AGENT,
+    }
+    try:
+        response = requests.get(
+            api_url,
+            headers=headers,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+    except HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else "unknown"
+        raise UpdateError(
+            f"GitHub release metadata unavailable (HTTP {status})."
+        ) from exc
+    try:
+        release_info = response.json()
+    except ValueError as exc:
+        raise UpdateError("Received invalid JSON from GitHub releases API.") from exc
     assets = release_info.get("assets", [])
     if not assets:
         raise UpdateError("No assets available for the latest release.")
