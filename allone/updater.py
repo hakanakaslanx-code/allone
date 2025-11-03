@@ -182,12 +182,40 @@ def _remote_version_string(timeout: int) -> str:
 
 
 def _parse_version(value: str) -> tuple:
+    """Return a comparable tuple for version strings.
+
+    GitHub tags often contain a leading "v" (for example, "v5.1.3") or other
+    non-numeric prefixes/suffixes. The previous implementation returned a tuple
+    that mixed raw strings and integers which would raise ``TypeError`` when a
+    release tag started with a letter (e.g. comparing ``("v5", 1, 3)`` with
+    ``(5, 1, 3)``). This caused the update check to get stuck in the
+    "Checking" state for users because the exception bubbled up and was caught
+    as a generic error.
+
+    To keep comparisons robust we normalise the string by stripping any leading
+    non-digit characters, splitting on common separators and then encoding each
+    component as a tuple ``(kind, value)`` where ``kind`` ensures deterministic
+    ordering between numeric and textual components.
+    """
+
+    value = value.strip()
+    if not value:
+        return tuple()
+
+    # Drop leading characters such as "v" or "release-".
+    value = re.sub(r"^[^0-9]+", "", value)
+    if not value:
+        return tuple()
+
     parts = []
-    for token in re.split(r"[.]+", value):
-        if token.isdigit():
-            parts.append(int(token))
-        else:
-            parts.append(token)
+    for token in re.split(r"[.\-_]+", value):
+        if not token:
+            continue
+        for chunk in re.findall(r"[0-9]+|[A-Za-z]+", token):
+            if chunk.isdigit():
+                parts.append((1, int(chunk)))
+            else:
+                parts.append((0, chunk.lower()))
     return tuple(parts)
 
 
