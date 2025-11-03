@@ -42,7 +42,7 @@ class UpdateInfo:
     download_url: str
     download_size: Optional[int]
     file_name: str
-    sha256: str
+    sha256: Optional[str]
     release_notes_url: str
 
 
@@ -135,7 +135,7 @@ def _fetch_latest_release_asset(owner: str, repo: str, timeout: int) -> UpdateIn
 
     asset_name = asset.get("name", "update.bin")
     sha_candidate = None
-    expected_hash = None
+    expected_hash: Optional[str] = None
     base_name = asset_name
     if base_name.lower().endswith(".zip"):
         base_name = base_name[:-4]
@@ -151,20 +151,22 @@ def _fetch_latest_release_asset(owner: str, repo: str, timeout: int) -> UpdateIn
         match = re.search(r"([A-Fa-f0-9]{64})", sha_text)
         if match:
             expected_hash = match.group(1).lower()
-    if not expected_hash:
-        raise UpdateError("Could not locate SHA256 checksum for update package.")
-
     download_url = asset.get("browser_download_url")
     if not download_url:
         raise UpdateError("Download URL for the latest release is missing.")
 
+    version_str = release_info.get("tag_name") or release_info.get("name") or ""
+    release_notes_url = release_info.get("html_url") or (
+        f"https://github.com/{owner}/{repo}/releases/tag/{version_str}" if version_str else ""
+    )
+
     return UpdateInfo(
-        version=release_info.get("tag_name") or release_info.get("name") or "",
+        version=version_str,
         download_url=download_url,
         download_size=asset.get("size"),
         file_name=asset_name,
         sha256=expected_hash,
-        release_notes_url=release_info.get("html_url", ""),
+        release_notes_url=release_notes_url,
     )
 
 
@@ -337,10 +339,13 @@ def perform_update_installation(
     try:
         log_callback("Downloading update package…")
         _download_asset(update_info.download_url, package_path, update_info.download_size, log_callback)
-        log_callback("Download completed. Verifying package integrity…")
-        actual_hash = _calculate_sha256(package_path)
-        if actual_hash.lower() != update_info.sha256.lower():
-            raise UpdateError("Package checksum mismatch. Update aborted.")
+        if update_info.sha256:
+            log_callback("Download completed. Verifying package integrity…")
+            actual_hash = _calculate_sha256(package_path)
+            if actual_hash.lower() != update_info.sha256.lower():
+                raise UpdateError("Package checksum mismatch. Update aborted.")
+        else:
+            log_callback("Download completed. No checksum provided; skipping integrity verification.")
 
         log_callback("Preparing installer…")
         _prepare_updater_script(updater_path)
@@ -418,6 +423,31 @@ def check_for_updates(
                     "Update", f"Update information could not be retrieved.\n\n{exc}"
                 ),
             )
+        return
+
+    if update_info.release_notes_url:
+        log_callback(f"Latest release notes: {update_info.release_notes_url}")
+
+    auto_install = (
+        silent
+        and hasattr(app_instance, "is_auto_update_enabled")
+        and app_instance.is_auto_update_enabled()
+    )
+
+    if auto_install and hasattr(app_instance, "_start_update_flow"):
+        log_callback(
+            "Update available. Auto-update is enabled; preparing installation for version "
+            f"{update_info.version}."
+        )
+
+        def _auto_start() -> None:
+            try:
+                app_instance._start_update_flow(update_info)
+            except Exception as exc2:  # pragma: no cover - defensive UI feedback
+                log_callback(f"Update failed: {exc2}")
+                messagebox.showerror("Update", f"Update failed: {exc2}")
+
+        app_instance.after(0, _auto_start)
         return
 
     def _prompt() -> None:
