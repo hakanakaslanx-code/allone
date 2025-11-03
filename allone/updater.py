@@ -19,7 +19,6 @@ from typing import Callable, Dict, Optional
 import shutil
 
 import requests
-from requests import HTTPError
 from tkinter import messagebox
 
 OWNER = "hakanakaslanx-code"
@@ -75,17 +74,7 @@ def _paths() -> Dict[str, Path]:
     }
 
 
-def _download_text(url: str, timeout: int) -> str:
-    headers = {
-        "Accept": "text/plain",
-        "User-Agent": USER_AGENT,
-    }
-    response = requests.get(url, timeout=timeout, headers=headers)
-    response.raise_for_status()
-    return response.text
-
-
-def _fetch_latest_release_asset(owner: str, repo: str, timeout: int) -> UpdateInfo:
+def _get_latest_release_payload(owner: str, repo: str, timeout: int) -> dict:
     api_url = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
     headers = {
         "Accept": "application/vnd.github+json",
@@ -98,17 +87,35 @@ def _fetch_latest_release_asset(owner: str, repo: str, timeout: int) -> UpdateIn
             timeout=timeout,
         )
         response.raise_for_status()
-    except HTTPError as exc:
-        status = exc.response.status_code if exc.response is not None else "unknown"
-        raise UpdateError(
-            f"GitHub release metadata unavailable (HTTP {status})."
-        ) from exc
+    except requests.Timeout:
+        raise
+    except requests.RequestException as exc:
+        raise UpdateError(f"GitHub release metadata request failed: {exc}") from exc
     try:
         release_info = response.json()
     except ValueError as exc:
         raise UpdateError("Received invalid JSON from GitHub releases API.") from exc
+    if not isinstance(release_info, dict):
+        raise UpdateError(
+            "Received unexpected JSON structure from GitHub releases API."
+        )
+    return release_info
+
+
+def _download_text(url: str, timeout: int) -> str:
+    headers = {
+        "Accept": "text/plain",
+        "User-Agent": USER_AGENT,
+    }
+    response = requests.get(url, timeout=timeout, headers=headers)
+    response.raise_for_status()
+    return response.text
+
+
+def _fetch_latest_release_asset(owner: str, repo: str, timeout: int) -> UpdateInfo:
+    release_info = _get_latest_release_payload(owner, repo, timeout)
     assets = release_info.get("assets", [])
-    if not assets:
+    if not isinstance(assets, list) or not assets:
         raise UpdateError("No assets available for the latest release.")
 
     asset = None
@@ -162,14 +169,14 @@ def _fetch_latest_release_asset(owner: str, repo: str, timeout: int) -> UpdateIn
 
 
 def _remote_version_string(timeout: int) -> str:
-    version_check_url = (
-        f"https://raw.githubusercontent.com/{OWNER}/{REPO}/main/allone/app_ui.py"
-    )
-    content = _download_text(version_check_url, timeout)
-    match = re.search(r"__version__\s*=\s*[\"'](.+?)[\"']", content)
-    if not match:
-        raise UpdateError("Could not determine remote version.")
-    return match.group(1)
+    release_info = _get_latest_release_payload(OWNER, REPO, timeout)
+    version = release_info.get("tag_name") or release_info.get("name")
+    if not version or not isinstance(version, str):
+        raise UpdateError("Version information missing in GitHub release metadata.")
+    version = version.strip()
+    if not version:
+        raise UpdateError("Version information was empty in GitHub release metadata.")
+    return version
 
 
 def _parse_version(value: str) -> tuple:
