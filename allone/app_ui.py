@@ -30,7 +30,7 @@ from updater import (
 import backend_logic as backend
 from wayfair_formatter import WayfairFormatter
 
-__version__ = "5.1.0"
+__version__ = "5.1.1"
 
 translations = {
     "en": {
