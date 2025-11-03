@@ -14,7 +14,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import shutil
 
@@ -181,42 +181,112 @@ def _remote_version_string(timeout: int) -> str:
     return version
 
 
-def _parse_version(value: str) -> tuple:
-    """Return a comparable tuple for version strings.
+def _tokenize_version(value: str) -> List[Tuple[str, str]]:
+    """Return a token list describing the numeric and textual parts of ``value``."""
 
-    GitHub tags often contain a leading "v" (for example, "v5.1.3") or other
-    non-numeric prefixes/suffixes. The previous implementation returned a tuple
-    that mixed raw strings and integers which would raise ``TypeError`` when a
-    release tag started with a letter (e.g. comparing ``("v5", 1, 3)`` with
-    ``(5, 1, 3)``). This caused the update check to get stuck in the
-    "Checking" state for users because the exception bubbled up and was caught
-    as a generic error.
-
-    To keep comparisons robust we normalise the string by stripping any leading
-    non-digit characters, splitting on common separators and then encoding each
-    component as a tuple ``(kind, value)`` where ``kind`` ensures deterministic
-    ordering between numeric and textual components.
-    """
-
-    value = value.strip()
+    value = str(value).strip()
     if not value:
-        return tuple()
+        return []
 
-    # Drop leading characters such as "v" or "release-".
     value = re.sub(r"^[^0-9]+", "", value)
     if not value:
-        return tuple()
+        return []
 
-    parts = []
+    tokens: List[Tuple[str, str]] = []
     for token in re.split(r"[.\-_]+", value):
         if not token:
             continue
         for chunk in re.findall(r"[0-9]+|[A-Za-z]+", token):
-            if chunk.isdigit():
-                parts.append((1, int(chunk)))
-            else:
-                parts.append((0, chunk.lower()))
+            kind = "num" if chunk.isdigit() else "text"
+            tokens.append((kind, chunk.lower()))
+    return tokens
+
+
+def _parse_version(value: str) -> Tuple[Tuple[int, object], ...]:
+    """Return a comparable tuple for version strings."""
+
+    parts: List[Tuple[int, object]] = []
+    for kind, chunk in _tokenize_version(value):
+        if kind == "num":
+            parts.append((1, int(chunk)))
+        else:
+            parts.append((0, chunk))
     return tuple(parts)
+
+
+def _compare_version_tokens(
+    remote_tokens: Sequence[Tuple[str, str]],
+    current_tokens: Sequence[Tuple[str, str]],
+) -> int:
+    """Compare two token sequences without raising ``TypeError``.
+
+    Returns a negative value when ``remote_tokens`` describe an older version,
+    zero when they are equivalent and a positive value when ``remote_tokens``
+    represent a newer version.
+    """
+
+    for (remote_kind, remote_value), (current_kind, current_value) in zip(
+        remote_tokens, current_tokens
+    ):
+        if remote_kind == current_kind:
+            if remote_kind == "num":
+                remote_num = int(remote_value)
+                current_num = int(current_value)
+                if remote_num != current_num:
+                    return remote_num - current_num
+            else:
+                if remote_value != current_value:
+                    return -1 if remote_value < current_value else 1
+        else:
+            return 1 if remote_kind == "num" else -1
+
+    if len(remote_tokens) == len(current_tokens):
+        return 0
+
+    if len(remote_tokens) > len(current_tokens):
+        for kind, value in remote_tokens[len(current_tokens) :]:
+            if kind == "num":
+                if int(value) != 0:
+                    return 1
+            else:
+                return -1
+        return 0
+
+    for kind, value in current_tokens[len(remote_tokens) :]:
+        if kind == "num":
+            if int(value) != 0:
+                return -1
+        else:
+            return 1
+    return 0
+
+
+def _version_is_not_newer(
+    remote_version: str,
+    current_version: str,
+    log_callback: Optional[Callable[[str], None]] = None,
+) -> bool:
+    """Return ``True`` when ``remote_version`` is not newer than ``current_version``.
+
+    The helper attempts a fast tuple comparison via :func:`_parse_version` and
+    falls back to a defensive token based comparison when legacy data triggers a
+    ``TypeError`` (for example older settings files stored tuples such as
+    ``("v5", 1, 3)``).
+    """
+
+    remote_key = _parse_version(remote_version)
+    current_key = _parse_version(current_version)
+    try:
+        return remote_key <= current_key
+    except TypeError as exc:  # pragma: no cover - exercised via unit tests
+        if log_callback:
+            log_callback(
+                "⚠️ Version comparison required a compatibility fallback. "
+                f"Details: {exc}."
+            )
+        remote_tokens = _tokenize_version(remote_version)
+        current_tokens = _tokenize_version(current_version)
+        return _compare_version_tokens(remote_tokens, current_tokens) <= 0
 
 
 def _download_asset(
@@ -448,7 +518,7 @@ def check_for_updates(
             )
         return
 
-    if _parse_version(remote_version) <= _parse_version(current_version):
+    if _version_is_not_newer(remote_version, current_version, log_callback):
         log_callback(f"✅ Your application is up-to-date. (Version: {current_version})")
         _emit_status("up_to_date", version=current_version)
         if not silent:
