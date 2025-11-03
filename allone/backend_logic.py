@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 import pandas as pd
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 import pillow_heif
 import qrcode
 
@@ -823,6 +823,36 @@ def _render_barcode_image(
         return barcode_img, writer
 
 
+def _tighten_barcode_whitespace(
+    barcode_img: Image.Image, margin_x: int, margin_y: int
+) -> Image.Image:
+    """Crop redundant whitespace around a rendered barcode image."""
+
+    if margin_x <= 0 and margin_y <= 0:
+        return barcode_img
+
+    grayscale = barcode_img if barcode_img.mode == "L" else barcode_img.convert("L")
+    bbox = ImageOps.invert(grayscale).getbbox()
+    if not bbox:
+        return barcode_img
+
+    left, upper, right, lower = bbox
+    left = max(left - margin_x, 0)
+    upper = max(upper - margin_y, 0)
+    right = min(right + margin_x, barcode_img.width)
+    lower = min(lower + margin_y, barcode_img.height)
+
+    if (
+        left == 0
+        and upper == 0
+        and right == barcode_img.width
+        and lower == barcode_img.height
+    ):
+        return barcode_img
+
+    return barcode_img.crop((left, upper, right, lower))
+
+
 def _render_rinven_barcode(data: str, dpi: int) -> Tuple[Image.Image, str, Optional[str]]:
     """Render the barcode image for Rinven tags.
 
@@ -1009,6 +1039,9 @@ def build_rinven_tag_image(
                     DPI,
                 )
                 barcode_img = raw_barcode.convert("RGB")
+                margin_x = max(4, int(round(0.02 * DPI)))
+                margin_y = max(4, int(round(0.01 * DPI)))
+                barcode_img = _tighten_barcode_whitespace(barcode_img, margin_x, margin_y)
                 if font_warning_message:
                     has_font_warning = any(
                         isinstance(entry, dict) and entry.get("code") == "barcode_font_warning"
@@ -1040,8 +1073,14 @@ def build_rinven_tag_image(
             # Draw the barcode before any text so it remains visually on top of the canvas.
             max_barcode_width = width_px - (padding * 2)
             max_barcode_height = int(height_px * 0.26)
-            min_barcode_width = 300
-            min_barcode_height = 120
+            min_barcode_width = min(
+                max_barcode_width,
+                max(int(max_barcode_width * 0.9), 360),
+            )
+            min_barcode_height = min(
+                max_barcode_height,
+                max(int(max_barcode_height * 0.9), 180),
+            )
 
             width = max(barcode_img.width, 1)
             height = max(barcode_img.height, 1)
