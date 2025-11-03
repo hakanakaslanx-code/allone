@@ -65,6 +65,14 @@ translations = {
         "Update in progress…": "Update in progress…",
         "Update failed, try again later.": "Update failed, try again later.",
         "Unsaved work saved automatically before update.": "Unsaved work saved automatically before update.",
+        "UpdateStatus.Idle": "Update status: Idle",
+        "UpdateStatus.Checking": "Checking for updates…",
+        "UpdateStatus.UpToDate": "Up to date (v{version})",
+        "UpdateStatus.UpdateAvailable": "Update available: v{version}",
+        "UpdateStatus.AutoInstalling": "Installing update v{version}…",
+        "UpdateStatus.Preparing": "Preparing update v{version}…",
+        "UpdateStatus.Error": "Update check failed: {error}",
+        "UpdateStatus.Timeout": "Update check timed out. Possibly offline.",
         "Updated to v{version}": "Updated to v{version}",
         "Sections": "Sections",
         "Automatic compact mode enabled for small screens.": "Automatic compact mode enabled for small screens.",
@@ -409,6 +417,14 @@ translations = {
         "Update in progress…": "Güncelleme uygulanıyor…",
         "Update failed, try again later.": "Güncelleme başarısız oldu, lütfen daha sonra tekrar deneyin.",
         "Unsaved work saved automatically before update.": "Güncelleme öncesinde kaydedilmemiş çalışmalar otomatik kaydedildi.",
+        "UpdateStatus.Idle": "Güncelleme durumu: Beklemede",
+        "UpdateStatus.Checking": "Güncellemeler kontrol ediliyor…",
+        "UpdateStatus.UpToDate": "Uygulama güncel (v{version})",
+        "UpdateStatus.UpdateAvailable": "Yeni sürüm hazır: v{version}",
+        "UpdateStatus.AutoInstalling": "Güncelleme kuruluyor: v{version}…",
+        "UpdateStatus.Preparing": "Güncelleme hazırlanıyor: v{version}…",
+        "UpdateStatus.Error": "Güncelleme kontrolü başarısız: {error}",
+        "UpdateStatus.Timeout": "Güncelleme kontrolü zaman aşımına uğradı. İnternet bağlantınızı kontrol edin.",
         "Updated to v{version}": "v{version} sürümüne güncellendi",
         "Sections": "Bölümler",
         "Automatic compact mode enabled for small screens.": "Küçük ekranlar için otomatik kompakt mod etkinleştirildi.",
@@ -858,6 +874,11 @@ class ToolApp(tk.Tk):
         auto_update_default = bool(self.update_settings.get("auto_update_on_startup", True))
         self.auto_update_var = tk.BooleanVar(value=auto_update_default)
 
+        self._update_status_state = "idle"
+        self._update_status_context: Dict[str, str] = {}
+        self.update_status_var = tk.StringVar()
+        self._refresh_update_status_text()
+
         self.translatable_widgets = []
         self.section_descriptions = []
         self.notebook_tabs = []
@@ -1062,7 +1083,14 @@ class ToolApp(tk.Tk):
         self._update_dialog: Optional[tk.Toplevel] = None
         self._update_in_progress = False
 
-        self.run_in_thread(check_for_updates, self, self.log, __version__, silent=True)
+        self.run_in_thread(
+            check_for_updates,
+            self,
+            self.log,
+            __version__,
+            silent=True,
+            status_callback=self._on_update_status_changed,
+        )
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.after(0, self._maybe_auto_start_shared_printer)
@@ -1238,6 +1266,53 @@ class ToolApp(tk.Tk):
         else:
             self.after(0, append)
 
+    def _on_update_status_changed(self, state: str, context: Optional[Dict[str, str]] = None) -> None:
+        context = context or {}
+
+        def apply() -> None:
+            self._set_update_status(state, **context)
+
+        if threading.current_thread() is threading.main_thread():
+            apply()
+        else:
+            self.after(0, apply)
+
+    def _set_update_status(self, state: str, **context) -> None:
+        self._update_status_state = state or "idle"
+        self._update_status_context = {
+            key: str(value)
+            for key, value in (context or {}).items()
+            if value is not None
+        }
+        self._refresh_update_status_text()
+
+    def _refresh_update_status_text(self) -> None:
+        if not hasattr(self, "update_status_var"):
+            return
+
+        state = getattr(self, "_update_status_state", "idle") or "idle"
+        context = getattr(self, "_update_status_context", {}) or {}
+        version = context.get("version") or __version__
+        if state == "checking":
+            text = self.tr("UpdateStatus.Checking")
+        elif state == "timeout":
+            text = self.tr("UpdateStatus.Timeout")
+        elif state == "error":
+            error_message = context.get("error") or ""
+            text = self.tr("UpdateStatus.Error").format(error=error_message)
+        elif state == "up_to_date":
+            text = self.tr("UpdateStatus.UpToDate").format(version=version)
+        elif state == "update_available":
+            text = self.tr("UpdateStatus.UpdateAvailable").format(version=version)
+        elif state == "auto_installing":
+            text = self.tr("UpdateStatus.AutoInstalling").format(version=version)
+        elif state == "preparing":
+            text = self.tr("UpdateStatus.Preparing").format(version=version)
+        else:
+            text = self.tr("UpdateStatus.Idle")
+
+        self.update_status_var.set(text)
+
     def run_in_thread(self, target: Callable, *args, daemon: bool = True, **kwargs) -> threading.Thread:
         """Execute a callable in a background thread and report unexpected errors."""
 
@@ -1305,11 +1380,13 @@ class ToolApp(tk.Tk):
             return
         self._update_in_progress = True
         self.log(self.tr("Preparing update…"))
+        self._set_update_status("preparing", version=update_info.version)
         self.prepare_for_update()
         self.run_in_thread(self._execute_update_install, update_info)
 
     def _execute_update_install(self, update_info: UpdateInfo) -> None:
         try:
+            self._on_update_status_changed("auto_installing", {"version": update_info.version})
             perform_update_installation(self, update_info, self.log)
         except Exception as exc:
             self.after(0, lambda: self._handle_update_failure(exc))
@@ -1321,6 +1398,7 @@ class ToolApp(tk.Tk):
         self._shutdown_event.clear()
         cleanup_update_artifacts()
         message = self.tr("Update failed, try again later.")
+        self._set_update_status("error", error=str(error))
         self.log(message)
         messagebox.showerror(self.tr("Update"), f"{message}\n\n{error}")
 
@@ -1402,8 +1480,10 @@ class ToolApp(tk.Tk):
         version = data.get("version")
         if version:
             message = self.tr("Updated to v{version}").format(version=version)
+            self._set_update_status("up_to_date", version=version)
         else:
             message = self.tr("Update in progress…")
+            self._set_update_status("preparing", version=__version__)
         self.log(message)
         self.show_toast(message)
         self._pending_update_metadata = {}
@@ -3659,6 +3739,8 @@ class ToolApp(tk.Tk):
             self._show_view_in_room_message(self.tr("Preview will appear here."))
         self._update_manual_prompt_label()
         self._update_sidebar_toggle_text()
+        if hasattr(self, "update_status_var"):
+            self._refresh_update_status_text()
         self._refresh_language_options()
 
     def _refresh_language_options(self):
@@ -4820,7 +4902,14 @@ class ToolApp(tk.Tk):
         update_button = ttk.Button(
             top_frame,
             text=self.tr("Check for Updates"),
-            command=lambda: self.run_in_thread(check_for_updates, self, self.log, __version__, silent=False),
+            command=lambda: self.run_in_thread(
+                check_for_updates,
+                self,
+                self.log,
+                __version__,
+                silent=False,
+                status_callback=self._on_update_status_changed,
+            ),
         )
         update_button.pack(side="left")
         self.register_widget(update_button, "Check for Updates")
@@ -4833,6 +4922,12 @@ class ToolApp(tk.Tk):
         )
         auto_update_toggle.pack(side="left", padx=(12, 0))
         self.register_widget(auto_update_toggle, "Auto-update on startup")
+
+        self.update_status_label = ttk.Label(
+            top_frame,
+            textvariable=self.update_status_var,
+        )
+        self.update_status_label.pack(side="left", padx=(12, 0))
 
         self.help_text_area = ScrolledText(
             frame,
