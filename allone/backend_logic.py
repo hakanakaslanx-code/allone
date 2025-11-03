@@ -754,23 +754,18 @@ def _verify_barcode_dependencies() -> Optional[str]:
     return None
 
 
-def _select_rinven_barcode_formats(data: str) -> List[str]:
-    """Return candidate barcode symbologies for Rinven tags."""
+def _select_rinven_barcode_formats(_data: str) -> List[str]:
+    """Return the barcode symbologies to attempt for Rinven tags.
 
-    candidates: List[str] = []
-    digits_only = data.isdigit()
-    if digits_only:
-        length = len(data)
-        if length == 8:
-            candidates.append("ean8")
-        elif length == 12:
-            candidates.append("upca")
-        elif length == 13:
-            candidates.append("ean13")
+    Rinven stakeholders require that all barcodes are rendered using Code 128.
+    Historically, the code attempted to optimise by preferring other formats
+    such as EAN or UPC for numeric data; however, that behaviour caused the
+    generated labels to deviate from the mandated Code 128 symbology. The
+    implementation now always returns a single-entry list with ``code128`` so
+    that every rendered barcode adheres to this requirement.
+    """
 
-    # Code128 is the default symbology and always attempted as the fallback.
-    candidates.append("code128")
-    return candidates
+    return ["code128"]
 
 
 def _render_barcode_image(
