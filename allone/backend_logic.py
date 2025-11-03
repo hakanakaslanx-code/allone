@@ -646,6 +646,45 @@ def _load_font(preferred_names, size):
     return ImageFont.load_default()
 
 
+def _append_barcode_text(barcode_img: Image.Image, text: str) -> Image.Image:
+    """Append human readable text below the barcode image using fallback fonts."""
+
+    text = (text or "").strip()
+    if not text:
+        return barcode_img
+
+    if barcode_img.mode != "RGB":
+        barcode_img = barcode_img.convert("RGB")
+
+    width, height = barcode_img.size
+    padding = max(4, width // 40)
+    font_size = max(10, min(36, width // 10))
+    font = _load_font(
+        [
+            "DejaVuSans.ttf",
+            "Arial.ttf",
+            "LiberationSans-Regular.ttf",
+            "Helvetica.ttf",
+            "Verdana.ttf",
+        ],
+        size=font_size,
+    )
+
+    draw = ImageDraw.Draw(barcode_img)
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+
+    new_height = height + text_height + padding * 2
+    new_image = Image.new("RGB", (width, new_height), "white")
+    new_image.paste(barcode_img, (0, 0))
+
+    text_x = max(padding, (width - text_width) // 2)
+    text_y = height + padding
+    ImageDraw.Draw(new_image).text((text_x, text_y), text, font=font, fill="black")
+    return new_image
+
+
 def _fit_font(draw, text, preferred_names, max_width, initial_size, min_size):
     """Return a font whose rendered width fits inside ``max_width``."""
 
@@ -667,6 +706,31 @@ def _exception_details(exc: BaseException) -> Tuple[str, str]:
     message = f"{exc.__class__.__name__}: {exc}"
     stack = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
     return message, stack
+
+
+def _is_font_resource_error(exc: BaseException) -> bool:
+    """Return ``True`` when the exception chain indicates a missing font resource."""
+
+    target = "cannot open resource"
+    to_check: List[BaseException] = [exc]
+    seen: Set[int] = set()
+
+    while to_check:
+        current = to_check.pop()
+        identifier = id(current)
+        if identifier in seen:
+            continue
+        seen.add(identifier)
+
+        if target in str(current).lower():
+            return True
+
+        if getattr(current, "__cause__", None) is not None:
+            to_check.append(current.__cause__)  # type: ignore[arg-type]
+        if getattr(current, "__context__", None) is not None:
+            to_check.append(current.__context__)  # type: ignore[arg-type]
+
+    return False
 
 
 def _verify_barcode_dependencies() -> Optional[str]:
@@ -719,10 +783,42 @@ def _render_barcode_image(
     if barcode is None or ImageWriter is None:  # pragma: no cover - defensive guard
         raise RuntimeError("Barcode dependencies are unavailable")
 
-    writer = _SafeImageWriter()
-    barcode_instance = barcode.get_barcode_class(bc_format)(data, writer=writer)
-    barcode_img = barcode_instance.render(writer_options=writer_options)
-    return barcode_img, writer
+    barcode_class = barcode.get_barcode_class(bc_format)
+
+    def _render_with_writer(
+        active_writer: _SafeImageWriter,
+        options: Optional[Dict[str, object]] = None,
+    ) -> Tuple[Image.Image, _SafeImageWriter]:
+        instance = barcode_class(data, writer=active_writer)
+        img = instance.render(writer_options=options)
+        return img, active_writer
+
+    try:
+        return _render_with_writer(_SafeImageWriter(), writer_options)
+    except Exception as exc:  # noqa: BLE001 - barcode library raised an error
+        if not _is_font_resource_error(exc):
+            raise
+
+        fallback_options = dict(writer_options or {})
+        fallback_options["write_text"] = False
+
+        fallback_writer = _SafeImageWriter()
+        try:
+            barcode_img, writer = _render_with_writer(
+                fallback_writer, fallback_options
+            )
+        except Exception:
+            raise exc
+
+        barcode_img = _append_barcode_text(barcode_img, data)
+
+        warning = (
+            writer.font_warning_message
+            or "Barcode font unavailable. Text rendered with fallback font."
+        )
+        writer.font_fallback_used = True
+        writer.font_warning_message = warning
+        return barcode_img, writer
 
 
 def _render_rinven_barcode(data: str, dpi: int) -> Tuple[Image.Image, str, Optional[str]]:
