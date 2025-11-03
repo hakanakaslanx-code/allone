@@ -23,6 +23,12 @@ except Exception as exc:  # pragma: no cover - handled at runtime for user feedb
     _BARCODE_IMPORT_ERROR = exc
 
 
+if hasattr(Image, "Resampling"):
+    _RESAMPLE_NEAREST = Image.Resampling.NEAREST
+else:  # pragma: no cover - Pillow < 9 compatibility
+    _RESAMPLE_NEAREST = Image.NEAREST
+
+
 if ImageWriter is not None:
 
     class _SafeImageWriter(ImageWriter):
@@ -299,7 +305,8 @@ def create_label_image(code_image, label_info, bottom_text=""):
     text_area_height = int(0.25 * DPI) if bottom_text else 0
     max_code_w = label_width_px - (2 * padding)
     max_code_h = label_height_px - (2 * padding) - text_area_height
-    code_image.thumbnail((max_code_w, max_code_h), Image.Resampling.LANCZOS)
+    # Preserve the barcode's sharp edges when resizing for the preview label.
+    code_image.thumbnail((max_code_w, max_code_h), _RESAMPLE_NEAREST)
     paste_x = (label_width_px - code_image.width) // 2
     paste_y = (label_height_px - text_area_height - code_image.height) // 2
     label_bg.paste(code_image, (paste_x, paste_y))
@@ -1049,7 +1056,9 @@ def build_rinven_tag_image(
                     int(round(width * scale_up)),
                     int(round(height * scale_up)),
                 )
-                barcode_img = barcode_img.resize(new_size, Image.Resampling.LANCZOS)
+                # Upscaling with anti-aliasing blurs the barcode bars; use NEAREST to keep
+                # module edges crisp and scannable.
+                barcode_img = barcode_img.resize(new_size, _RESAMPLE_NEAREST)
                 width, height = barcode_img.size
 
             scale_down = min(
@@ -1062,7 +1071,8 @@ def build_rinven_tag_image(
                     int(round(width * scale_down)),
                     int(round(height * scale_down)),
                 )
-                barcode_img = barcode_img.resize(new_size, Image.Resampling.LANCZOS)
+                # Downscaling with NEAREST avoids introducing grey artifacts between bars.
+                barcode_img = barcode_img.resize(new_size, _RESAMPLE_NEAREST)
 
             barcode_x = (width_px - barcode_img.width) // 2
             canvas.paste(barcode_img, (barcode_x, current_y))
