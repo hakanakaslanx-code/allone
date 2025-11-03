@@ -4608,7 +4608,6 @@ class ToolApp(tk.Tk):
 
         bc_card = self.create_section_card(parent, "9. Barcode Generator")
         bc_card.grid(row=0, column=1, sticky="nsew", padx=8, pady=8)
-        self._mark_advanced_card(bc_card)
         bc_frame = bc_card.body
         bc_frame.columnconfigure(1, weight=1)
         bc_frame.columnconfigure(3, weight=1)
