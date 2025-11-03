@@ -380,6 +380,7 @@ def check_for_updates(
     log_callback: Callable[[str], None],
     current_version: str,
     silent: bool = False,
+    status_callback: Optional[Callable[[str, Dict[str, str]], None]] = None,
 ) -> None:
     timeout = CHECK_TIMEOUT_SILENT if silent else CHECK_TIMEOUT_INTERACTIVE
 
@@ -388,14 +389,30 @@ def check_for_updates(
             log_callback("Auto-update on startup disabled. Skipping update check.")
             return
 
+    def _emit_status(state: str, **context: Optional[str]) -> None:
+        if not status_callback:
+            return
+        try:
+            payload = {
+                key: str(value)
+                for key, value in context.items()
+                if value is not None
+            }
+            status_callback(state, payload)
+        except Exception:
+            pass
+
+    _emit_status("checking")
     log_callback("Checking for updates…")
     try:
         remote_version = _remote_version_string(timeout)
     except requests.Timeout:
         log_callback("Update check timed out. Possibly offline.")
+        _emit_status("timeout")
         return
     except Exception as exc:
         log_callback(f"Update check failed: {exc}")
+        _emit_status("error", error=str(exc))
         if not silent:
             app_instance.after(
                 0,
@@ -405,6 +422,7 @@ def check_for_updates(
 
     if _parse_version(remote_version) <= _parse_version(current_version):
         log_callback(f"✅ Your application is up-to-date. (Version: {current_version})")
+        _emit_status("up_to_date", version=current_version)
         if not silent:
             app_instance.after(
                 0,
@@ -416,6 +434,7 @@ def check_for_updates(
         update_info = _fetch_latest_release_asset(OWNER, REPO, timeout)
     except Exception as exc:
         log_callback(f"Unable to retrieve update metadata: {exc}")
+        _emit_status("error", error=str(exc))
         if not silent:
             app_instance.after(
                 0,
@@ -425,6 +444,7 @@ def check_for_updates(
             )
         return
 
+    _emit_status("update_available", version=update_info.version)
     if update_info.release_notes_url:
         log_callback(f"Latest release notes: {update_info.release_notes_url}")
 
@@ -439,6 +459,7 @@ def check_for_updates(
             "Update available. Auto-update is enabled; preparing installation for version "
             f"{update_info.version}."
         )
+        _emit_status("auto_installing", version=update_info.version)
 
         def _auto_start() -> None:
             try:
