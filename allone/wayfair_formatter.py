@@ -114,7 +114,7 @@ class WayfairFormatter(ttk.Frame):
             combo.bind("<<ComboboxSelected>>", lambda _event, f=field: self._on_mapping_change(f))
             self.mapping_widgets[field] = combo
 
-            toggle_var = tk.BooleanVar(value=False)
+            toggle_var = tk.BooleanVar(value=True)
             self.field_enable_vars[field] = toggle_var
             toggle = ttk.Checkbutton(
                 mapping_frame,
@@ -146,6 +146,9 @@ class WayfairFormatter(ttk.Frame):
 
         self.size_width_var.set(placeholder)
         self.size_length_var.set(placeholder)
+
+        # Ensure every field starts enabled and ready for mapping.
+        self._refresh_field_states()
 
         button_frame = ttk.Frame(self)
         button_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
@@ -731,7 +734,7 @@ class WayfairFormatter(ttk.Frame):
         self._suppress_compliance_update = True
         try:
             for field, widget in self.mapping_widgets.items():
-                self.field_enable_vars[field].set(bool(enabled_fields.get(field, False)))
+                self.field_enable_vars[field].set(bool(enabled_fields.get(field, True)))
                 value = mapping.get(field, "")
                 if not value:
                     widget.set(self._tr(self.SELECTION_PLACEHOLDER_KEY))
