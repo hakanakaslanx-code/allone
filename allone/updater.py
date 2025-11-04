@@ -360,6 +360,15 @@ if /I "!PKG_EXT!"==".zip" (
 )
 copy /Y "!NEW_PAYLOAD!" "%TARGET_EXE%.new" >>"%LOG_FILE%" 2>&1
 if errorlevel 1 goto fail
+if exist "%TARGET_EXE%" (
+    attrib -R "%TARGET_EXE%" >>"%LOG_FILE%" 2>&1
+    del /F /Q "%TARGET_EXE%" >>"%LOG_FILE%" 2>&1
+    if exist "%TARGET_EXE%" (
+        >>"%LOG_FILE%" echo [%%date%% %%time%%] Failed to remove existing executable.
+        goto fail
+    )
+)
+attrib -R "%TARGET_EXE%.new" >>"%LOG_FILE%" 2>&1
 move /Y "%TARGET_EXE%.new" "%TARGET_EXE%" >>"%LOG_FILE%" 2>&1
 if errorlevel 1 goto fail
 if exist "%EXTRACT_DIR%" (
