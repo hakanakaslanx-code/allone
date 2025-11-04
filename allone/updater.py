@@ -64,13 +64,14 @@ def _install_root() -> Path:
     return Path(__file__).resolve().parent
 
 
-def _paths() -> Dict[str, Path]:
-    root = _install_root()
+def _paths(root: Optional[Path] = None) -> Dict[str, Path]:
+    base = Path(root) if root is not None else _install_root()
+    base = base.resolve()
     return {
-        "lock": root / "update.lock",
-        "updater": root / "run_update.bat",
-        "log": root / "last_update.log",
-        "success": root / "update_success.json",
+        "lock": base / "update.lock",
+        "updater": base / "run_update.bat",
+        "log": base / "last_update.log",
+        "success": base / "update_success.json",
     }
 
 
@@ -389,15 +390,49 @@ exit /B !EXIT_CODE!
     script_path.write_text(content, encoding="utf-8")
 
 
-def _launch_updater(script_path: Path, args: list[str]) -> None:
+def _launch_updater(
+    script_path: Path,
+    args: list[str],
+    *,
+    detach: bool = True,
+) -> Optional[subprocess.Popen]:
+    creationflags = DETACHED_PROCESS if detach else 0
     try:
-        subprocess.Popen(
+        process = subprocess.Popen(
             ["cmd", "/c", str(script_path)] + args,
-            creationflags=DETACHED_PROCESS,
+            creationflags=creationflags,
             close_fds=True,
         )
     except FileNotFoundError as exc:
         raise UpdateError(f"Failed to launch updater: {exc}")
+    return None if detach else process
+
+
+@dataclass
+class PreparedUpdate:
+    """Temporary workspace describing a staged update installation."""
+
+    base_dir: Path
+    lock_path: Path
+    log_path: Path
+    updater_path: Path
+    success_path: Path
+    package_path: Path
+    temp_dir: Path
+
+
+def _cleanup_prepared_update(prepared: Optional["PreparedUpdate"]) -> None:
+    if prepared is None:
+        return
+    with contextlib.suppress(OSError):
+        if prepared.lock_path.exists():
+            prepared.lock_path.unlink()
+    with contextlib.suppress(Exception):
+        if prepared.package_path.exists():
+            prepared.package_path.unlink()
+    with contextlib.suppress(Exception):
+        if prepared.temp_dir.exists():
+            shutil.rmtree(prepared.temp_dir, ignore_errors=True)
 
 
 def _create_temp_dir() -> Path:
@@ -405,6 +440,137 @@ def _create_temp_dir() -> Path:
     directory = base / f"allone_update_{int(time.time())}"
     directory.mkdir(parents=True, exist_ok=True)
     return directory
+
+
+def _prepare_update_environment(
+    update_info: UpdateInfo,
+    log_callback: Callable[[str], None],
+    base_dir: Optional[Path] = None,
+) -> PreparedUpdate:
+    resolved_base = (
+        Path(base_dir).resolve() if base_dir is not None else _install_root().resolve()
+    )
+    paths = _paths(resolved_base)
+    lock_path = paths["lock"]
+    log_path = paths["log"]
+    updater_path = paths["updater"]
+    success_path = paths["success"]
+
+    if lock_path.exists():
+        raise UpdateError("Another update appears to be in progress. Please retry later.")
+
+    lock_path.write_text(str(time.time()), encoding="utf-8")
+    temp_dir = _create_temp_dir()
+    package_path = temp_dir / update_info.file_name
+
+    try:
+        log_callback("Downloading update package…")
+        _download_asset(
+            update_info.download_url,
+            package_path,
+            update_info.download_size,
+            log_callback,
+        )
+        if update_info.sha256:
+            log_callback("Download completed. Verifying package integrity…")
+            actual_hash = _calculate_sha256(package_path)
+            if actual_hash.lower() != update_info.sha256.lower():
+                raise UpdateError("Package checksum mismatch. Update aborted.")
+        else:
+            log_callback(
+                "Download completed. No checksum provided; skipping integrity verification."
+            )
+
+        log_callback("Preparing installer…")
+        _prepare_updater_script(updater_path)
+    except Exception:
+        _cleanup_prepared_update(
+            PreparedUpdate(
+                base_dir=resolved_base,
+                lock_path=lock_path,
+                log_path=log_path,
+                updater_path=updater_path,
+                success_path=success_path,
+                package_path=package_path,
+                temp_dir=temp_dir,
+            )
+        )
+        raise
+
+    return PreparedUpdate(
+        base_dir=resolved_base,
+        lock_path=lock_path,
+        log_path=log_path,
+        updater_path=updater_path,
+        success_path=success_path,
+        package_path=package_path,
+        temp_dir=temp_dir,
+    )
+
+
+def _launch_update_process(
+    target_executable: Path,
+    target_pid: Optional[int],
+    update_info: UpdateInfo,
+    log_callback: Callable[[str], None],
+    *,
+    base_dir: Optional[Path] = None,
+    wait_for_completion: bool = False,
+) -> Optional[subprocess.Popen]:
+    prepared: Optional[PreparedUpdate] = None
+    try:
+        prepared = _prepare_update_environment(update_info, log_callback, base_dir)
+        args = [
+            str(target_executable.resolve()),
+            str(target_pid or ""),
+            str(prepared.package_path),
+            str(prepared.temp_dir / "work"),
+            target_executable.name,
+            str(prepared.log_path),
+            str(prepared.success_path),
+            str(prepared.lock_path),
+            update_info.version,
+        ]
+        process = _launch_updater(
+            prepared.updater_path,
+            args,
+            detach=not wait_for_completion,
+        )
+    except Exception:
+        _cleanup_prepared_update(prepared)
+        raise
+
+    if target_pid:
+        log_callback("Update installer launched. Application will exit to apply the update.")
+    else:
+        log_callback("Update installer launched. Application files will be refreshed shortly.")
+    return process
+
+
+def start_update_installation(
+    update_info: UpdateInfo,
+    log_callback: Callable[[str], None],
+    target_executable: Path,
+    *,
+    target_pid: Optional[int] = None,
+    base_dir: Optional[Path] = None,
+    wait_for_completion: bool = False,
+) -> Optional[subprocess.Popen]:
+    """Initiate the installer batch script for the provided executable."""
+
+    target_executable = Path(target_executable).resolve()
+    if not target_executable.exists():
+        raise UpdateError(f"Target executable not found: {target_executable}")
+
+    resolved_base = Path(base_dir) if base_dir is not None else target_executable.parent
+    return _launch_update_process(
+        target_executable,
+        target_pid,
+        update_info,
+        log_callback,
+        base_dir=resolved_base,
+        wait_for_completion=wait_for_completion,
+    )
 
 
 def perform_update_installation(
@@ -422,55 +588,12 @@ def perform_update_installation(
         )
         return
 
-    paths = _paths()
-    lock_path = paths["lock"]
-    log_path = paths["log"]
-    updater_path = paths["updater"]
-
-    if lock_path.exists():
-        raise UpdateError("Another update appears to be in progress. Please retry later.")
-
-    lock_path.write_text(str(time.time()), encoding="utf-8")
-    temp_dir = _create_temp_dir()
-    package_path = temp_dir / update_info.file_name
-
-    try:
-        log_callback("Downloading update package…")
-        _download_asset(update_info.download_url, package_path, update_info.download_size, log_callback)
-        if update_info.sha256:
-            log_callback("Download completed. Verifying package integrity…")
-            actual_hash = _calculate_sha256(package_path)
-            if actual_hash.lower() != update_info.sha256.lower():
-                raise UpdateError("Package checksum mismatch. Update aborted.")
-        else:
-            log_callback("Download completed. No checksum provided; skipping integrity verification.")
-
-        log_callback("Preparing installer…")
-        _prepare_updater_script(updater_path)
-
-        args = [
-            str(Path(sys.executable).resolve()),
-            str(os.getpid()),
-            str(package_path),
-            str(temp_dir / "work"),
-            Path(sys.executable).name,
-            str(log_path),
-            str(paths["success"]),
-            str(lock_path),
-            update_info.version,
-        ]
-        _launch_updater(updater_path, args)
-        log_callback("Update installer launched. Application will exit to apply the update.")
-    except Exception:
-        if lock_path.exists():
-            with contextlib.suppress(OSError):
-                lock_path.unlink()
-        with contextlib.suppress(Exception):
-            if package_path.exists():
-                package_path.unlink()
-            if temp_dir.exists():
-                shutil.rmtree(temp_dir)
-        raise
+    start_update_installation(
+        update_info,
+        log_callback,
+        Path(sys.executable).resolve(),
+        target_pid=os.getpid(),
+    )
 
 
 def check_for_updates(
