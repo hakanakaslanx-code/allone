@@ -21,7 +21,7 @@ goto :eof
 
 :found_python
 pushd "%SCRIPT_DIR%"
-%PYTHON_CMD% -m allone.update_cli --install-root "%SCRIPT_DIR%" --wait
+%PYTHON_CMD% -m allone.update_cli --install-root "%SCRIPT_DIR%" --wait %*
 set "EXIT_CODE=%ERRORLEVEL%"
 popd
 
