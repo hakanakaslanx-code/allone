@@ -7,6 +7,7 @@ from tkinter.scrolledtext import ScrolledText
 import threading
 import os
 import math
+import time
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
