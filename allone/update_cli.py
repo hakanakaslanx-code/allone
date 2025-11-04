@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Any
 
 from version import __version__
 from updater import (
@@ -25,6 +26,49 @@ def _printer(message: str) -> None:
     if message is None:
         return
     print(str(message))
+
+
+def _load_settings(settings_path: Path) -> dict[str, Any]:
+    if not settings_path.exists():
+        return {}
+
+    try:
+        with settings_path.open("r", encoding="utf-8") as stream:
+            payload = json.load(stream)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    if isinstance(payload, dict):
+        return payload
+    return {}
+
+
+def _configure_auto_update_setting(
+    install_root: Path, *, enable: bool, logger: Callable[[str], None]
+) -> None:
+    settings_path = install_root / "settings.json"
+    settings = _load_settings(settings_path)
+
+    updates_section = settings.get("updates")
+    if not isinstance(updates_section, dict):
+        updates_section = {}
+        settings["updates"] = updates_section
+
+    desired_value = bool(enable)
+    current_value = bool(updates_section.get("auto_update_on_startup", False))
+
+    if current_value == desired_value:
+        state = "enabled" if desired_value else "disabled"
+        logger(f"Auto-update on startup already {state}.")
+        return
+
+    updates_section["auto_update_on_startup"] = desired_value
+
+    with settings_path.open("w", encoding="utf-8") as stream:
+        json.dump(settings, stream, indent=4)
+
+    state = "enabled" if desired_value else "disabled"
+    logger(f"Auto-update on startup {state}.")
 
 
 def _normalize_install_root(value: Path) -> Path:
@@ -71,6 +115,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Install even if the local version appears current.",
     )
+    toggle_group = parser.add_mutually_exclusive_group()
+    toggle_group.add_argument(
+        "--enable-auto-update",
+        action="store_true",
+        help="Enable automatic updates on application startup and exit.",
+    )
+    toggle_group.add_argument(
+        "--disable-auto-update",
+        action="store_true",
+        help="Disable automatic updates on application startup and exit.",
+    )
     parser.add_argument(
         "--wait",
         action="store_true",
@@ -82,6 +137,21 @@ def main(argv: list[str] | None = None) -> int:
     logger = _printer
     install_root = _normalize_install_root(args.install_root)
     target_executable = install_root / args.exe_name
+
+    if args.enable_auto_update or args.disable_auto_update:
+        try:
+            _configure_auto_update_setting(
+                install_root,
+                enable=args.enable_auto_update,
+                logger=logger,
+            )
+        except UpdateError as exc:
+            print(f"Failed to update auto-update setting: {exc}", file=sys.stderr)
+            return 1
+        except OSError as exc:
+            print(f"Unable to write settings file: {exc}", file=sys.stderr)
+            return 1
+        return 0
 
     if not target_executable.exists():
         parser.error(f"Target executable not found: {target_executable}")
