@@ -3,6 +3,7 @@ openpyxl
 Pillow
 pillow-heif
 pandas
+PyYAML
 requests
 Flask
 xlrd
