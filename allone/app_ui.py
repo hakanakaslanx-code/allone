@@ -27,10 +27,9 @@ from updater import (
     consume_update_success_message,
     perform_update_installation,
 )
+from version import __version__
 import backend_logic as backend
 from wayfair_formatter import WayfairFormatter
-
-__version__ = "5.1.6"
 
 translations = {
     "en": {
