@@ -9,6 +9,7 @@ import os
 import math
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
 import pandas as pd
@@ -31,6 +32,13 @@ from updater import (
 from version import __version__
 import backend_logic as backend
 from wayfair_formatter import WayfairFormatter
+from wayfair_image_mapper import (
+    WayfairImageMappingError,
+    WayfairImageMappingResult,
+    load_image_link_columns,
+    load_wayfair_columns,
+    map_wayfair_images,
+)
 
 translations = {
     "en": {
@@ -44,6 +52,25 @@ translations = {
         "menu.utility.single_size_calculator": "Single Rug Size Calculator",
         "menu.utility.unit_converter": "Multi-Unit Converter",
         "menu.utility.wayfair_mapper": "Wayfair Mapper",
+        "Map Wayfair Images": "Map Wayfair Images",
+        "Select Wayfair File (.xlsx)": "Select Wayfair File (.xlsx)",
+        "Select Image Link File (.csv or .xlsx)": "Select Image Link File (.csv or .xlsx)",
+        "Wayfair RugNo Column:": "Wayfair RugNo Column:",
+        "Image RugNo Column:": "Image RugNo Column:",
+        "Image Link Column:": "Image Link Column:",
+        "Load Columns": "Load Columns",
+        "Start Mapping": "Start Mapping",
+        "Preserve existing images": "Preserve existing images",
+        "Progress: {current}/{total}": "Progress: {current}/{total}",
+        "Mapping completed successfully — {matched} rugs matched, {missing} missing.": "Mapping completed successfully — {matched} rugs matched, {missing} missing.",
+        "Please select both Wayfair and image link files.": "Please select both Wayfair and image link files.",
+        "Please choose the RugNo column for both files.": "Please choose the RugNo column for both files.",
+        "Please choose the image link column.": "Please choose the image link column.",
+        "Unmatched RugNos": "Unmatched RugNos",
+        "No unmatched rug numbers.": "No unmatched rug numbers.",
+        "Additional images sheet created with {count} entries.": "Additional images sheet created with {count} entries.",
+        "Could not load columns: {error}": "Could not load columns: {error}",
+        "Sheet missing": "Sheet missing",
         "Code Generators": "Code Generators",
         "Help & About": "Help & About",
         "Language": "Language",
@@ -396,6 +423,25 @@ translations = {
         "menu.utility.single_size_calculator": "Tek Halı Ölçü Hesaplayıcı",
         "menu.utility.unit_converter": "Çoklu Birim Dönüştürücü",
         "menu.utility.wayfair_mapper": "Wayfair Eşleştirici",
+        "Map Wayfair Images": "Wayfair Görsellerini Eşleştir",
+        "Select Wayfair File (.xlsx)": "Wayfair Dosyası Seç (.xlsx)",
+        "Select Image Link File (.csv or .xlsx)": "Görsel Link Dosyası Seç (.csv veya .xlsx)",
+        "Wayfair RugNo Column:": "Wayfair RugNo Sütunu:",
+        "Image RugNo Column:": "Görsel RugNo Sütunu:",
+        "Image Link Column:": "Görsel Link Sütunu:",
+        "Load Columns": "Sütunları Yükle",
+        "Start Mapping": "Eşleştirmeyi Başlat",
+        "Preserve existing images": "Mevcut görselleri koru",
+        "Progress: {current}/{total}": "İlerleme: {current}/{total}",
+        "Mapping completed successfully — {matched} rugs matched, {missing} missing.": "Eşleştirme başarıyla tamamlandı — {matched} halı eşleşti, {missing} eksik.",
+        "Please select both Wayfair and image link files.": "Lütfen hem Wayfair hem de görsel link dosyalarını seçin.",
+        "Please choose the RugNo column for both files.": "Lütfen her iki dosya için de RugNo sütununu seçin.",
+        "Please choose the image link column.": "Lütfen görsel link sütununu seçin.",
+        "Unmatched RugNos": "Eşleşmeyen RugNo'lar",
+        "No unmatched rug numbers.": "Eşleşmeyen halı numarası yok.",
+        "Additional images sheet created with {count} entries.": "Ek görseller sayfası {count} kayıtla oluşturuldu.",
+        "Could not load columns: {error}": "Sütunlar yüklenemedi: {error}",
+        "Sheet missing": "Sayfa bulunamadı",
         "Code Generators": "Kod Üreteçleri",
         "Help & About": "Yardım ve Hakkında",
         "Language": "Dil",
@@ -801,6 +847,7 @@ PANEL_INFO = {
         "Rug No Checker": "Compare sold and master lists or search manually to verify rug numbers.",
         "Rug No Check": "Check sold rug numbers against an inventory file and report their availability.",
         "Multi-Unit Converter": "Convert between cm, inches, and feet using three separate input boxes. Type a value in any field to automatically update the others in real time.",
+        "Map Wayfair Images": "Automatically map hosted image links to Wayfair template image columns based on RugNo matches, preserving existing values when needed.",
         "8. Match Image Links": "Attach hosted image URLs to product rows by matching a shared key column.",
         "8. QR Code Generator": "Generate QR codes for web links or label printers in just a few clicks.",
         "9. Barcode Generator": "Create printable barcodes in multiple formats, including DYMO labels.",
@@ -820,6 +867,7 @@ PANEL_INFO = {
         "Rug No Checker": "Satış ve ana listeleri karşılaştırarak halı numaralarını doğrular veya manuel arama yapar.",
         "Rug No Check": "Satılan halı numaralarını envanter dosyasıyla hızlıca karşılaştırıp durumlarını raporlar.",
         "Multi-Unit Converter": "Santimetre, inç ve ayak değerlerini üç ayrı kutuda dönüştürün; herhangi birine yazdığınızda diğerleri anında güncellensin.",
+        "Map Wayfair Images": "RugNo eşleşmelerine göre Wayfair şablonundaki görsel sütunlarını otomatik doldurur; dilerseniz mevcut değerleri korur.",
         "8. Match Image Links": "Paylaşılan anahtar sütunu kullanarak ürün satırlarına görsel bağlantıları ekler.",
         "8. QR Code Generator": "Web bağlantıları veya etiket yazıcıları için birkaç tıklamayla QR kodu üretir.",
         "9. Barcode Generator": "PNG veya DYMO dahil birden çok formatta baskıya hazır barkod oluşturur.",
@@ -1054,6 +1102,10 @@ class ToolApp(tk.Tk):
         self.rug_manual_last_result = None
         self.rug_comparison_results = None
         self.rug_control_results: List[Tuple[str, bool]] = []
+        self.wayfair_image_columns_map: Dict[str, object] = {}
+        self.image_link_columns_map: Dict[str, object] = {}
+        self.wayfair_image_sheet_name: Optional[str] = None
+        self._wayfair_image_mapping_in_progress = False
 
         self.create_file_image_panels(self.section_frames["File & Image Tools"])
         self.create_view_in_room_tab(self.section_frames["View in Room"])
@@ -1853,6 +1905,9 @@ class ToolApp(tk.Tk):
 
         # Allow additional rows to expand if needed.
         parent.rowconfigure(2, weight=1)
+        parent.rowconfigure(3, weight=1)
+        parent.rowconfigure(4, weight=1)
+        parent.rowconfigure(5, weight=1)
 
         copy_card = self.create_section_card(parent, "1. Copy/Move Files by List")
         copy_card.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
@@ -4192,6 +4247,14 @@ class ToolApp(tk.Tk):
             entry.bind("<<Paste>>", lambda _event, key=unit_key: self._on_unit_field_change(key))
             entry.bind("<<Cut>>", lambda _event, key=unit_key: self._on_unit_field_change(key))
 
+        self.wayfair_image_file = tk.StringVar()
+        self.image_link_file = tk.StringVar()
+        self.wayfair_image_rugno_var = tk.StringVar()
+        self.image_link_rugno_var = tk.StringVar()
+        self.image_link_value_var = tk.StringVar()
+        self.wayfair_image_preserve_var = tk.BooleanVar(value=True)
+        self.wayfair_image_progress_label_var = tk.StringVar()
+
         wayfair_card = self.create_section_card(parent, "Wayfair Mapper")
         wayfair_card.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
         wayfair_frame = wayfair_card.body
@@ -4200,8 +4263,117 @@ class ToolApp(tk.Tk):
         self.wayfair_formatter = WayfairFormatter(wayfair_frame, translator=self.tr)
         self.wayfair_formatter.pack(fill="both", expand=True, padx=6, pady=6)
 
+        wayfair_image_card = self.create_section_card(parent, "Map Wayfair Images")
+        wayfair_image_card.grid(row=3, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
+        wayfair_image_frame = wayfair_image_card.body
+        wayfair_image_frame.columnconfigure(1, weight=1)
+
+        wayfair_file_label = ttk.Label(wayfair_image_frame, text=self.tr("Select Wayfair File (.xlsx)"))
+        wayfair_file_label.grid(row=0, column=0, sticky="w", padx=6, pady=4)
+        self.register_widget(wayfair_file_label, "Select Wayfair File (.xlsx)")
+        ttk.Entry(wayfair_image_frame, textvariable=self.wayfair_image_file).grid(
+            row=0,
+            column=1,
+            sticky="we",
+            padx=6,
+            pady=4,
+        )
+        wayfair_browse = ttk.Button(
+            wayfair_image_frame,
+            text=self.tr("Browse..."),
+            command=self._browse_wayfair_image_file,
+        )
+        wayfair_browse.grid(row=0, column=2, sticky="e", padx=6, pady=4)
+        self.register_widget(wayfair_browse, "Browse...")
+
+        image_file_label = ttk.Label(wayfair_image_frame, text=self.tr("Select Image Link File (.csv or .xlsx)"))
+        image_file_label.grid(row=1, column=0, sticky="w", padx=6, pady=4)
+        self.register_widget(image_file_label, "Select Image Link File (.csv or .xlsx)")
+        ttk.Entry(wayfair_image_frame, textvariable=self.image_link_file).grid(
+            row=1,
+            column=1,
+            sticky="we",
+            padx=6,
+            pady=4,
+        )
+        image_browse = ttk.Button(
+            wayfair_image_frame,
+            text=self.tr("Browse..."),
+            command=self._browse_image_link_file,
+        )
+        image_browse.grid(row=1, column=2, sticky="e", padx=6, pady=4)
+        self.register_widget(image_browse, "Browse...")
+
+        load_columns_button = ttk.Button(
+            wayfair_image_frame,
+            text=self.tr("Load Columns"),
+            command=self._refresh_wayfair_image_columns,
+        )
+        load_columns_button.grid(row=2, column=0, columnspan=3, sticky="w", padx=6, pady=(4, 8))
+        self.register_widget(load_columns_button, "Load Columns")
+
+        wayfair_rugno_label = ttk.Label(wayfair_image_frame, text=self.tr("Wayfair RugNo Column:"))
+        wayfair_rugno_label.grid(row=3, column=0, sticky="w", padx=6, pady=4)
+        self.register_widget(wayfair_rugno_label, "Wayfair RugNo Column:")
+        self.wayfair_image_rugno_combo = ttk.Combobox(
+            wayfair_image_frame,
+            textvariable=self.wayfair_image_rugno_var,
+            state="readonly",
+            values=(),
+        )
+        self.wayfair_image_rugno_combo.grid(row=3, column=1, sticky="we", padx=6, pady=4)
+
+        image_rugno_label = ttk.Label(wayfair_image_frame, text=self.tr("Image RugNo Column:"))
+        image_rugno_label.grid(row=4, column=0, sticky="w", padx=6, pady=4)
+        self.register_widget(image_rugno_label, "Image RugNo Column:")
+        self.image_link_rugno_combo = ttk.Combobox(
+            wayfair_image_frame,
+            textvariable=self.image_link_rugno_var,
+            state="readonly",
+            values=(),
+        )
+        self.image_link_rugno_combo.grid(row=4, column=1, sticky="we", padx=6, pady=4)
+
+        image_link_label = ttk.Label(wayfair_image_frame, text=self.tr("Image Link Column:"))
+        image_link_label.grid(row=5, column=0, sticky="w", padx=6, pady=4)
+        self.register_widget(image_link_label, "Image Link Column:")
+        self.image_link_value_combo = ttk.Combobox(
+            wayfair_image_frame,
+            textvariable=self.image_link_value_var,
+            state="readonly",
+            values=(),
+        )
+        self.image_link_value_combo.grid(row=5, column=1, sticky="we", padx=6, pady=4)
+
+        preserve_check = ttk.Checkbutton(
+            wayfair_image_frame,
+            text=self.tr("Preserve existing images"),
+            variable=self.wayfair_image_preserve_var,
+        )
+        preserve_check.grid(row=6, column=0, columnspan=3, sticky="w", padx=6, pady=(4, 4))
+        self.register_widget(preserve_check, "Preserve existing images")
+
+        button_frame = ttk.Frame(wayfair_image_frame, style="PanelBody.TFrame")
+        button_frame.grid(row=7, column=0, columnspan=3, sticky="w", padx=6, pady=(4, 4))
+        self.wayfair_image_start_button = ttk.Button(
+            button_frame,
+            text=self.tr("Start Mapping"),
+            command=self.start_wayfair_image_mapping,
+        )
+        self.wayfair_image_start_button.pack(side="left")
+        self.register_widget(self.wayfair_image_start_button, "Start Mapping")
+
+        progress_frame = ttk.Frame(wayfair_image_frame, style="PanelBody.TFrame")
+        progress_frame.grid(row=8, column=0, columnspan=3, sticky="we", padx=6, pady=(6, 0))
+        progress_frame.columnconfigure(0, weight=1)
+        self.wayfair_image_progress_bar = ttk.Progressbar(progress_frame, maximum=1, value=0)
+        self.wayfair_image_progress_bar.grid(row=0, column=0, sticky="we")
+        progress_label = ttk.Label(progress_frame, textvariable=self.wayfair_image_progress_label_var, style="Secondary.TLabel")
+        progress_label.grid(row=1, column=0, sticky="w", pady=(4, 0))
+        self._reset_wayfair_image_progress()
+
         rug_check_card = self.create_section_card(parent, "Rug No Checker")
-        rug_check_card.grid(row=3, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
+        rug_check_card.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
         rug_check_frame = rug_check_card.body
         rug_check_frame.columnconfigure(1, weight=1)
         rug_check_frame.rowconfigure(1, weight=1)
@@ -4380,7 +4552,7 @@ class ToolApp(tk.Tk):
         self._refresh_rug_comparison_display()
 
         image_link_card = self.create_section_card(parent, "8. Match Image Links")
-        image_link_card.grid(row=3, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
+        image_link_card.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
         self._mark_advanced_card(image_link_card)
         image_link_frame = image_link_card.body
         image_link_frame.columnconfigure(1, weight=1)
@@ -4422,6 +4594,250 @@ class ToolApp(tk.Tk):
         match_button = ttk.Button(image_link_frame, text=self.tr("Match and Add Links"), command=self.start_add_image_links)
         match_button.grid(row=3, column=1, pady=10)
         self.register_widget(match_button, "Match and Add Links")
+
+    def _browse_wayfair_image_file(self) -> None:
+        path = filedialog.askopenfilename(
+            filetypes=[
+                ("Excel files", "*.xlsx *.xls *.xlsm *.xlsb"),
+            ]
+        )
+        if path:
+            self.wayfair_image_file.set(path)
+            self._load_wayfair_image_columns()
+
+    def _browse_image_link_file(self) -> None:
+        path = filedialog.askopenfilename(
+            filetypes=[
+                ("CSV files", "*.csv"),
+                ("Excel files", "*.xlsx *.xls *.xlsm *.xlsb"),
+            ]
+        )
+        if path:
+            self.image_link_file.set(path)
+            self._load_image_link_columns()
+
+    def _refresh_wayfair_image_columns(self) -> None:
+        self._load_wayfair_image_columns()
+        self._load_image_link_columns()
+
+    def _load_wayfair_image_columns(self) -> bool:
+        path = self.wayfair_image_file.get().strip()
+        if not path:
+            return False
+        try:
+            sheet_name, column_map = load_wayfair_columns(path)
+        except WayfairImageMappingError as exc:
+            message = self.tr("Could not load columns: {error}").format(error=exc)
+            messagebox.showerror(self.tr("Error"), message)
+            return False
+
+        self.wayfair_image_sheet_name = sheet_name
+        self.wayfair_image_columns_map = dict(column_map)
+        values = list(column_map.keys())
+        self.wayfair_image_rugno_combo["values"] = values
+        if values:
+            default = next((name for name in values if "rug" in name.lower()), values[0])
+            self.wayfair_image_rugno_var.set(default)
+        else:
+            self.wayfair_image_rugno_var.set("")
+        return True
+
+    def _load_image_link_columns(self) -> bool:
+        path = self.image_link_file.get().strip()
+        if not path:
+            return False
+        try:
+            column_map = load_image_link_columns(path)
+        except WayfairImageMappingError as exc:
+            message = self.tr("Could not load columns: {error}").format(error=exc)
+            messagebox.showerror(self.tr("Error"), message)
+            return False
+
+        self.image_link_columns_map = dict(column_map)
+        values = list(column_map.keys())
+        self.image_link_rugno_combo["values"] = values
+        self.image_link_value_combo["values"] = values
+        if values:
+            rug_default = next((name for name in values if "rug" in name.lower()), values[0])
+            link_default = next(
+                (
+                    name
+                    for name in values
+                    if any(keyword in name.lower() for keyword in ("link", "url", "image"))
+                ),
+                values[0],
+            )
+            self.image_link_rugno_var.set(rug_default)
+            self.image_link_value_var.set(link_default)
+        else:
+            self.image_link_rugno_var.set("")
+            self.image_link_value_var.set("")
+        return True
+
+    def _reset_wayfair_image_progress(self) -> None:
+        if hasattr(self, "wayfair_image_progress_bar"):
+            self.wayfair_image_progress_bar.config(value=0, maximum=1)
+        if hasattr(self, "wayfair_image_progress_label_var"):
+            self.wayfair_image_progress_label_var.set(
+                self.tr("Progress: {current}/{total}").format(current=0, total=0)
+            )
+
+    def _update_wayfair_image_progress(self, current: int, total: int) -> None:
+        def apply() -> None:
+            if not hasattr(self, "wayfair_image_progress_bar"):
+                return
+            maximum = max(total, 1)
+            self.wayfair_image_progress_bar.config(maximum=maximum)
+            self.wayfair_image_progress_bar["value"] = min(maximum, current)
+            if hasattr(self, "wayfair_image_progress_label_var"):
+                display_current = min(current, total)
+                self.wayfair_image_progress_label_var.set(
+                    self.tr("Progress: {current}/{total}").format(current=display_current, total=total)
+                )
+
+        if threading.current_thread() is threading.main_thread():
+            apply()
+        else:
+            self.after(0, apply)
+
+    def start_wayfair_image_mapping(self) -> None:
+        if self._wayfair_image_mapping_in_progress:
+            return
+
+        wayfair_path = self.wayfair_image_file.get().strip()
+        image_path = self.image_link_file.get().strip()
+
+        if not wayfair_path or not image_path:
+            messagebox.showerror(
+                self.tr("Error"),
+                self.tr("Please select both Wayfair and image link files."),
+            )
+            return
+
+        if not self._load_wayfair_image_columns():
+            return
+        if not self._load_image_link_columns():
+            return
+
+        wayfair_column = self.wayfair_image_columns_map.get(self.wayfair_image_rugno_var.get())
+        image_rugno_column = self.image_link_columns_map.get(self.image_link_rugno_var.get())
+        image_link_column = self.image_link_columns_map.get(self.image_link_value_var.get())
+
+        if wayfair_column is None or image_rugno_column is None:
+            messagebox.showerror(
+                self.tr("Error"),
+                self.tr("Please choose the RugNo column for both files."),
+            )
+            return
+        if image_link_column is None:
+            messagebox.showerror(
+                self.tr("Error"),
+                self.tr("Please choose the image link column."),
+            )
+            return
+
+        sheet_name = self.wayfair_image_sheet_name
+        if not sheet_name and not self._load_wayfair_image_columns():
+            return
+        sheet_name = self.wayfair_image_sheet_name
+        if not sheet_name:
+            messagebox.showerror(
+                self.tr("Error"),
+                self.tr("Could not load columns: {error}").format(error=self.tr("Sheet missing")),
+            )
+            return
+
+        output_path = (Path(wayfair_path).resolve().parent / "wayfair_images_filled.xlsx").resolve()
+        preserve_existing = bool(self.wayfair_image_preserve_var.get())
+
+        self._wayfair_image_mapping_in_progress = True
+        self._reset_wayfair_image_progress()
+        self.wayfair_image_start_button.config(state="disabled")
+
+        self.run_in_thread(
+            self._run_wayfair_image_mapping,
+            wayfair_path,
+            str(output_path),
+            sheet_name,
+            wayfair_column,
+            image_path,
+            image_rugno_column,
+            image_link_column,
+            preserve_existing,
+        )
+
+    def _run_wayfair_image_mapping(
+        self,
+        wayfair_path: str,
+        output_path: str,
+        sheet_name: str,
+        wayfair_column: object,
+        image_path: str,
+        image_rugno_column: object,
+        image_link_column: object,
+        preserve_existing: bool,
+    ) -> None:
+        def progress(current: int, total: int) -> None:
+            self._update_wayfair_image_progress(current, total)
+
+        try:
+            result = map_wayfair_images(
+                wayfair_path=wayfair_path,
+                data_sheet=sheet_name,
+                wayfair_rugno_column=wayfair_column,
+                image_link_path=image_path,
+                image_rugno_column=image_rugno_column,
+                image_link_column=image_link_column,
+                preserve_existing=preserve_existing,
+                output_path=Path(output_path),
+                progress_callback=progress,
+            )
+        except WayfairImageMappingError as exc:
+            self.after(0, lambda: self._on_wayfair_image_mapping_failed(str(exc)))
+        else:
+            self.after(0, lambda: self._on_wayfair_image_mapping_success(result))
+        finally:
+            self.after(0, self._finalize_wayfair_image_mapping)
+
+    def _on_wayfair_image_mapping_success(self, result: WayfairImageMappingResult) -> None:
+        self._update_wayfair_image_progress(result.total_rows, result.total_rows)
+        summary = self.tr("Mapping completed successfully — {matched} rugs matched, {missing} missing.").format(
+            matched=result.matched_count,
+            missing=result.missing_count,
+        )
+        saved_message = self.tr("Wayfair formatted file saved to {path}.").format(path=result.output_path)
+        self.log(summary)
+        self.log(saved_message)
+        if result.extra_image_rows:
+            self.log(
+                self.tr("Additional images sheet created with {count} entries.").format(
+                    count=len(result.extra_image_rows)
+                )
+            )
+
+        messagebox.showinfo(self.tr("Success"), f"{summary}\n{saved_message}")
+
+        if result.missing_count:
+            missing_values = sorted({value for value in result.missing_rugnos if value})
+            if missing_values:
+                display_text = "\n".join(missing_values[:50])
+                if len(missing_values) > 50:
+                    display_text += "\n…"
+                messagebox.showwarning(self.tr("Unmatched RugNos"), display_text)
+            else:
+                messagebox.showwarning(self.tr("Unmatched RugNos"), self.tr("No unmatched rug numbers."))
+        else:
+            self.log(self.tr("No unmatched rug numbers."))
+
+    def _on_wayfair_image_mapping_failed(self, error: str) -> None:
+        self._reset_wayfair_image_progress()
+        self.log(f"{self.tr('Error')}: {error}")
+        messagebox.showerror(self.tr("Error"), error)
+
+    def _finalize_wayfair_image_mapping(self) -> None:
+        self._wayfair_image_mapping_in_progress = False
+        if hasattr(self, "wayfair_image_start_button"):
+            self.wayfair_image_start_button.config(state="normal")
 
     def create_rug_no_control_tab(self, parent: ttk.Frame) -> ttk.Frame:
         parent.columnconfigure(0, weight=1)
