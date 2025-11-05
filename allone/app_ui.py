@@ -1650,10 +1650,16 @@ class ToolApp(tk.Tk):
         self.configure(bg=base_bg)
 
         style = ttk.Style(self)
+        preferred_theme = "clam"
         try:
-            style.theme_use("clam")
+            style.theme_use(preferred_theme)
         except tk.TclError:
-            pass
+            preferred_theme = style.theme_use()
+
+        custom_theme = "allone-dark"
+        if custom_theme not in style.theme_names():
+            style.theme_create(custom_theme, parent=preferred_theme, settings={})
+        style.theme_use(custom_theme)
 
         style.configure("TFrame", background=base_bg)
         style.configure("Header.TFrame", background=base_bg)
@@ -1814,6 +1820,117 @@ class ToolApp(tk.Tk):
             background=[("active", accent_hover)],
             foreground=[("active", text_primary)],
         )
+
+        tree_base_bg = "#111822"
+        tree_alt_bg = "#1a2332"
+        tree_fg = "#e5e5e5"
+        tree_border = "#2f3b52"
+        tree_header_bg = "#2a3344"
+        tree_header_fg = "#ffffff"
+
+        style.configure(
+            "Rinven.Treeview",
+            background=tree_base_bg,
+            fieldbackground=tree_base_bg,
+            foreground=tree_fg,
+            bordercolor=tree_border,
+            lightcolor=tree_border,
+            darkcolor=tree_border,
+            rowheight=self._scaled_size(26),
+        )
+        style.map(
+            "Rinven.Treeview",
+            background=[("selected", accent)],
+            foreground=[("selected", tree_header_fg)],
+            bordercolor=[("selected", accent)],
+        )
+        style.layout(
+            "Rinven.Treeview",
+            [
+                (
+                    "Treeview.border",
+                    {
+                        "sticky": "nswe",
+                        "border": 1,
+                        "children": [
+                            (
+                                "Treeview.padding",
+                                {
+                                    "sticky": "nswe",
+                                    "children": [("Treeview.treearea", {"sticky": "nswe"})],
+                                },
+                            )
+                        ],
+                    },
+                )
+            ],
+        )
+        style.configure(
+            "Rinven.Treeview.Heading",
+            background=tree_header_bg,
+            foreground=tree_header_fg,
+            bordercolor=tree_border,
+            font=self._font("Segoe UI", 10, "bold"),
+            padding=(self._pad_value(14, 8), self._pad_value(10, 6)),
+        )
+        style.map(
+            "Rinven.Treeview.Heading",
+            background=[("active", panel_header_hover), ("pressed", accent_hover)],
+            foreground=[("active", tree_header_fg)],
+        )
+        style.layout(
+            "Rinven.Treeview.Heading",
+            [
+                (
+                    "Treeheading.cell",
+                    {
+                        "sticky": "nswe",
+                        "children": [
+                            (
+                                "Treeheading.border",
+                                {
+                                    "sticky": "nswe",
+                                    "children": [
+                                        (
+                                            "Treeheading.padding",
+                                            {
+                                                "sticky": "nswe",
+                                                "children": [
+                                                    ("Treeheading.image", {"side": "left", "sticky": ""}),
+                                                    ("Treeheading.text", {"sticky": "nswe"}),
+                                                ],
+                                            },
+                                        )
+                                    ],
+                                },
+                            )
+                        ],
+                    },
+                )
+            ],
+        )
+
+        scrollbar_colors = {
+            "background": tree_alt_bg,
+            "troughcolor": tree_base_bg,
+            "bordercolor": tree_border,
+            "lightcolor": tree_border,
+            "darkcolor": tree_border,
+            "arrowcolor": tree_fg,
+        }
+        style.configure("Dark.Vertical.TScrollbar", **scrollbar_colors)
+        style.configure("Dark.Horizontal.TScrollbar", **scrollbar_colors)
+        style.map(
+            "Dark.Vertical.TScrollbar",
+            background=[("active", panel_header_hover), ("pressed", accent_hover)],
+            arrowcolor=[("disabled", text_muted), ("active", tree_header_fg)],
+        )
+        style.map(
+            "Dark.Horizontal.TScrollbar",
+            background=[("active", panel_header_hover), ("pressed", accent_hover)],
+            arrowcolor=[("disabled", text_muted), ("active", tree_header_fg)],
+        )
+
         style.configure("Horizontal.TSeparator", background="#1f2937")
 
         option_font = self._font("Segoe UI", 10)
@@ -4761,18 +4878,33 @@ class ToolApp(tk.Tk):
         tree_container.grid(row=2, column=0, sticky="nsew")
         tree_container.columnconfigure(0, weight=1)
         tree_container.rowconfigure(0, weight=1)
+        tree_container.rowconfigure(1, weight=0)
 
         tree = ttk.Treeview(
             tree_container,
             columns=RINVEN_IMPORT_COLUMNS,
             show="headings",
             selectmode="extended",
+            style="Rinven.Treeview",
         )
         tree.grid(row=0, column=0, sticky="nsew")
 
-        vsb = ttk.Scrollbar(tree_container, orient="vertical", command=tree.yview)
+        tree.tag_configure("even", background="#111822", foreground="#e5e5e5")
+        tree.tag_configure("odd", background="#1a2332", foreground="#e5e5e5")
+
+        vsb = ttk.Scrollbar(
+            tree_container,
+            orient="vertical",
+            command=tree.yview,
+            style="Dark.Vertical.TScrollbar",
+        )
         vsb.grid(row=0, column=1, sticky="ns")
-        hsb = ttk.Scrollbar(tree_container, orient="horizontal", command=tree.xview)
+        hsb = ttk.Scrollbar(
+            tree_container,
+            orient="horizontal",
+            command=tree.xview,
+            style="Dark.Horizontal.TScrollbar",
+        )
         hsb.grid(row=1, column=0, sticky="ew")
         tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
 
@@ -4786,7 +4918,7 @@ class ToolApp(tk.Tk):
                 width = 90
             else:
                 width = 120
-            tree.column(column, width=width, anchor="w")
+            tree.column(column, width=width, anchor="w", stretch=True)
 
         tree.bind("<Double-1>", self._on_rinven_import_double_click)
 
@@ -4841,7 +4973,8 @@ class ToolApp(tk.Tk):
             tree.delete(item)
         for index, row in enumerate(self.rinven_import_rows):
             values = [row.get(column, "") for column in RINVEN_IMPORT_COLUMNS]
-            tree.insert("", "end", iid=str(index), values=values)
+            tag = "even" if index % 2 == 0 else "odd"
+            tree.insert("", "end", iid=str(index), values=values, tags=(tag,))
         available_items = set(tree.get_children(""))
         new_selection = [item for item in selected if item in available_items]
         if new_selection:
