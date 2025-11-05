@@ -2,7 +2,7 @@
 
 import tkinter as tk
 import tkinter.font as tkfont
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog
 from tkinter.scrolledtext import ScrolledText
 import threading
 import os
@@ -10,7 +10,7 @@ import math
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 import pandas as pd
 import requests
@@ -18,10 +18,19 @@ import requests
 import numpy as np
 
 from PIL import Image, ImageTk, ImageDraw, ImageFilter, ImageOps, ImageChops
+from openpyxl import Workbook
 
 from print_service import SharedLabelPrinterServer, resolve_local_ip
 
 from settings_manager import load_settings, save_settings
+from rinven_import_manager import (
+    DEFAULT_PRICING,
+    RINVEN_IMPORT_COLUMNS,
+    RinvenImportStorage,
+    apply_pricing,
+    make_empty_row,
+    normalise_size,
+)
 from updater import (
     UpdateInfo,
     check_for_updates,
@@ -113,6 +122,7 @@ translations = {
         "Browse": "Browse",
         "(Select)": "(Select)",
         "Image Files": "Image Files",
+        "All Files": "All Files",
         "1. Choose Excel File": "1. Choose Excel File",
         "2. Columns": "2. Columns",
         "3. Map Wayfair Fields": "3. Map Wayfair Fields",
@@ -280,6 +290,46 @@ translations = {
         "Barcode support is unavailable.": "Barcode support is unavailable.",
         "Barcode feature requires additional libraries.": "Barcode feature requires additional libraries.",
         "Nothing to export yet. Add at least one field.": "Nothing to export yet. Add at least one field.",
+        "Rinven Import Sheet Generator": "Rinven Import Sheet Generator",
+        "Paste RugNo List": "Paste RugNo List",
+        "Load Excel/CSV": "Load Excel/CSV",
+        "Select Image Folder": "Select Image Folder",
+        "Fill Images": "Fill Images",
+        "Auto Size/Area": "Auto Size/Area",
+        "Auto Price": "Auto Price",
+        "Bulk Set Origin": "Bulk Set Origin",
+        "Bulk Set Style": "Bulk Set Style",
+        "Export Rinven Excel": "Export Rinven Excel",
+        "Active Image Folder:": "Active Image Folder:",
+        "No RugNo values found.": "No RugNo values found.",
+        "Imported {count} RugNo values.": "Imported {count} RugNo values.",
+        "Select RugNo Column": "Select RugNo Column",
+        "Please choose the RugNo column to import.": "Please choose the RugNo column to import.",
+        "Import failed: {error}": "Import failed: {error}",
+        "Pricing Multipliers": "Pricing Multipliers",
+        "SP Multiplier:": "SP Multiplier:",
+        "Retail Multiplier:": "Retail Multiplier:",
+        "MSRP Multiplier:": "MSRP Multiplier:",
+        "Save Pricing": "Save Pricing",
+        "Pricing settings saved.": "Pricing settings saved.",
+        "Please enter a value.": "Please enter a value.",
+        "Updated {field} for {count} rows.": "Updated {field} for {count} rows.",
+        "Auto size applied to {count} rows.": "Auto size applied to {count} rows.",
+        "Auto pricing applied to {count} rows.": "Auto pricing applied to {count} rows.",
+        "Please select rows to update.": "Please select rows to update.",
+        "Please select an image folder first.": "Please select an image folder first.",
+        "Fill Images completed for {count} rows.": "Fill Images completed for {count} rows.",
+        "Could not parse cost value.": "Could not parse cost value.",
+        "No file selected.": "No file selected.",
+        "Export completed: {path}": "Export completed: {path}",
+        "Export failed: {error}": "Export failed: {error}",
+        "Enter value to apply:": "Enter value to apply:",
+        "RugNo Column:": "RugNo Column:",
+        "Image folder updated.": "Image folder updated.",
+        "Added {count} RugNo rows.": "Added {count} RugNo rows.",
+        "No RugNo values were added.": "No RugNo values were added.",
+        "Unable to read file: {error}": "Unable to read file: {error}",
+        "Please enter valid multipliers.": "Please enter valid multipliers.",
         "Map this field": "Map this field",
         "Compliance Panel": "Compliance Panel",
         "Export Only Mapped Fields": "Export Only Mapped Fields",
@@ -344,6 +394,8 @@ translations = {
         "Check for Updates": "Check for Updates",
         "Warning": "Warning",
         "Information": "Information",
+        "OK": "OK",
+        "Cancel": "Cancel",
         "Source and Target folders cannot be empty.": "Source and Target folders cannot be empty.",
         "✅ Settings saved to settings.json": "✅ Settings saved to settings.json",
         "Success": "Success",
@@ -484,6 +536,7 @@ translations = {
         "Browse": "Gözat",
         "(Select)": "(Seçiniz)",
         "Image Files": "Görsel Dosyaları",
+        "All Files": "Tüm Dosyalar",
         "1. Choose Excel File": "1. Excel Dosyası Seç",
         "2. Columns": "2. Sütunlar",
         "3. Map Wayfair Fields": "3. Wayfair Alan Eşlemesi",
@@ -649,6 +702,46 @@ translations = {
         "Unable to render Rinven preview.": "Rinven önizlemesi oluşturulamadı.",
         "Barcode support": "Barkod Desteği",
         "Barcode support is unavailable.": "Barkod özelliği kullanılamıyor.",
+        "Rinven Import Sheet Generator": "Rinven İçe Aktarma Tablosu Oluşturucu",
+        "Paste RugNo List": "RugNo Listesini Yapıştır",
+        "Load Excel/CSV": "Excel/CSV Yükle",
+        "Select Image Folder": "Görsel Klasörü Seç",
+        "Fill Images": "Görselleri Doldur",
+        "Auto Size/Area": "Otomatik Boyut/Alan",
+        "Auto Price": "Otomatik Fiyat",
+        "Bulk Set Origin": "Menşei Toplu Ayarla",
+        "Bulk Set Style": "Stil Toplu Ayarla",
+        "Export Rinven Excel": "Rinven Excel Dışa Aktar",
+        "Active Image Folder:": "Aktif Görsel Klasörü:",
+        "No RugNo values found.": "Hiç RugNo değeri bulunamadı.",
+        "Imported {count} RugNo values.": "{count} RugNo değeri içe aktarıldı.",
+        "Select RugNo Column": "RugNo Sütununu Seç",
+        "Please choose the RugNo column to import.": "Lütfen içe aktarılacak RugNo sütununu seçin.",
+        "Import failed: {error}": "İçe aktarma başarısız: {error}",
+        "Pricing Multipliers": "Fiyatlandırma Katsayıları",
+        "SP Multiplier:": "SP Katsayısı:",
+        "Retail Multiplier:": "Perakende Katsayısı:",
+        "MSRP Multiplier:": "MSRP Katsayısı:",
+        "Save Pricing": "Fiyatlandırmayı Kaydet",
+        "Pricing settings saved.": "Fiyatlandırma ayarları kaydedildi.",
+        "Please enter a value.": "Lütfen bir değer girin.",
+        "Updated {field} for {count} rows.": "{field} alanı {count} satır için güncellendi.",
+        "Auto size applied to {count} rows.": "Otomatik boyut {count} satıra uygulandı.",
+        "Auto pricing applied to {count} rows.": "Otomatik fiyat {count} satıra uygulandı.",
+        "Please select rows to update.": "Lütfen güncellenecek satırları seçin.",
+        "Please select an image folder first.": "Lütfen önce bir görsel klasörü seçin.",
+        "Fill Images completed for {count} rows.": "Görsel doldurma {count} satır için tamamlandı.",
+        "Could not parse cost value.": "Maliyet değeri çözümlenemedi.",
+        "No file selected.": "Dosya seçilmedi.",
+        "Export completed: {path}": "Dışa aktarma tamamlandı: {path}",
+        "Export failed: {error}": "Dışa aktarma başarısız: {error}",
+        "Enter value to apply:": "Uygulanacak değeri girin:",
+        "RugNo Column:": "RugNo Sütunu:",
+        "Image folder updated.": "Görsel klasörü güncellendi.",
+        "Added {count} RugNo rows.": "{count} RugNo satırı eklendi.",
+        "No RugNo values were added.": "Herhangi bir RugNo değeri eklenmedi.",
+        "Unable to read file: {error}": "Dosya okunamadı: {error}",
+        "Please enter valid multipliers.": "Lütfen geçerli katsayılar girin.",
         "Barcode feature requires additional libraries.": "Barkod özelliği ek kütüphaneler gerektirir.",
         "Nothing to export yet. Add at least one field.": "Henüz dışa aktarılacak bir şey yok. En az bir alan ekleyin.",
         "Map this field": "Bu alanı eşle",
@@ -715,6 +808,8 @@ translations = {
         "Check for Updates": "Güncellemeleri Kontrol Et",
         "Warning": "Uyarı",
         "Information": "Bilgi",
+        "OK": "Tamam",
+        "Cancel": "İptal",
         "Source and Target folders cannot be empty.": "Kaynak ve hedef klasörler boş olamaz.",
         "✅ Settings saved to settings.json": "✅ Ayarlar settings.json dosyasına kaydedildi",
         "Success": "Başarılı",
@@ -853,6 +948,7 @@ PANEL_INFO = {
         "9. Barcode Generator": "Create printable barcodes in multiple formats, including DYMO labels.",
         "Wayfair Mapper": "Prepare a Wayfair-ready Excel export by mapping local columns to required Wayfair fields and validating missing or incorrect values.",
         "Rinven Tag": "Design branded Rinven tags with collection details and optional barcode.",
+        "Rinven Import Sheet Generator": "Manage Rinven import rows in a grid with bulk paste, automatic sizing, pricing, and Excel export.",
         "Shared Label Printer": "Share your local DYMO printer securely with other devices on the network.",
         "Help & About": "Review update status, helpful links and support information for the app.",
     },
@@ -873,6 +969,7 @@ PANEL_INFO = {
         "9. Barcode Generator": "PNG veya DYMO dahil birden çok formatta baskıya hazır barkod oluşturur.",
         "Wayfair Mapper": "Yerel sütunları gerekli Wayfair alanlarına eşleştirip eksik veya hatalı değerleri doğrulayarak Wayfair'e hazır Excel çıktısı hazırlayın.",
         "Rinven Tag": "Koleksiyon bilgileri ve isteğe bağlı barkod içeren Rinven etiketleri tasarlar.",
+        "Rinven Import Sheet Generator": "Rinven ana ithalat tablosu satırlarını tablo düzenleyicide yönetir; toplu yapıştırma, otomatik boyut/fiyat ve Excel dışa aktarma sunar.",
         "Shared Label Printer": "Yerel DYMO yazıcınızı ağdaki diğer cihazlarla güvenle paylaşmanızı sağlar.",
         "Help & About": "Uygulama sürümünü, rehberleri ve destek bağlantılarını tek yerde gösterir.",
     },
@@ -905,6 +1002,24 @@ class ToolApp(tk.Tk):
 
         self.settings = load_settings()
         self.settings.setdefault("rinven_history", {})
+        rinven_import_settings = self.settings.setdefault("rinven_import", {})
+        settings_updated = False
+        if "image_folder" not in rinven_import_settings:
+            rinven_import_settings["image_folder"] = ""
+            settings_updated = True
+        pricing_settings = rinven_import_settings.setdefault("pricing", dict(DEFAULT_PRICING))
+        for key, default_value in DEFAULT_PRICING.items():
+            if key not in pricing_settings:
+                pricing_settings[key] = default_value
+                settings_updated = True
+        if settings_updated:
+            save_settings(self.settings)
+        self.rinven_import_settings = rinven_import_settings
+        self.rinven_import_storage = RinvenImportStorage()
+        self.rinven_import_rows = self.rinven_import_storage.load_rows()
+        self.rinven_import_editor: Optional[ttk.Entry] = None
+        self.rinven_import_editor_info: Optional[Tuple[str, str]] = None
+        self._rinven_import_committing = False
         legacy_print = self.settings.get("print_server", {})
         shared_settings = self.settings.setdefault("shared_label_printer", {})
         shared_settings.setdefault("token", legacy_print.get("token", "change-me"))
@@ -1084,6 +1199,7 @@ class ToolApp(tk.Tk):
             "Utility",
             "Rug No Check",
             "Code Generators",
+            "Rinven Import Sheet Generator",
             "Rinven Tag",
             "Shared Label Printer",
             "Help & About",
@@ -1112,6 +1228,7 @@ class ToolApp(tk.Tk):
         self.create_data_calc_panels(self.section_frames["Utility"])
         self.create_rug_no_control_tab(self.section_frames["Rug No Check"])
         self.create_code_gen_panels(self.section_frames["Code Generators"])
+        self.create_rinven_import_panel(self.section_frames["Rinven Import Sheet Generator"])
         self.create_rinven_tag_panel(self.section_frames["Rinven Tag"])
         self.create_shared_printer_panel(self.section_frames["Shared Label Printer"])
         self.create_about_panel(self.section_frames["Help & About"])
@@ -3796,6 +3913,8 @@ class ToolApp(tk.Tk):
         self._update_sidebar_toggle_text()
         if hasattr(self, "update_status_var"):
             self._refresh_update_status_text()
+        if hasattr(self, "rinven_image_folder_value"):
+            self._update_rinven_image_folder_display()
         self._refresh_language_options()
 
     def _refresh_language_options(self):
@@ -5024,6 +5143,535 @@ class ToolApp(tk.Tk):
             tree.insert("", "end", values=(original, status_text))
 
         return tree
+
+    def create_rinven_import_panel(self, parent: ttk.Frame):
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(0, weight=1)
+
+        card = self.create_section_card(parent, "Rinven Import Sheet Generator")
+        card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+
+        frame = card.body
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(2, weight=1)
+
+        toolbar = ttk.Frame(frame, style="TFrame")
+        toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+
+        self.rinven_pricing_vars: Dict[str, tk.StringVar] = {}
+
+        toolbar_buttons = [
+            ("Paste RugNo List", self._open_rinven_paste_dialog),
+            ("Load Excel/CSV", self._load_rinven_rugno_from_file),
+            ("Select Image Folder", self._select_rinven_image_folder),
+            ("Fill Images", self._fill_rinven_images),
+            ("Auto Size/Area", self._rinven_import_auto_size_for_selection),
+            ("Auto Price", self._rinven_import_auto_price_for_selection),
+            ("Bulk Set Origin", lambda: self._rinven_import_bulk_set("Origin", "Bulk Set Origin")),
+            ("Bulk Set Style", lambda: self._rinven_import_bulk_set("Style", "Bulk Set Style")),
+            ("Export Rinven Excel", self._export_rinven_excel),
+        ]
+
+        for index, (label_key, command) in enumerate(toolbar_buttons):
+            button = ttk.Button(toolbar, text=self.tr(label_key), command=command)
+            button.grid(row=0, column=index, padx=3, pady=3, sticky="w")
+            self.register_widget(button, label_key)
+        toolbar.columnconfigure(len(toolbar_buttons), weight=1)
+
+        folder_frame = ttk.Frame(frame, style="TFrame")
+        folder_frame.grid(row=1, column=0, sticky="w", pady=(0, 6))
+        folder_label = ttk.Label(folder_frame, text=self.tr("Active Image Folder:"), style="Secondary.TLabel")
+        folder_label.pack(side="left")
+        self.register_widget(folder_label, "Active Image Folder:")
+        self.rinven_image_folder_value = tk.StringVar()
+        folder_value = ttk.Label(folder_frame, textvariable=self.rinven_image_folder_value)
+        folder_value.pack(side="left", padx=(6, 0))
+        self._update_rinven_image_folder_display()
+
+        tree_container = ttk.Frame(frame, style="PanelBody.TFrame")
+        tree_container.grid(row=2, column=0, sticky="nsew")
+        tree_container.columnconfigure(0, weight=1)
+        tree_container.rowconfigure(0, weight=1)
+
+        tree = ttk.Treeview(
+            tree_container,
+            columns=RINVEN_IMPORT_COLUMNS,
+            show="headings",
+            selectmode="extended",
+        )
+        tree.grid(row=0, column=0, sticky="nsew")
+
+        vsb = ttk.Scrollbar(tree_container, orient="vertical", command=tree.yview)
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb = ttk.Scrollbar(tree_container, orient="horizontal", command=tree.xview)
+        hsb.grid(row=1, column=0, sticky="ew")
+        tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+        for column in RINVEN_IMPORT_COLUMNS:
+            tree.heading(column, text=column)
+            if column in {"RugNo", "ImageFileName"}:
+                width = 160
+            elif column in {"ASize", "StSize", "Design", "Collection"}:
+                width = 140
+            elif column in {"Area", "Rate", "Amount", "Retail", "SP", "MSRP", "Cost"}:
+                width = 90
+            else:
+                width = 120
+            tree.column(column, width=width, anchor="w")
+
+        tree.bind("<Double-1>", self._on_rinven_import_double_click)
+
+        self.rinven_import_tree = tree
+        self._refresh_rinven_import_tree()
+
+        pricing_frame = ttk.Labelframe(frame, text=self.tr("Pricing Multipliers"))
+        pricing_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+        self.register_widget(pricing_frame, "Pricing Multipliers")
+
+        pricing_frame.columnconfigure(6, weight=1)
+
+        pricing = self.rinven_import_settings.get("pricing", {})
+        pricing_fields = [
+            ("sp_multiplier", "SP Multiplier:"),
+            ("retail_multiplier", "Retail Multiplier:"),
+            ("msrp_multiplier", "MSRP Multiplier:"),
+        ]
+        for idx, (key, label_key) in enumerate(pricing_fields):
+            label = ttk.Label(pricing_frame, text=self.tr(label_key))
+            label.grid(row=0, column=idx * 2, sticky="e", padx=(8, 4), pady=6)
+            self.register_widget(label, label_key)
+            value = str(pricing.get(key, DEFAULT_PRICING[key]))
+            var = tk.StringVar(value=value)
+            entry = ttk.Entry(pricing_frame, textvariable=var, width=10)
+            entry.grid(row=0, column=idx * 2 + 1, sticky="w", padx=(0, 12), pady=6)
+            self.rinven_pricing_vars[key] = var
+
+        save_button = ttk.Button(
+            pricing_frame,
+            text=self.tr("Save Pricing"),
+            command=self._save_rinven_pricing_settings,
+        )
+        save_button.grid(row=1, column=0, columnspan=6, sticky="w", padx=8, pady=(0, 8))
+        self.register_widget(save_button, "Save Pricing")
+
+    def _update_rinven_image_folder_display(self) -> None:
+        value_var = getattr(self, "rinven_image_folder_value", None)
+        if value_var is None:
+            return
+        folder_path = self.rinven_import_settings.get("image_folder", "")
+        display = folder_path if folder_path else self.tr("(Select)")
+        value_var.set(display)
+
+    def _refresh_rinven_import_tree(self) -> None:
+        tree = getattr(self, "rinven_import_tree", None)
+        if tree is None:
+            return
+        selected = set(tree.selection())
+        focus_item = tree.focus()
+        for item in tree.get_children():
+            tree.delete(item)
+        for index, row in enumerate(self.rinven_import_rows):
+            values = [row.get(column, "") for column in RINVEN_IMPORT_COLUMNS]
+            tree.insert("", "end", iid=str(index), values=values)
+        available_items = set(tree.get_children(""))
+        new_selection = [item for item in selected if item in available_items]
+        if new_selection:
+            tree.selection_set(new_selection)
+        if focus_item in available_items:
+            tree.focus(focus_item)
+
+    def _on_rinven_import_double_click(self, event: tk.Event) -> None:
+        tree = getattr(self, "rinven_import_tree", None)
+        if tree is None:
+            return
+        region = tree.identify("region", event.x, event.y)
+        if region != "cell":
+            return
+        row_id = tree.identify_row(event.y)
+        column_id = tree.identify_column(event.x)
+        if not row_id or not column_id:
+            return
+        self._start_rinven_import_edit(row_id, column_id)
+
+    def _start_rinven_import_edit(self, row_id: str, column_id: str) -> None:
+        tree = getattr(self, "rinven_import_tree", None)
+        if tree is None:
+            return
+        try:
+            column_index = int(column_id.lstrip("#")) - 1
+        except ValueError:
+            return
+        if not (0 <= column_index < len(RINVEN_IMPORT_COLUMNS)):
+            return
+        column_name = RINVEN_IMPORT_COLUMNS[column_index]
+        bbox = tree.bbox(row_id, column_id)
+        if not bbox:
+            return
+        self._close_rinven_import_editor(save=False)
+        entry = ttk.Entry(tree)
+        current_value = tree.set(row_id, column_name)
+        entry.insert(0, current_value)
+        entry.place(x=bbox[0], y=bbox[1], width=bbox[2], height=bbox[3])
+        entry.focus_set()
+        entry.select_range(0, tk.END)
+        entry.bind("<Return>", lambda _e: self._close_rinven_import_editor(True))
+        entry.bind("<KP_Enter>", lambda _e: self._close_rinven_import_editor(True))
+        entry.bind("<Escape>", lambda _e: self._close_rinven_import_editor(False))
+        entry.bind("<FocusOut>", lambda _e: self._close_rinven_import_editor(True))
+        self.rinven_import_editor = entry
+        self.rinven_import_editor_info = (row_id, column_name)
+
+    def _close_rinven_import_editor(self, save: bool, value: Optional[str] = None) -> None:
+        entry = getattr(self, "rinven_import_editor", None)
+        info = getattr(self, "rinven_import_editor_info", None)
+        if entry is None:
+            return
+        text_value = entry.get() if value is None else value
+        entry.destroy()
+        self.rinven_import_editor = None
+        self.rinven_import_editor_info = None
+        if not save or not info:
+            self._refresh_rinven_import_tree()
+            return
+        row_id, column_name = info
+        self._apply_rinven_cell_update(row_id, column_name, text_value)
+
+    def _apply_rinven_cell_update(self, row_id: str, column_name: str, raw_value: str) -> None:
+        if self._rinven_import_committing:
+            return
+        try:
+            index = int(row_id)
+        except (TypeError, ValueError):
+            return
+        if not (0 <= index < len(self.rinven_import_rows)):
+            return
+        row = self.rinven_import_rows[index]
+        value = raw_value.strip()
+        self._rinven_import_committing = True
+        try:
+            if column_name == "ASize":
+                row["ASize"] = value
+                st_size, area_text = normalise_size(value)
+                row["StSize"] = st_size
+                row["Area"] = area_text
+            elif column_name == "Cost":
+                previous = row.get("Cost", "")
+                try:
+                    updates = apply_pricing(value, self._get_rinven_pricing_values())
+                except ValueError:
+                    row["Cost"] = previous
+                    messagebox.showerror(self.tr("Error"), self.tr("Could not parse cost value."))
+                    self._refresh_rinven_import_tree()
+                    return
+                row.update(updates)
+            else:
+                row[column_name] = value
+            self._refresh_rinven_import_tree()
+            self._save_rinven_import_rows()
+        finally:
+            self._rinven_import_committing = False
+
+    def _save_rinven_import_rows(self) -> None:
+        try:
+            self.rinven_import_storage.save_rows(self.rinven_import_rows)
+        except OSError as exc:
+            self.log(f"{self.tr('Error')}: {exc}")
+
+    def _get_rinven_pricing_values(self) -> Dict[str, float]:
+        pricing = self.rinven_import_settings.get("pricing", {})
+        values: Dict[str, float] = {}
+        for key, default in DEFAULT_PRICING.items():
+            try:
+                values[key] = float(pricing.get(key, default))
+            except (TypeError, ValueError):
+                values[key] = float(default)
+        return values
+
+    def _save_rinven_pricing_settings(self) -> None:
+        parsed: Dict[str, float] = {}
+        for key, var in self.rinven_pricing_vars.items():
+            text = var.get().strip()
+            try:
+                parsed[key] = float(text)
+            except ValueError:
+                messagebox.showerror(self.tr("Error"), self.tr("Please enter valid multipliers."))
+                return
+        self.rinven_import_settings.setdefault("pricing", {})
+        self.rinven_import_settings["pricing"].update(parsed)
+        save_settings(self.settings)
+        message = self.tr("Pricing settings saved.")
+        self.log(message)
+        messagebox.showinfo(self.tr("Success"), message)
+
+    def _open_rinven_paste_dialog(self) -> None:
+        dialog = tk.Toplevel(self)
+        dialog.title(self.tr("Paste RugNo List"))
+        dialog.transient(self)
+        dialog.grab_set()
+
+        text_area = ScrolledText(dialog, width=40, height=14)
+        text_area.pack(fill="both", expand=True, padx=12, pady=12)
+        text_area.focus_set()
+
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(fill="x", padx=12, pady=(0, 12))
+
+        def on_confirm() -> None:
+            content = text_area.get("1.0", tk.END)
+            values = [line.strip() for line in content.splitlines() if line.strip()]
+            if not values:
+                messagebox.showinfo(self.tr("Information"), self.tr("No RugNo values found."), parent=dialog)
+                return
+            added = self._rinven_import_add_rugnos(values)
+            if added:
+                message = self.tr("Added {count} RugNo rows.").format(count=added)
+                self.log(message)
+                messagebox.showinfo(self.tr("Success"), message, parent=dialog)
+            else:
+                messagebox.showinfo(self.tr("Information"), self.tr("No RugNo values were added."), parent=dialog)
+            dialog.destroy()
+
+        def on_cancel() -> None:
+            dialog.destroy()
+
+        ok_button = ttk.Button(button_frame, text=self.tr("OK"), command=on_confirm)
+        ok_button.pack(side="left", padx=(0, 6))
+        cancel_button = ttk.Button(button_frame, text=self.tr("Cancel"), command=on_cancel)
+        cancel_button.pack(side="left")
+        dialog.protocol("WM_DELETE_WINDOW", on_cancel)
+
+    def _rinven_import_add_rugnos(self, rugnos: Iterable[str]) -> int:
+        added = 0
+        for rug in rugnos:
+            row = make_empty_row(rug)
+            self.rinven_import_rows.append(row)
+            added += 1
+        if added:
+            self._refresh_rinven_import_tree()
+            self._save_rinven_import_rows()
+        return added
+
+    def _load_rinven_rugno_from_file(self) -> None:
+        file_path = filedialog.askopenfilename(
+            title=self.tr("Load Excel/CSV"),
+            filetypes=[
+                ("Excel", "*.xlsx *.xls *.xlsm *.xlsb"),
+                ("CSV", "*.csv"),
+                (self.tr("All Files"), "*.*"),
+            ],
+        )
+        if not file_path:
+            self.log(self.tr("No file selected."))
+            return
+        try:
+            extension = Path(file_path).suffix.lower()
+            if extension in {".xlsx", ".xls", ".xlsm", ".xlsb"}:
+                dataframe = pd.read_excel(file_path, dtype=str)
+            else:
+                dataframe = pd.read_csv(file_path, dtype=str, keep_default_na=False)
+        except Exception as exc:  # pylint: disable=broad-except
+            message = self.tr("Unable to read file: {error}").format(error=exc)
+            messagebox.showerror(self.tr("Error"), message)
+            return
+        columns = list(dataframe.columns)
+        if not columns:
+            messagebox.showinfo(self.tr("Information"), self.tr("No RugNo values found."))
+            return
+        selected_column = self._prompt_rinven_rugno_column(columns)
+        if not selected_column:
+            return
+        values: List[str] = []
+        for raw in dataframe[selected_column]:
+            if pd.isna(raw):
+                continue
+            text = str(raw).strip()
+            if text:
+                values.append(text)
+        if not values:
+            messagebox.showinfo(self.tr("Information"), self.tr("No RugNo values found."))
+            return
+        added = self._rinven_import_add_rugnos(values)
+        if added:
+            message = self.tr("Imported {count} RugNo values.").format(count=added)
+            self.log(message)
+            messagebox.showinfo(self.tr("Success"), message)
+
+    def _prompt_rinven_rugno_column(self, columns: List[str]) -> Optional[str]:
+        if not columns:
+            return None
+        dialog = tk.Toplevel(self)
+        dialog.title(self.tr("Select RugNo Column"))
+        dialog.transient(self)
+        dialog.grab_set()
+
+        prompt = ttk.Label(dialog, text=self.tr("Please choose the RugNo column to import."))
+        prompt.pack(fill="x", padx=12, pady=(12, 6))
+
+        selected = tk.StringVar(value=columns[0])
+        combo = ttk.Combobox(dialog, values=columns, textvariable=selected, state="readonly")
+        combo.pack(fill="x", padx=12, pady=(0, 12))
+        combo.focus_set()
+
+        result: Dict[str, Optional[str]] = {"value": None}
+
+        def on_confirm() -> None:
+            result["value"] = selected.get()
+            dialog.destroy()
+
+        def on_cancel() -> None:
+            dialog.destroy()
+
+        buttons = ttk.Frame(dialog)
+        buttons.pack(fill="x", padx=12, pady=(0, 12))
+        ok_button = ttk.Button(buttons, text=self.tr("OK"), command=on_confirm)
+        ok_button.pack(side="left", padx=(0, 6))
+        cancel_button = ttk.Button(buttons, text=self.tr("Cancel"), command=on_cancel)
+        cancel_button.pack(side="left")
+        dialog.protocol("WM_DELETE_WINDOW", on_cancel)
+        dialog.wait_window()
+        return result["value"]
+
+    def _select_rinven_image_folder(self) -> None:
+        folder = filedialog.askdirectory(title=self.tr("Select Image Folder"))
+        if not folder:
+            return
+        self.rinven_import_settings["image_folder"] = folder
+        save_settings(self.settings)
+        self._update_rinven_image_folder_display()
+        self.log(self.tr("Image folder updated."))
+
+    def _fill_rinven_images(self) -> None:
+        folder_path = self.rinven_import_settings.get("image_folder", "")
+        if not folder_path:
+            messagebox.showinfo(self.tr("Information"), self.tr("Please select an image folder first."))
+            return
+        folder = Path(folder_path)
+        matched = 0
+        for row in self.rinven_import_rows:
+            rug_no = row.get("RugNo", "").strip()
+            expected = f"{rug_no}.jpg" if rug_no else ""
+            if expected and (folder / expected).exists():
+                row["ImageFileName"] = expected
+                matched += 1
+            else:
+                row["ImageFileName"] = ""
+        self._refresh_rinven_import_tree()
+        self._save_rinven_import_rows()
+        message = self.tr("Fill Images completed for {count} rows.").format(count=matched)
+        self.log(message)
+        messagebox.showinfo(self.tr("Success"), message)
+
+    def _rinven_import_selected_indices(self) -> List[int]:
+        tree = getattr(self, "rinven_import_tree", None)
+        if tree is None:
+            return []
+        indices: List[int] = []
+        for item in tree.selection():
+            try:
+                index = int(item)
+            except ValueError:
+                continue
+            if 0 <= index < len(self.rinven_import_rows):
+                indices.append(index)
+        return indices
+
+    def _rinven_import_auto_size_for_selection(self) -> None:
+        indices = self._rinven_import_selected_indices()
+        if not indices:
+            messagebox.showinfo(self.tr("Information"), self.tr("Please select rows to update."))
+            return
+        updated = 0
+        for index in indices:
+            if self._apply_rinven_size_to_row(index):
+                updated += 1
+        self._refresh_rinven_import_tree()
+        self._save_rinven_import_rows()
+        message = self.tr("Auto size applied to {count} rows.").format(count=updated)
+        self.log(message)
+        messagebox.showinfo(self.tr("Success"), message)
+
+    def _apply_rinven_size_to_row(self, index: int) -> bool:
+        row = self.rinven_import_rows[index]
+        size_text = row.get("ASize", "")
+        st_size, area_text = normalise_size(size_text)
+        row["StSize"] = st_size
+        row["Area"] = area_text
+        return bool(st_size and area_text)
+
+    def _rinven_import_auto_price_for_selection(self) -> None:
+        indices = self._rinven_import_selected_indices()
+        if not indices:
+            messagebox.showinfo(self.tr("Information"), self.tr("Please select rows to update."))
+            return
+        updated = 0
+        for index in indices:
+            if self._apply_rinven_price_to_row(index):
+                updated += 1
+        self._refresh_rinven_import_tree()
+        self._save_rinven_import_rows()
+        message = self.tr("Auto pricing applied to {count} rows.").format(count=updated)
+        self.log(message)
+        messagebox.showinfo(self.tr("Success"), message)
+
+    def _apply_rinven_price_to_row(self, index: int) -> bool:
+        row = self.rinven_import_rows[index]
+        cost_text = row.get("Cost", "")
+        try:
+            updates = apply_pricing(cost_text, self._get_rinven_pricing_values())
+        except ValueError:
+            return False
+        row.update(updates)
+        return bool(updates.get("Cost"))
+
+    def _rinven_import_bulk_set(self, field_name: str, title_key: str) -> None:
+        indices = self._rinven_import_selected_indices()
+        if not indices:
+            messagebox.showinfo(self.tr("Information"), self.tr("Please select rows to update."))
+            return
+        value = simpledialog.askstring(self.tr(title_key), self.tr("Enter value to apply:"), parent=self)
+        if value is None:
+            return
+        value = value.strip()
+        if not value:
+            messagebox.showinfo(self.tr("Information"), self.tr("Please enter a value."))
+            return
+        for index in indices:
+            self.rinven_import_rows[index][field_name] = value
+        self._refresh_rinven_import_tree()
+        self._save_rinven_import_rows()
+        message = self.tr("Updated {field} for {count} rows.").format(
+            field=self.tr(field_name),
+            count=len(indices),
+        )
+        self.log(message)
+        messagebox.showinfo(self.tr("Success"), message)
+
+    def _export_rinven_excel(self) -> None:
+        if not self.rinven_import_rows:
+            messagebox.showinfo(self.tr("Information"), self.tr("No RugNo values were added."))
+            return
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel", "*.xlsx"), (self.tr("All Files"), "*.*")],
+            title=self.tr("Export Rinven Excel"),
+        )
+        if not file_path:
+            return
+        try:
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Import"
+            sheet.append(RINVEN_IMPORT_COLUMNS)
+            for row in self.rinven_import_rows:
+                sheet.append([row.get(column, "") for column in RINVEN_IMPORT_COLUMNS])
+            workbook.save(file_path)
+        except Exception as exc:  # pylint: disable=broad-except
+            message = self.tr("Export failed: {error}").format(error=exc)
+            messagebox.showerror(self.tr("Error"), message)
+            return
+        message = self.tr("Export completed: {path}").format(path=file_path)
+        self.log(message)
+        messagebox.showinfo(self.tr("Success"), message)
 
     def create_code_gen_panels(self, parent: ttk.Frame):
         parent.columnconfigure(0, weight=1)
