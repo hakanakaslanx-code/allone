@@ -177,14 +177,18 @@ translations = {
         "Column Name/Letter:": "Column Name/Letter:",
         "Process File": "Process File",
         "Status": "Status",
-        "Rug No": "Rug No",
+        "ID": "ID",
         "Column Match & Report": "Column Match & Report",
-        "Inventory List File:": "Inventory List File:",
-        "Check Rug Nos": "Check Rug Nos",
+        "Primary List:": "Primary List:",
+        "Reference List:": "Reference List:",
+        "Compare IDs": "Compare IDs",
         "Results:": "Results:",
         "RUG_NO_CONTROL_FOUND": "Found",
         "RUG_NO_CONTROL_NOT_FOUND": "Not Found",
-        "Please select both Sold and Inventory files.": "Please select both Sold and Inventory files.",
+        "Please select both Primary and Reference lists.": "Please select both Primary and Reference lists.",
+        "Primary List Tooltip": "The main list to be checked.",
+        "Reference List Tooltip": "The list to compare against.",
+        "Compare IDs Tooltip": "Compare ID values across both sheets.",
         "Could not find a Rug No column in the selected file.": "Could not find a Rug No column in the selected file.",
         "Could not read the selected file: {error}": "Could not read the selected file: {error}",
         "Rug No control completed.": "Rug No control completed.",
@@ -548,14 +552,18 @@ translations = {
         "Column Name/Letter:": "Sütun Adı/Harf:",
         "Process File": "Dosyayı İşle",
         "Column Match & Report": "Sütun Eşleştir & Raporla",
-        "Inventory List File:": "Envanter Listesi Dosyası:",
+        "Primary List:": "Birincil Liste:",
+        "Reference List:": "Referans Listesi:",
         "Status": "Durum",
-        "Rug No": "Rug No",
-        "Check Rug Nos": "Rug No Kontrol Et",
+        "ID": "Kimlik",
+        "Compare IDs": "Kimlikleri Karşılaştır",
         "Results:": "Sonuçlar:",
         "RUG_NO_CONTROL_FOUND": "Bulundu",
         "RUG_NO_CONTROL_NOT_FOUND": "Yok",
-        "Please select both Sold and Inventory files.": "Lütfen Satılanlar ve Envanter dosyalarını seçin.",
+        "Please select both Primary and Reference lists.": "Lütfen Birincil ve Referans listelerini seçin.",
+        "Primary List Tooltip": "Kontrol edilecek ana liste.",
+        "Reference List Tooltip": "Karşılaştırma yapılacak liste.",
+        "Compare IDs Tooltip": "Her iki listede ID değerlerini karşılaştır.",
         "Could not find a Rug No column in the selected file.": "Seçilen dosyada bir Halı No sütunu bulunamadı.",
         "Could not read the selected file: {error}": "Seçilen dosya okunamadı: {error}",
         "Rug No control completed.": "Rug No kontrolü tamamlandı.",
@@ -875,6 +883,112 @@ PANEL_INFO = {
     },
 }
 
+
+class Tooltip:
+    """Simple tooltip helper for ttk/tk widgets."""
+
+    def __init__(
+        self,
+        widget: tk.Misc,
+        text: str,
+        *,
+        background: str = "#111c2e",
+        foreground: str = "#f1f5f9",
+        font: Optional[tuple] = None,
+        delay: int = 400,
+    ) -> None:
+        self.widget = widget
+        self.text = text or ""
+        self.background = background
+        self.foreground = foreground
+        self.font = font or ("Segoe UI", 9)
+        self.delay = max(0, int(delay))
+        self._tipwindow: Optional[tk.Toplevel] = None
+        self._label: Optional[tk.Label] = None
+        self._after_id: Optional[str] = None
+
+        self.widget.bind("<Enter>", self._schedule_show, add="+")
+        self.widget.bind("<Leave>", self._hide, add="+")
+        self.widget.bind("<FocusIn>", self._schedule_show, add="+")
+        self.widget.bind("<FocusOut>", self._hide, add="+")
+        self.widget.bind("<ButtonPress>", self._hide, add="+")
+        self.widget.bind("<Destroy>", self._on_destroy, add="+")
+
+    def _schedule_show(self, event: Optional[tk.Event] = None) -> None:
+        self._cancel_scheduled_show()
+        if self.delay <= 0:
+            self._show(event)
+            return
+        try:
+            self._after_id = self.widget.after(self.delay, lambda e=event: self._show(e))
+        except tk.TclError:
+            self._after_id = None
+
+    def _cancel_scheduled_show(self) -> None:
+        if self._after_id is None:
+            return
+        try:
+            self.widget.after_cancel(self._after_id)
+        except tk.TclError:
+            pass
+        self._after_id = None
+
+    def _show(self, event: Optional[tk.Event] = None) -> None:
+        self._after_id = None
+        if self._tipwindow or not self.text:
+            return
+        try:
+            x = event.x_root if event else self.widget.winfo_rootx()
+            y = event.y_root if event else self.widget.winfo_rooty() + self.widget.winfo_height()
+        except tk.TclError:
+            return
+
+        self._tipwindow = tk.Toplevel(self.widget)
+        self._tipwindow.withdraw()
+        self._tipwindow.overrideredirect(True)
+        self._tipwindow.configure(bg=self.background)
+
+        self._label = tk.Label(
+            self._tipwindow,
+            text=self.text,
+            justify="left",
+            background=self.background,
+            foreground=self.foreground,
+            borderwidth=0,
+            padx=8,
+            pady=4,
+            font=self.font,
+            wraplength=280,
+        )
+        self._label.pack()
+
+        offset_x = 12
+        offset_y = 8
+        self._tipwindow.geometry(f"+{x + offset_x}+{y + offset_y}")
+        self._tipwindow.deiconify()
+
+    def _hide(self, _event: Optional[tk.Event] = None) -> None:
+        self._cancel_scheduled_show()
+        if self._tipwindow is not None:
+            try:
+                self._tipwindow.destroy()
+            except tk.TclError:
+                pass
+            self._tipwindow = None
+        self._label = None
+
+    def _on_destroy(self, _event: Optional[tk.Event] = None) -> None:
+        self._cancel_scheduled_show()
+        self._tipwindow = None
+        self._label = None
+
+    def update_text(self, text: str) -> None:
+        self.text = text or ""
+        if self._label is not None:
+            self._label.configure(text=self.text)
+        if not self.text:
+            self._hide()
+
 DYMO_LABELS = {
     'Address (30252)': {'w_in': 3.5, 'h_in': 1.125},
     'Shipping (30256)': {'w_in': 4.0, 'h_in': 2.3125},
@@ -943,6 +1057,7 @@ class ToolApp(tk.Tk):
         self._refresh_update_status_text()
 
         self.translatable_widgets = []
+        self.registered_tooltips: List[Tuple[Tooltip, str]] = []
         self.section_descriptions = []
         self.notebook_tabs = []
         self.sidebar_nav = []
@@ -3869,6 +3984,18 @@ class ToolApp(tk.Tk):
         self.translatable_widgets.append((widget, attr, text_key))
         self._apply_translation(widget, attr, text_key)
 
+    def register_tooltip(self, widget: tk.Misc, text_key: str) -> Tooltip:
+        """Attach a localized tooltip to a widget."""
+        tooltip = Tooltip(
+            widget,
+            self.tr(text_key),
+            background=self.theme_colors.get("tooltip_bg", "#111c2e"),
+            foreground=self.theme_colors.get("tooltip_fg", "#f1f5f9"),
+            font=self._font("Segoe UI", 9),
+        )
+        self.registered_tooltips.append((tooltip, text_key))
+        return tooltip
+
     def _apply_translation(self, widget, attr, text_key):
         try:
             value = self.tr(text_key)
@@ -3892,6 +4019,8 @@ class ToolApp(tk.Tk):
             self.header_subtitle.config(text=self.tr("Welcome to the Combined Utility Tool!"))
         for widget, attr, text_key in self.translatable_widgets:
             self._apply_translation(widget, attr, text_key)
+        for tooltip, text_key in self.registered_tooltips:
+            tooltip.update_text(self.tr(text_key))
         for label, title_key in self.section_descriptions:
             info_text = self.tr_info(title_key)
             if info_text:
@@ -4444,9 +4573,10 @@ class ToolApp(tk.Tk):
         input_frame.columnconfigure(1, weight=1)
         input_frame.columnconfigure(4, weight=1)
 
-        sold_label = ttk.Label(input_frame, text=self.tr("Sold List File:"))
+        sold_label = ttk.Label(input_frame, text=self.tr("Primary List:"))
         sold_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
-        self.register_widget(sold_label, "Sold List File:")
+        self.register_widget(sold_label, "Primary List:")
+        self.register_tooltip(sold_label, "Primary List Tooltip")
         ttk.Entry(input_frame, textvariable=self.rug_control_sold_path).grid(
             row=0,
             column=1,
@@ -4463,9 +4593,10 @@ class ToolApp(tk.Tk):
         sold_browse.grid(row=0, column=4, sticky="e", padx=6, pady=6)
         self.register_widget(sold_browse, "Browse...")
 
-        inventory_label = ttk.Label(input_frame, text=self.tr("Inventory List File:"))
+        inventory_label = ttk.Label(input_frame, text=self.tr("Reference List:"))
         inventory_label.grid(row=1, column=0, sticky="w", padx=6, pady=6)
-        self.register_widget(inventory_label, "Inventory List File:")
+        self.register_widget(inventory_label, "Reference List:")
+        self.register_tooltip(inventory_label, "Reference List Tooltip")
         ttk.Entry(input_frame, textvariable=self.rug_control_inventory_path).grid(
             row=1,
             column=1,
@@ -4484,11 +4615,12 @@ class ToolApp(tk.Tk):
 
         check_button = ttk.Button(
             input_frame,
-            text=self.tr("Check Rug Nos"),
+            text=self.tr("Compare IDs"),
             command=self.run_rug_no_control_check,
         )
         check_button.grid(row=2, column=0, columnspan=5, sticky="w", padx=6, pady=(6, 0))
-        self.register_widget(check_button, "Check Rug Nos")
+        self.register_widget(check_button, "Compare IDs")
+        self.register_tooltip(check_button, "Compare IDs Tooltip")
 
         results_label = ttk.Label(parent, text=self.tr("Results:"), style="Secondary.TLabel")
         results_label.grid(row=1, column=0, sticky="w", padx=12)
@@ -4518,7 +4650,7 @@ class ToolApp(tk.Tk):
         if not sold_path or not inventory_path:
             messagebox.showerror(
                 self.tr("Error"),
-                self.tr("Please select both Sold and Inventory files."),
+                self.tr("Please select both Primary and Reference lists."),
             )
             return
 
@@ -4606,7 +4738,7 @@ class ToolApp(tk.Tk):
         if tree is None:
             return None
 
-        tree.heading("rug_no", text=self.tr("Rug No"))
+        tree.heading("rug_no", text=self.tr("ID"))
         tree.heading("status", text=self.tr("Status"))
 
         for item in tree.get_children():
