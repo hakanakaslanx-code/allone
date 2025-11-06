@@ -48,10 +48,10 @@ translations = {
         "File & Image Tools": "File & Image Tools",
         "Utility": "Utility",
         "menu.utility": "Utility",
-        "menu.utility.rugno_formatter": "RugNo Column Formatter",
-        "menu.utility.bulk_size_processor": "Bulk Rug Size Processor",
-        "menu.utility.single_size_calculator": "Single Rug Size Calculator",
-        "menu.utility.unit_converter": "Multi-Unit Converter",
+        "menu.utility.rugno_formatter": "ID Column Formatter",
+        "menu.utility.bulk_size_processor": "Bulk Dimension Processor",
+        "menu.utility.single_size_calculator": "Quick Dimension Calculator",
+        "menu.utility.unit_converter": "Unit Converter",
         "Code Generators": "Code Generators",
         "Help & About": "Help & About",
         "Language": "Language",
@@ -164,13 +164,15 @@ translations = {
         "Manual Prompt 3": "Click the bottom-right corner where the rug should sit on the floor.",
         "Manual Prompt 4": "Click the bottom-left corner where the rug should sit on the floor.",
         "Manual Placement Complete": "Rug placed. You can drag, scale, or rotate.",
-        "RugNo Column Formatter": "RugNo Column Formatter",
+        "IDENTIFIER TOOLS": "IDENTIFIER TOOLS",
+        "DIMENSION & MEASUREMENT TOOLS": "DIMENSION & MEASUREMENT TOOLS",
+        "ID Column Formatter": "ID Column Formatter",
         "Excel/CSV/TXT File:": "Excel/CSV/TXT File:",
         "Format": "Format",
-        "Single Rug Size Calculator": "Single Rug Size Calculator",
+        "Quick Dimension Calculator": "Quick Dimension Calculator",
         "Dimension (e.g., 5'2\" x 8'):": "Dimension (e.g., 5'2\" x 8'):",
         "Calculate": "Calculate",
-        "Bulk Rug Size Processor": "Bulk Rug Size Processor",
+        "Bulk Dimension Processor": "Bulk Dimension Processor",
         "Excel/CSV File:": "Excel/CSV File:",
         "Column Name/Letter:": "Column Name/Letter:",
         "Process File": "Process File",
@@ -209,7 +211,7 @@ translations = {
         "Could not find a Rug No column in the selected file.": "Could not find a Rug No column in the selected file.",
         "Could not read the selected file: {error}": "Could not read the selected file: {error}",
         "Rug No control completed.": "Rug No control completed.",
-        "Multi-Unit Converter": "Multi-Unit Converter",
+        "Unit Converter": "Unit Converter",
         "Centimeters (cm):": "Centimeters (cm):",
         "Inches (in):": "Inches (in):",
         "Feet (ft/in):": "Feet (ft/in):",
@@ -420,14 +422,14 @@ translations = {
             "   Converts Apple's HEIC format images and WEBP pictures to the universal JPG format.\n"
             "3. Batch Image Resizer:\n"
             "   Resizes images by a fixed width or by a percentage of the original dimensions.\n"
-            "4. RugNo Column Formatter:\n"
-            "   Format rug numbers from Excel or CSV files by adding the 'RugNo' prefix to each value inside the selected column.\n"
-            "5. Single Rug Size Calculator:\n"
-            "   Calculate the exact area for a single rug size. Enter dimensions such as '5'2\" x 8'' to get square feet and square meters instantly.\n"
-            "6. Bulk Rug Size Processor:\n"
-            "   Process and normalize multiple rug sizes from an Excel or CSV file. Select the column that contains dimensions, and automatically calculate square feet and square meters for all rows.\n"
-            "7. Multi-Unit Converter:\n"
-            "   Convert between cm, inches, and feet using three separate input boxes. Type a value in any field to automatically update the others in real time.\n"
+            "4. ID Column Formatter:\n"
+            "   Format and standardize ID values in bulk for spreadsheets or text files.\n"
+            "5. Quick Dimension Calculator:\n"
+            "   Calculate area instantly for a single item size using flexible dimension formats.\n"
+            "6. Bulk Dimension Processor:\n"
+            "   Normalize dimension strings from spreadsheets and auto-calculate total area columns.\n"
+            "7. Unit Converter:\n"
+            "   Convert between centimeters, inches, and feet with synchronized input fields.\n"
             "8. Match Image Links:\n"
             "   Matches image links from a separate file to a key column in an Excel/CSV file and adds them as new columns.\n"
             "---------------------------------\n"
@@ -440,10 +442,10 @@ translations = {
         "File & Image Tools": "Dosya ve Görsel Araçları",
         "Utility": "Araçlar",
         "menu.utility": "Araçlar",
-        "menu.utility.rugno_formatter": "RugNo Sütun Biçimlendirici",
-        "menu.utility.bulk_size_processor": "Toplu Halı Ölçü İşleyici",
-        "menu.utility.single_size_calculator": "Tek Halı Ölçü Hesaplayıcı",
-        "menu.utility.unit_converter": "Çoklu Birim Dönüştürücü",
+        "menu.utility.rugno_formatter": "ID Sütun Biçimlendirici",
+        "menu.utility.bulk_size_processor": "Toplu Ölçü İşleyici",
+        "menu.utility.single_size_calculator": "Hızlı Ölçü Hesaplayıcı",
+        "menu.utility.unit_converter": "Birim Dönüştürücü",
         "Code Generators": "Kod Üreteçleri",
         "Help & About": "Yardım ve Hakkında",
         "Language": "Dil",
@@ -556,13 +558,15 @@ translations = {
         "Manual Prompt 3": "Click the bottom-right corner where the rug should sit on the floor.",
         "Manual Prompt 4": "Click the bottom-left corner where the rug should sit on the floor.",
         "Manual Placement Complete": "Rug placed. You can drag, scale, or rotate.",
-        "RugNo Column Formatter": "RugNo Sütun Biçimlendirici",
+        "IDENTIFIER TOOLS": "KİMLİK ARAÇLARI",
+        "DIMENSION & MEASUREMENT TOOLS": "ÖLÇÜ VE METRİK ARAÇLARI",
+        "ID Column Formatter": "ID Sütun Biçimlendirici",
         "Excel/CSV/TXT File:": "Excel/CSV/TXT Dosyası:",
         "Format": "Biçimlendir",
-        "Single Rug Size Calculator": "Tek Halı Ölçü Hesaplayıcı",
+        "Quick Dimension Calculator": "Hızlı Ölçü Hesaplayıcı",
         "Dimension (e.g., 5'2\" x 8'):": "Ölçü (örn. 5'2\" x 8'):",
         "Calculate": "Hesapla",
-        "Bulk Rug Size Processor": "Toplu Halı Ölçü İşleyici",
+        "Bulk Dimension Processor": "Toplu Ölçü İşleyici",
         "Excel/CSV File:": "Excel/CSV Dosyası:",
         "Column Name/Letter:": "Sütun Adı/Harf:",
         "Process File": "Dosyayı İşle",
@@ -601,7 +605,7 @@ translations = {
         "Could not find a Rug No column in the selected file.": "Seçilen dosyada bir Halı No sütunu bulunamadı.",
         "Could not read the selected file: {error}": "Seçilen dosya okunamadı: {error}",
         "Rug No control completed.": "Rug No kontrolü tamamlandı.",
-        "Multi-Unit Converter": "Çoklu Birim Dönüştürücü",
+        "Unit Converter": "Birim Dönüştürücü",
         "Centimeters (cm):": "Santimetre (cm):",
         "Inches (in):": "İnç (in):",
         "Feet (ft/in):": "Ayak (ft/in):",
@@ -884,12 +888,12 @@ PANEL_INFO = {
         "2. Convert HEIC/WEBP to JPG": "Convert entire folders of HEIC or WEBP photos into widely compatible JPG images.",
         "3. Batch Image Resizer": "Resize and compress images in bulk using width- or percentage-based rules.",
         "View in Room": "Preview rugs inside a selected room photo with scaling and transparency controls.",
-        "RugNo Column Formatter": "Format rug numbers from Excel or CSV files by adding the 'RugNo' prefix to each value inside the selected column.",
-        "Single Rug Size Calculator": "Calculate the exact area for a single rug size. Enter dimensions such as '5'2\" x 8'' to get square feet and square meters instantly.",
-        "Bulk Rug Size Processor": "Process and normalize multiple rug sizes from an Excel or CSV file. Select the column that contains dimensions, and automatically calculate square feet and square meters for all rows.",
+        "ID Column Formatter": "Format and standardize ID values in bulk.",
+        "Quick Dimension Calculator": "Calculate area instantly for a single item size.",
+        "Bulk Dimension Processor": "Normalize dimension strings and auto-calculate area.",
         "Rug No Checker": "Compare sold and master lists or search manually to verify rug numbers.",
         "Column Match & Report": "Compare selected columns across two Excel sheets and generate a match/missing report.",
-        "Multi-Unit Converter": "Convert between cm, inches, and feet using three separate input boxes. Type a value in any field to automatically update the others in real time.",
+        "Unit Converter": "Convert between cm, inches, and feet automatically.",
         "8. Match Image Links": "Attach hosted image URLs to product rows by matching a shared key column.",
         "8. QR Code Generator": "Generate QR codes for web links or label printers in just a few clicks.",
         "9. Barcode Generator": "Create printable barcodes in multiple formats, including DYMO labels.",
@@ -903,12 +907,12 @@ PANEL_INFO = {
         "2. Convert HEIC/WEBP to JPG": "HEIC veya WEBP fotoğraflarını tek seferde yaygın kullanılan JPG formatına dönüştürür.",
         "3. Batch Image Resizer": "Görselleri genişliğe ya da yüzdeye göre toplu biçimde yeniden boyutlandırıp sıkıştırır.",
         "View in Room": "Seçtiğiniz oda fotoğrafında halıyı ölçek ve saydamlıkla yerleştirerek önizleyin.",
-        "RugNo Column Formatter": "Excel veya CSV dosyalarındaki halı numaralarını seçtiğiniz sütundaki her değere 'RugNo' öneki ekleyerek biçimlendirin.",
-        "Single Rug Size Calculator": "Tek bir halı ölçüsünün alanını hesaplayın. '5'2\" x 8'' gibi değerler girerek metrekare ve fit sonuçlarını hemen görün.",
-        "Bulk Rug Size Processor": "Excel veya CSV dosyasındaki çoklu halı ölçülerini seçtiğiniz sütuna göre normalize edip tüm satırlar için metrekare ve fit kare hesaplarını otomatik oluşturur.",
+        "ID Column Formatter": "ID değerlerini toplu olarak biçimlendirin ve standartlaştırın.",
+        "Quick Dimension Calculator": "Tek ürün ölçüsünün alanını anında hesaplayın.",
+        "Bulk Dimension Processor": "Ölçü metinlerini normalize edip alanı otomatik hesaplayın.",
         "Rug No Checker": "Satış ve ana listeleri karşılaştırarak halı numaralarını doğrular veya manuel arama yapar.",
         "Column Match & Report": "İki Excel sayfasında seçilen sütunları karşılaştırır ve eşleşme/eksik raporu oluşturur.",
-        "Multi-Unit Converter": "Santimetre, inç ve ayak değerlerini üç ayrı kutuda dönüştürün; herhangi birine yazdığınızda diğerleri anında güncellensin.",
+        "Unit Converter": "Santimetre, inç ve ayak arasında otomatik dönüşüm yapın.",
         "8. Match Image Links": "Paylaşılan anahtar sütunu kullanarak ürün satırlarına görsel bağlantıları ekler.",
         "8. QR Code Generator": "Web bağlantıları veya etiket yazıcıları için birkaç tıklamayla QR kodu üretir.",
         "9. Barcode Generator": "PNG veya DYMO dahil birden çok formatta baskıya hazır barkod oluşturur.",
@@ -4324,10 +4328,21 @@ class ToolApp(tk.Tk):
     def create_data_calc_panels(self, parent: ttk.Frame):
         parent.columnconfigure(0, weight=1)
         parent.columnconfigure(1, weight=1)
+        parent.rowconfigure(1, weight=1)
+        parent.rowconfigure(3, weight=1)
+        parent.rowconfigure(4, weight=1)
+
+        identifier_heading = ttk.Label(
+            parent,
+            text=self.tr("IDENTIFIER TOOLS"),
+            style="Primary.TLabel",
+        )
+        identifier_heading.grid(row=0, column=0, columnspan=2, sticky="w", padx=8, pady=(0, 4))
+        self.register_widget(identifier_heading, "IDENTIFIER TOOLS")
 
         self.format_file = tk.StringVar()
-        format_card = self.create_section_card(parent, "RugNo Column Formatter")
-        format_card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        format_card = self.create_section_card(parent, "ID Column Formatter")
+        format_card.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
         format_frame = format_card.body
         format_frame.columnconfigure(1, weight=1)
 
@@ -4346,10 +4361,18 @@ class ToolApp(tk.Tk):
         format_button.grid(row=0, column=3, padx=6, pady=6)
         self.register_widget(format_button, "Format")
 
+        dimension_heading = ttk.Label(
+            parent,
+            text=self.tr("DIMENSION & MEASUREMENT TOOLS"),
+            style="Primary.TLabel",
+        )
+        dimension_heading.grid(row=2, column=0, columnspan=2, sticky="w", padx=8, pady=(16, 4))
+        self.register_widget(dimension_heading, "DIMENSION & MEASUREMENT TOOLS")
+
         self.rug_dim_input = tk.StringVar()
         self.rug_result_label = tk.StringVar()
-        single_rug_card = self.create_section_card(parent, "Single Rug Size Calculator")
-        single_rug_card.grid(row=0, column=1, sticky="nsew", padx=8, pady=8)
+        single_rug_card = self.create_section_card(parent, "Quick Dimension Calculator")
+        single_rug_card.grid(row=3, column=0, sticky="nsew", padx=8, pady=8)
         single_rug_frame = single_rug_card.body
         single_rug_frame.columnconfigure(1, weight=1)
 
@@ -4371,8 +4394,8 @@ class ToolApp(tk.Tk):
 
         self.bulk_rug_file = tk.StringVar()
         self.bulk_rug_col = tk.StringVar(value="Size")
-        bulk_rug_card = self.create_section_card(parent, "Bulk Rug Size Processor")
-        bulk_rug_card.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
+        bulk_rug_card = self.create_section_card(parent, "Bulk Dimension Processor")
+        bulk_rug_card.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
         bulk_rug_frame = bulk_rug_card.body
         bulk_rug_frame.columnconfigure(1, weight=1)
 
@@ -4396,8 +4419,8 @@ class ToolApp(tk.Tk):
         bulk_process.grid(row=1, column=2, padx=6, pady=6)
         self.register_widget(bulk_process, "Process File")
 
-        unit_card = self.create_section_card(parent, "Multi-Unit Converter")
-        unit_card.grid(row=1, column=1, sticky="nsew", padx=8, pady=8)
+        unit_card = self.create_section_card(parent, "Unit Converter")
+        unit_card.grid(row=3, column=1, sticky="nsew", padx=8, pady=8)
         unit_frame = unit_card.body
         unit_frame.columnconfigure(1, weight=1)
 
