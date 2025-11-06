@@ -1707,6 +1707,8 @@ class ToolApp(tk.Tk):
             borderwidth=0,
             tabmargins=(4, 2, 4, 0),
         )
+        # Hide the default tab bar because navigation is handled exclusively by the sidebar
+        style.layout("TNotebook.Tab", [])
         style.configure(
             "TNotebook.Tab",
             background=card_bg,
