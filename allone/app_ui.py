@@ -184,7 +184,7 @@ translations = {
         "Comparison Results:": "Comparison Results:",
         "Status": "Status",
         "Rug No": "Rug No",
-        "Rug No Check": "Rug No Check",
+        "Column Match & Report": "Column Match & Report",
         "Inventory List File:": "Inventory List File:",
         "Check Rug Nos": "Check Rug Nos",
         "Results:": "Results:",
@@ -567,7 +567,7 @@ translations = {
         "Column Name/Letter:": "Sütun Adı/Harf:",
         "Process File": "Dosyayı İşle",
         "Rug No Checker": "Rug No Kontrolü",
-        "Rug No Check": "Rug No Kontrol",
+        "Column Match & Report": "Sütun Eşleştir & Raporla",
         "Mode:": "Mod:",
         "Batch Comparison": "Toplu Karşılaştırma",
         "Manual Search": "Manuel Arama",
@@ -888,7 +888,7 @@ PANEL_INFO = {
         "Single Rug Size Calculator": "Calculate the exact area for a single rug size. Enter dimensions such as '5'2\" x 8'' to get square feet and square meters instantly.",
         "Bulk Rug Size Processor": "Process and normalize multiple rug sizes from an Excel or CSV file. Select the column that contains dimensions, and automatically calculate square feet and square meters for all rows.",
         "Rug No Checker": "Compare sold and master lists or search manually to verify rug numbers.",
-        "Rug No Check": "Check sold rug numbers against an inventory file and report their availability.",
+        "Column Match & Report": "Compare selected columns across two Excel sheets and generate a match/missing report.",
         "Multi-Unit Converter": "Convert between cm, inches, and feet using three separate input boxes. Type a value in any field to automatically update the others in real time.",
         "8. Match Image Links": "Attach hosted image URLs to product rows by matching a shared key column.",
         "8. QR Code Generator": "Generate QR codes for web links or label printers in just a few clicks.",
@@ -907,7 +907,7 @@ PANEL_INFO = {
         "Single Rug Size Calculator": "Tek bir halı ölçüsünün alanını hesaplayın. '5'2\" x 8'' gibi değerler girerek metrekare ve fit sonuçlarını hemen görün.",
         "Bulk Rug Size Processor": "Excel veya CSV dosyasındaki çoklu halı ölçülerini seçtiğiniz sütuna göre normalize edip tüm satırlar için metrekare ve fit kare hesaplarını otomatik oluşturur.",
         "Rug No Checker": "Satış ve ana listeleri karşılaştırarak halı numaralarını doğrular veya manuel arama yapar.",
-        "Rug No Check": "Satılan halı numaralarını envanter dosyasıyla hızlıca karşılaştırıp durumlarını raporlar.",
+        "Column Match & Report": "İki Excel sayfasında seçilen sütunları karşılaştırır ve eşleşme/eksik raporu oluşturur.",
         "Multi-Unit Converter": "Santimetre, inç ve ayak değerlerini üç ayrı kutuda dönüştürün; herhangi birine yazdığınızda diğerleri anında güncellensin.",
         "8. Match Image Links": "Paylaşılan anahtar sütunu kullanarak ürün satırlarına görsel bağlantıları ekler.",
         "8. QR Code Generator": "Web bağlantıları veya etiket yazıcıları için birkaç tıklamayla QR kodu üretir.",
@@ -1141,7 +1141,7 @@ class ToolApp(tk.Tk):
             "File & Image Tools",
             "View in Room",
             "Utility",
-            "Rug No Check",
+            "Column Match & Report",
             "Code Generators",
             "Rinven Import Sheet Generator",
             "Rinven Tag",
@@ -1165,7 +1165,7 @@ class ToolApp(tk.Tk):
         self.create_file_image_panels(self.section_frames["File & Image Tools"])
         self.create_view_in_room_tab(self.section_frames["View in Room"])
         self.create_data_calc_panels(self.section_frames["Utility"])
-        self.create_rug_no_control_tab(self.section_frames["Rug No Check"])
+        self.create_rug_no_control_tab(self.section_frames["Column Match & Report"])
         self.create_code_gen_panels(self.section_frames["Code Generators"])
         self.create_rinven_import_panel(self.section_frames["Rinven Import Sheet Generator"])
         self.create_rinven_tag_panel(self.section_frames["Rinven Tag"])
