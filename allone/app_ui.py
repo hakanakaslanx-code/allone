@@ -176,14 +176,6 @@ translations = {
         "Excel/CSV File:": "Excel/CSV File:",
         "Column Name/Letter:": "Column Name/Letter:",
         "Process File": "Process File",
-        "Rug No Checker": "Rug No Checker",
-        "Mode:": "Mode:",
-        "Batch Comparison": "Batch Comparison",
-        "Manual Search": "Manual Search",
-        "Sold List File:": "Sold List File:",
-        "Master List File:": "Master List File:",
-        "Start Comparison": "Start Comparison",
-        "Comparison Results:": "Comparison Results:",
         "Status": "Status",
         "Rug No": "Rug No",
         "Column Match & Report": "Column Match & Report",
@@ -192,21 +184,6 @@ translations = {
         "Results:": "Results:",
         "RUG_NO_CONTROL_FOUND": "Found",
         "RUG_NO_CONTROL_NOT_FOUND": "Not Found",
-        "FOUND": "FOUND",
-        "MISSING": "MISSING",
-        "Found: {found} | Missing: {missing}": "Found: {found} | Missing: {missing}",
-        "Please select both Sold List and Master List files.": "Please select both Sold List and Master List files.",
-        "Rug number comparison completed.": "Rug number comparison completed.",
-        "Enter Rug No:": "Enter Rug No:",
-        "Search": "Search",
-        "Please select a Master List file.": "Please select a Master List file.",
-        "Please enter a Rug No.": "Please enter a Rug No.",
-        "Rug No {number} found in master list.": "Rug No {number} found in master list.",
-        "Rug No {number} not found in master list.": "Rug No {number} not found in master list.",
-        "Manual Search History:": "Manual Search History:",
-        "No recent searches yet.": "No recent searches yet.",
-        "Found": "Found",
-        "Not Found": "Not Found",
         "Please select both Sold and Inventory files.": "Please select both Sold and Inventory files.",
         "Could not find a Rug No column in the selected file.": "Could not find a Rug No column in the selected file.",
         "Could not read the selected file: {error}": "Could not read the selected file: {error}",
@@ -570,37 +547,14 @@ translations = {
         "Excel/CSV File:": "Excel/CSV Dosyası:",
         "Column Name/Letter:": "Sütun Adı/Harf:",
         "Process File": "Dosyayı İşle",
-        "Rug No Checker": "Rug No Kontrolü",
         "Column Match & Report": "Sütun Eşleştir & Raporla",
-        "Mode:": "Mod:",
-        "Batch Comparison": "Toplu Karşılaştırma",
-        "Manual Search": "Manuel Arama",
-        "Sold List File:": "Sold List Dosyası:",
         "Inventory List File:": "Envanter Listesi Dosyası:",
-        "Master List File:": "Master List Dosyası:",
-        "Start Comparison": "Karşılaştırmayı Başlat",
-        "Comparison Results:": "Karşılaştırma Sonuçları:",
         "Status": "Durum",
         "Rug No": "Rug No",
         "Check Rug Nos": "Rug No Kontrol Et",
         "Results:": "Sonuçlar:",
         "RUG_NO_CONTROL_FOUND": "Bulundu",
         "RUG_NO_CONTROL_NOT_FOUND": "Yok",
-        "FOUND": "BULUNDU",
-        "MISSING": "EKSİK",
-        "Found: {found} | Missing: {missing}": "Bulundu: {found} | Eksik: {missing}",
-        "Please select both Sold List and Master List files.": "Lütfen hem Sold List hem de Master List dosyalarını seçin.",
-        "Rug number comparison completed.": "Rug No karşılaştırması tamamlandı.",
-        "Enter Rug No:": "Rug No Girin:",
-        "Search": "Ara",
-        "Please select a Master List file.": "Lütfen bir Master List dosyası seçin.",
-        "Please enter a Rug No.": "Lütfen bir Rug No girin.",
-        "Rug No {number} found in master list.": "Rug No {number} master listede bulundu.",
-        "Rug No {number} not found in master list.": "Rug No {number} master listede bulunamadı.",
-        "Manual Search History:": "Manuel Arama Geçmişi:",
-        "No recent searches yet.": "Henüz arama geçmişi yok.",
-        "Found": "Bulundu",
-        "Not Found": "Bulunamadı",
         "Please select both Sold and Inventory files.": "Lütfen Satılanlar ve Envanter dosyalarını seçin.",
         "Could not find a Rug No column in the selected file.": "Seçilen dosyada bir Halı No sütunu bulunamadı.",
         "Could not read the selected file: {error}": "Seçilen dosya okunamadı: {error}",
@@ -891,7 +845,6 @@ PANEL_INFO = {
         "ID Column Formatter": "Format and standardize ID values in bulk.",
         "Quick Dimension Calculator": "Calculate area instantly for a single item size.",
         "Bulk Dimension Processor": "Normalize dimension strings and auto-calculate area.",
-        "Rug No Checker": "Compare sold and master lists or search manually to verify rug numbers.",
         "Column Match & Report": "Compare selected columns across two Excel sheets and generate a match/missing report.",
         "Unit Converter": "Convert between cm, inches, and feet automatically.",
         "8. Match Image Links": "Attach hosted image URLs to product rows by matching a shared key column.",
@@ -910,7 +863,6 @@ PANEL_INFO = {
         "ID Column Formatter": "ID değerlerini toplu olarak biçimlendirin ve standartlaştırın.",
         "Quick Dimension Calculator": "Tek ürün ölçüsünün alanını anında hesaplayın.",
         "Bulk Dimension Processor": "Ölçü metinlerini normalize edip alanı otomatik hesaplayın.",
-        "Rug No Checker": "Satış ve ana listeleri karşılaştırarak halı numaralarını doğrular veya manuel arama yapar.",
         "Column Match & Report": "İki Excel sayfasında seçilen sütunları karşılaştırır ve eşleşme/eksik raporu oluşturur.",
         "Unit Converter": "Santimetre, inç ve ayak arasında otomatik dönüşüm yapın.",
         "8. Match Image Links": "Paylaşılan anahtar sütunu kullanarak ürün satırlarına görsel bağlantıları ekler.",
@@ -1162,9 +1114,6 @@ class ToolApp(tk.Tk):
 
         self.section_notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
-        self.rug_manual_history_entries = []
-        self.rug_manual_last_result = None
-        self.rug_comparison_results = None
         self.rug_control_results: List[Tuple[str, bool]] = []
         self.create_file_image_panels(self.section_frames["File & Image Tools"])
         self.create_view_in_room_tab(self.section_frames["View in Room"])
@@ -3957,12 +3906,6 @@ class ToolApp(tk.Tk):
             self._apply_shared_status_translation()
         if hasattr(self, "shared_help_text"):
             self._update_shared_help_text(self.shared_status_host, self.shared_status_port)
-        if hasattr(self, "rug_manual_history_var"):
-            self._update_manual_history_display()
-        if hasattr(self, "rug_manual_result_var"):
-            self._update_manual_result_label()
-        if hasattr(self, "rug_result_tree"):
-            self._refresh_rug_comparison_display()
         if hasattr(self, "rug_control_tree"):
             self.populate_rug_no_control_tree(getattr(self, "rug_control_results", []))
         if hasattr(self, "shared_printer_server"):
@@ -4444,185 +4387,6 @@ class ToolApp(tk.Tk):
             entry.bind("<FocusOut>", lambda _event, key=unit_key: self._on_unit_field_change(key))
             entry.bind("<<Paste>>", lambda _event, key=unit_key: self._on_unit_field_change(key))
             entry.bind("<<Cut>>", lambda _event, key=unit_key: self._on_unit_field_change(key))
-
-        rug_check_card = self.create_section_card(parent, "Rug No Checker")
-        rug_check_card.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
-        rug_check_frame = rug_check_card.body
-        rug_check_frame.columnconfigure(1, weight=1)
-        rug_check_frame.rowconfigure(1, weight=1)
-
-        self.rug_mode = tk.StringVar(value="batch")
-        self.rug_sold_file = tk.StringVar()
-        self.rug_master_file = tk.StringVar()
-        self.rug_manual_input = tk.StringVar()
-        self.rug_manual_result_var = tk.StringVar()
-        self.rug_manual_history_var = tk.StringVar()
-        self.rug_comparison_summary_var = tk.StringVar()
-
-        mode_label = ttk.Label(rug_check_frame, text=self.tr("Mode:"))
-        mode_label.grid(row=0, column=0, sticky="w", padx=6, pady=(0, 6))
-        self.register_widget(mode_label, "Mode:")
-
-        mode_buttons = ttk.Frame(rug_check_frame, style="PanelBody.TFrame")
-        mode_buttons.grid(row=0, column=1, sticky="w", padx=6, pady=(0, 6))
-
-        batch_radio = ttk.Radiobutton(
-            mode_buttons,
-            text=self.tr("Batch Comparison"),
-            variable=self.rug_mode,
-            value="batch",
-            command=self._update_rug_mode,
-        )
-        batch_radio.pack(side="left", padx=(0, 10))
-        self.register_widget(batch_radio, "Batch Comparison")
-
-        manual_radio = ttk.Radiobutton(
-            mode_buttons,
-            text=self.tr("Manual Search"),
-            variable=self.rug_mode,
-            value="manual",
-            command=self._update_rug_mode,
-        )
-        manual_radio.pack(side="left")
-        self.register_widget(manual_radio, "Manual Search")
-
-        self.rug_batch_frame = ttk.Frame(rug_check_frame, style="PanelBody.TFrame")
-        self.rug_batch_frame.grid(row=1, column=0, columnspan=2, sticky="nsew")
-        self.rug_batch_frame.columnconfigure(1, weight=1)
-        self.rug_batch_frame.rowconfigure(4, weight=1)
-
-        sold_label = ttk.Label(self.rug_batch_frame, text=self.tr("Sold List File:"))
-        sold_label.grid(row=0, column=0, padx=6, pady=4, sticky="w")
-        self.register_widget(sold_label, "Sold List File:")
-        ttk.Entry(self.rug_batch_frame, textvariable=self.rug_sold_file, width=50).grid(
-            row=0,
-            column=1,
-            padx=6,
-            pady=4,
-            sticky="we",
-        )
-        sold_browse = ttk.Button(
-            self.rug_batch_frame,
-            text=self.tr("Browse..."),
-            command=lambda: self._browse_rug_file(self.rug_sold_file),
-        )
-        sold_browse.grid(row=0, column=2, padx=6, pady=4)
-        self.register_widget(sold_browse, "Browse...")
-
-        master_label = ttk.Label(self.rug_batch_frame, text=self.tr("Master List File:"))
-        master_label.grid(row=1, column=0, padx=6, pady=4, sticky="w")
-        self.register_widget(master_label, "Master List File:")
-        ttk.Entry(self.rug_batch_frame, textvariable=self.rug_master_file, width=50).grid(
-            row=1,
-            column=1,
-            padx=6,
-            pady=4,
-            sticky="we",
-        )
-        master_browse = ttk.Button(
-            self.rug_batch_frame,
-            text=self.tr("Browse..."),
-            command=lambda: self._browse_rug_file(self.rug_master_file),
-        )
-        master_browse.grid(row=1, column=2, padx=6, pady=4)
-        self.register_widget(master_browse, "Browse...")
-
-        compare_button = ttk.Button(
-            self.rug_batch_frame,
-            text=self.tr("Start Comparison"),
-            command=self.start_rug_comparison,
-        )
-        compare_button.grid(row=2, column=0, columnspan=3, padx=6, pady=(6, 6), sticky="w")
-        self.register_widget(compare_button, "Start Comparison")
-
-        results_label = ttk.Label(self.rug_batch_frame, text=self.tr("Comparison Results:"))
-        results_label.grid(row=3, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 4))
-        self.register_widget(results_label, "Comparison Results:")
-
-        results_container = ttk.Frame(self.rug_batch_frame, style="PanelBody.TFrame")
-        results_container.grid(row=4, column=0, columnspan=3, sticky="nsew", padx=0, pady=(0, 6))
-        results_container.columnconfigure(0, weight=1)
-        results_container.rowconfigure(0, weight=1)
-
-        self.rug_result_tree = ttk.Treeview(
-            results_container,
-            columns=("status", "rug_no"),
-            show="headings",
-            height=8,
-        )
-        self.rug_result_tree.heading("status", text=self.tr("Status"))
-        self.rug_result_tree.heading("rug_no", text=self.tr("Rug No"))
-        self.rug_result_tree.column("status", width=120, anchor="center")
-        self.rug_result_tree.column("rug_no", width=200, anchor="w")
-        self.rug_result_tree.grid(row=0, column=0, sticky="nsew")
-
-        tree_scroll = ttk.Scrollbar(results_container, orient="vertical", command=self.rug_result_tree.yview)
-        tree_scroll.grid(row=0, column=1, sticky="ns")
-        self.rug_result_tree.configure(yscrollcommand=tree_scroll.set)
-
-        summary_label = ttk.Label(self.rug_batch_frame, textvariable=self.rug_comparison_summary_var, style="Secondary.TLabel")
-        summary_label.grid(row=5, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 4))
-
-        self.rug_manual_frame = ttk.Frame(rug_check_frame, style="PanelBody.TFrame")
-        self.rug_manual_frame.grid(row=1, column=0, columnspan=2, sticky="nsew")
-        self.rug_manual_frame.columnconfigure(1, weight=1)
-
-        manual_master_label = ttk.Label(self.rug_manual_frame, text=self.tr("Master List File:"))
-        manual_master_label.grid(row=0, column=0, padx=6, pady=4, sticky="w")
-        self.register_widget(manual_master_label, "Master List File:")
-        ttk.Entry(self.rug_manual_frame, textvariable=self.rug_master_file, width=50).grid(
-            row=0,
-            column=1,
-            padx=6,
-            pady=4,
-            sticky="we",
-        )
-        manual_master_browse = ttk.Button(
-            self.rug_manual_frame,
-            text=self.tr("Browse..."),
-            command=lambda: self._browse_rug_file(self.rug_master_file),
-        )
-        manual_master_browse.grid(row=0, column=2, padx=6, pady=4)
-        self.register_widget(manual_master_browse, "Browse...")
-
-        manual_query_label = ttk.Label(self.rug_manual_frame, text=self.tr("Enter Rug No:"))
-        manual_query_label.grid(row=1, column=0, padx=6, pady=(10, 4), sticky="w")
-        self.register_widget(manual_query_label, "Enter Rug No:")
-        ttk.Entry(self.rug_manual_frame, textvariable=self.rug_manual_input, width=30).grid(
-            row=1,
-            column=1,
-            padx=6,
-            pady=(10, 4),
-            sticky="we",
-        )
-        manual_search_button = ttk.Button(
-            self.rug_manual_frame,
-            text=self.tr("Search"),
-            command=self.start_manual_rug_search,
-        )
-        manual_search_button.grid(row=1, column=2, padx=6, pady=(10, 4))
-        self.register_widget(manual_search_button, "Search")
-
-        manual_result_label = ttk.Label(self.rug_manual_frame, textvariable=self.rug_manual_result_var, style="Secondary.TLabel")
-        manual_result_label.grid(row=2, column=0, columnspan=3, sticky="w", padx=6, pady=(6, 4))
-
-        manual_history_title = ttk.Label(self.rug_manual_frame, text=self.tr("Manual Search History:"))
-        manual_history_title.grid(row=3, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
-        self.register_widget(manual_history_title, "Manual Search History:")
-
-        manual_history_label = ttk.Label(
-            self.rug_manual_frame,
-            textvariable=self.rug_manual_history_var,
-            justify="left",
-            style="Secondary.TLabel",
-        )
-        manual_history_label.grid(row=4, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 4))
-
-        self.rug_manual_frame.grid_remove()
-        self._update_manual_history_display()
-        self._update_manual_result_label()
-        self._update_rug_mode()
-        self._refresh_rug_comparison_display()
 
         image_link_card = self.create_section_card(parent, "8. Match Image Links")
         image_link_card.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
@@ -5972,158 +5736,6 @@ class ToolApp(tk.Tk):
         )
         if file_path:
             variable.set(file_path)
-
-    def _update_rug_mode(self) -> None:
-        if not hasattr(self, "rug_mode"):
-            return
-        mode = self.rug_mode.get()
-        if mode == "manual":
-            self.rug_batch_frame.grid_remove()
-            self.rug_manual_frame.grid()
-        else:
-            self.rug_manual_frame.grid_remove()
-            self.rug_batch_frame.grid()
-
-    def start_rug_comparison(self) -> None:
-        sold_path = self.rug_sold_file.get().strip()
-        master_path = self.rug_master_file.get().strip()
-        if not sold_path or not master_path:
-            messagebox.showerror(
-                self.tr("Error"),
-                self.tr("Please select both Sold List and Master List files."),
-            )
-            return
-
-        self.rug_comparison_results = None
-        self._refresh_rug_comparison_display()
-
-        self.run_in_thread(
-            backend.compare_rug_numbers_task,
-            sold_path,
-            master_path,
-            self.log,
-            self._handle_rug_comparison_completion,
-            self.handle_rug_comparison_results,
-        )
-
-    def _handle_rug_comparison_completion(self, status: str, message: str) -> None:
-        translated_message = self.tr(message) if message else message
-        self.task_completion_popup(status, translated_message)
-
-    def handle_rug_comparison_results(self, found, missing) -> None:
-        def update():
-            self.rug_comparison_results = (list(found), list(missing))
-            self._refresh_rug_comparison_display()
-
-        self.after(0, update)
-
-    def _refresh_rug_comparison_display(self) -> None:
-        tree = getattr(self, "rug_result_tree", None)
-        if tree is None:
-            return
-
-        tree.heading("status", text=self.tr("Status"))
-        tree.heading("rug_no", text=self.tr("Rug No"))
-
-        for item in tree.get_children():
-            tree.delete(item)
-
-        results = getattr(self, "rug_comparison_results", None)
-        if results is None:
-            self.rug_comparison_summary_var.set("")
-            return
-
-        found, missing = results
-        status_found = self.tr("FOUND")
-        status_missing = self.tr("MISSING")
-
-        for number in found:
-            tree.insert("", "end", values=(status_found, number))
-        for number in missing:
-            tree.insert("", "end", values=(status_missing, number))
-
-        summary = self.tr("Found: {found} | Missing: {missing}").format(
-            found=len(found), missing=len(missing)
-        )
-        self.rug_comparison_summary_var.set(summary)
-
-    def start_manual_rug_search(self) -> None:
-        master_path = self.rug_master_file.get().strip()
-        if not master_path:
-            messagebox.showerror(
-                self.tr("Error"),
-                self.tr("Please select a Master List file."),
-            )
-            return
-
-        query_raw = self.rug_manual_input.get()
-        normalized_query = backend.normalize_rug_number(query_raw)
-        if not normalized_query:
-            messagebox.showerror(self.tr("Error"), self.tr("Please enter a Rug No."))
-            return
-
-        self.rug_manual_input.set(normalized_query)
-        self.run_in_thread(self._manual_rug_search_worker, master_path, normalized_query)
-
-    def _manual_rug_search_worker(self, master_path: str, rug_no: str) -> None:
-        try:
-            numbers = backend.load_rug_numbers_from_file(master_path)
-        except Exception as exc:
-            message = str(exc)
-            self.log(self.tr("Error: {message}").format(message=message))
-
-            def show_error() -> None:
-                messagebox.showerror(self.tr("Error"), message)
-
-            self.after(0, show_error)
-            return
-
-        found = rug_no in set(numbers)
-
-        self.after(0, lambda: self._apply_manual_search_result(rug_no, found))
-
-    def _apply_manual_search_result(self, rug_no: str, found: bool) -> None:
-        # Update last result and keep only the latest five history entries.
-        self.rug_manual_last_result = (rug_no, found)
-
-        history = [entry for entry in self.rug_manual_history_entries if entry[0] != rug_no]
-        history.insert(0, (rug_no, found))
-        if len(history) > 5:
-            history = history[:5]
-        self.rug_manual_history_entries = history
-
-        self._update_manual_result_label()
-        self._update_manual_history_display()
-
-    def _update_manual_result_label(self) -> None:
-        if getattr(self, "rug_manual_result_var", None) is None:
-            return
-
-        result = getattr(self, "rug_manual_last_result", None)
-        if not result:
-            self.rug_manual_result_var.set("")
-            return
-
-        rug_no, found = result
-        template = (
-            "Rug No {number} found in master list."
-            if found
-            else "Rug No {number} not found in master list."
-        )
-        self.rug_manual_result_var.set(self.tr(template).format(number=rug_no))
-
-    def _update_manual_history_display(self) -> None:
-        if getattr(self, "rug_manual_history_var", None) is None:
-            return
-
-        if self.rug_manual_history_entries:
-            lines = []
-            for rug_no, found in self.rug_manual_history_entries:
-                status_text = self.tr("Found") if found else self.tr("Not Found")
-                lines.append(f"{rug_no} — {status_text}")
-            self.rug_manual_history_var.set("\n".join(lines))
-        else:
-            self.rug_manual_history_var.set(self.tr("No recent searches yet."))
 
     def _on_unit_field_change(self, source_unit: str) -> None:
         """Synchronize unit inputs when one of the fields changes."""
