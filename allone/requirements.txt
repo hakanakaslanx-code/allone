@@ -13,3 +13,6 @@ numpy
 zeroconf
 pywin32; platform_system == "Windows"
 pycups; platform_system != "Windows"
+google-api-python-client
+google-auth
+google-auth-httplib2

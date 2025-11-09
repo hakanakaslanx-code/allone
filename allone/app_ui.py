@@ -23,6 +23,7 @@ from openpyxl import Workbook
 from print_service import SharedLabelPrinterServer, resolve_local_ip
 
 from settings_manager import load_settings, save_settings
+from ui.panels.sync_panel import SyncPanel
 from rinven_import_manager import (
     DEFAULT_PRICING,
     RINVEN_IMPORT_COLUMNS,
@@ -124,6 +125,29 @@ translations = {
         "Copy Files": "Copy Files",
         "Move Files": "Move Files",
         "Save Settings": "Save Settings",
+        "Settings": "Settings",
+        "Synchronization": "Synchronization",
+        "Google Sheet ID": "Google Sheet ID",
+        "Service Account Email": "Service Account Email",
+        "SyncStatus": "Status",
+        "SyncStatusIdle": "Idle",
+        "SyncStatusTesting": "Testing connection…",
+        "SyncStatusUploading": "Uploading local data…",
+        "SyncStatusDownloading": "Downloading sheet data…",
+        "SyncStatusBidirectional": "Running two-way sync…",
+        "Test Connection": "Test Connection",
+        "Manual Sync (Upload/Download)": "Manual Sync (Upload/Download)",
+        "Upload Local → Sheets": "Upload Local → Sheets",
+        "Download Sheets → Local": "Download Sheets → Local",
+        "Two-way Sync": "Two-way Sync",
+        "Backup Now": "Backup Now",
+        "SyncTestSuccess": "Connected to sheet \"{title}\" successfully.",
+        "SyncUploadSuccess": "Local items uploaded to Google Sheets.",
+        "SyncDownloadSuccess": "Downloaded {inserted} new rows and updated {updated}.",
+        "SyncBidirectionalSuccess": "Two-way sync completed ({inserted} inserted, {updated} updated).",
+        "SyncBackupSuccess": "Database backup created at {path}.",
+        "SyncBackupMetadata": "Backup metadata → timestamp: {timestamp}, size: {size} bytes, sha256: {digest}",
+        "SyncSheetIdSaved": "Sheet ID saved: {sheet_id}",
         "2. Convert HEIC/WEBP to JPG": "2. Convert HEIC/WEBP to JPG",
         "Folder with HEIC/WEBP files:": "Folder with HEIC/WEBP files:",
         "Convert": "Convert",
@@ -499,6 +523,29 @@ translations = {
         "Copy Files": "Dosyaları Kopyala",
         "Move Files": "Dosyaları Taşı",
         "Save Settings": "Ayarları Kaydet",
+        "Settings": "Ayarlar",
+        "Synchronization": "Senkronizasyon",
+        "Google Sheet ID": "Google Sheet Kimliği",
+        "Service Account Email": "Servis Hesabı E-postası",
+        "SyncStatus": "Durum",
+        "SyncStatusIdle": "Beklemede",
+        "SyncStatusTesting": "Bağlantı test ediliyor…",
+        "SyncStatusUploading": "Sheets'e yükleniyor…",
+        "SyncStatusDownloading": "Sheets'ten indiriliyor…",
+        "SyncStatusBidirectional": "İki yönlü senkron yapılıyor…",
+        "Test Connection": "Bağlantıyı Test Et",
+        "Manual Sync (Upload/Download)": "Elle Senkronla (Yükle/İndir)",
+        "Upload Local → Sheets": "Yerel → Sheets Yükle",
+        "Download Sheets → Local": "Sheets → Yerel İndir",
+        "Two-way Sync": "Çift Yönlü Senkron",
+        "Backup Now": "Yedek Al",
+        "SyncTestSuccess": "\"{title}\" sayfasına bağlantı başarılı.",
+        "SyncUploadSuccess": "Yerel veriler Google Sheets'e yüklendi.",
+        "SyncDownloadSuccess": "{inserted} yeni satır eklendi, {updated} satır güncellendi.",
+        "SyncBidirectionalSuccess": "Çift yönlü senkron tamamlandı ({inserted} ekleme, {updated} güncelleme).",
+        "SyncBackupSuccess": "Veritabanı yedeği {path} konumuna alındı.",
+        "SyncBackupMetadata": "Yedek bilgisi → zaman: {timestamp}, boyut: {size} bayt, sha256: {digest}",
+        "SyncSheetIdSaved": "Sheet ID kaydedildi: {sheet_id}",
         "2. Convert HEIC/WEBP to JPG": "2. HEIC/WEBP'yi JPG'ye Dönüştür",
         "Folder with HEIC/WEBP files:": "HEIC/WEBP dosyalarının olduğu klasör:",
         "Convert": "Dönüştür",
@@ -1217,6 +1264,7 @@ class ToolApp(tk.Tk):
             "Rinven Import Sheet Generator",
             "Rinven Tag",
             "Shared Label Printer",
+            "Settings",
             "Help & About",
         ):
             tab = ScrollableTab(self.section_notebook)
@@ -1238,6 +1286,7 @@ class ToolApp(tk.Tk):
         self.create_rinven_import_panel(self.section_frames["Rinven Import Sheet Generator"])
         self.create_rinven_tag_panel(self.section_frames["Rinven Tag"])
         self.create_shared_printer_panel(self.section_frames["Shared Label Printer"])
+        self.create_settings_panel(self.section_frames["Settings"])
         self.create_about_panel(self.section_frames["Help & About"])
 
         self.log_area = ScrolledText(self.content_frame, height=8)
@@ -1271,6 +1320,8 @@ class ToolApp(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.after(0, self._maybe_auto_start_shared_printer)
         self.after(1200, self._show_pending_update_notice)
+        if hasattr(self, "sync_panel"):
+            self.sync_panel.start_background_sync()
 
     def _parse_zoom_level(self, value: str) -> float:
         mapping = {"80%": 0.8, "100%": 1.0, "120%": 1.2}
@@ -5716,6 +5767,21 @@ class ToolApp(tk.Tk):
         self.rinven_barcode_var.trace_add("write", self._queue_rinven_preview_update)
 
         self._queue_rinven_preview_update()
+
+    def create_settings_panel(self, parent: ttk.Frame) -> None:
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(0, weight=1)
+        notebook = ttk.Notebook(parent, style="TNotebook")
+        notebook.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+
+        sync_frame = ttk.Frame(notebook, style="PanelBody.TFrame")
+        sync_frame.columnconfigure(0, weight=1)
+        sync_frame.rowconfigure(0, weight=1)
+        notebook.add(sync_frame, text=self.tr("Synchronization"))
+
+        self.sync_panel = SyncPanel(sync_frame, self)
+        self.sync_panel.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        self.register_widget(notebook, "Synchronization")
 
     def create_about_panel(self, parent: ttk.Frame):
         parent.columnconfigure(0, weight=1)

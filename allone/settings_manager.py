@@ -1,20 +1,28 @@
-# settings_manager.py
+"""Simple JSON-backed settings loader and saver."""
+
+from __future__ import annotations
+
 import json
-import os
+from typing import Any, Dict
 
-SETTINGS_FILE = "settings.json"
+from core.paths import get_settings_path
 
-def load_settings() -> dict:
-    """Loads settings from the JSON file."""
-    if os.path.exists(SETTINGS_FILE):
-        try:
-            with open(SETTINGS_FILE, "r", encoding='utf-8') as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            return {}
-    return {}
 
-def save_settings(settings: dict):
-    """Saves the settings dictionary to the JSON file."""
-    with open(SETTINGS_FILE, "w", encoding='utf-8') as f:
-        json.dump(settings, f, indent=4)
+def load_settings() -> Dict[str, Any]:
+    """Load persisted settings from the application data directory."""
+    path = get_settings_path()
+    if not path.exists():
+        return {}
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except json.JSONDecodeError:
+        return {}
+
+
+def save_settings(settings: Dict[str, Any]) -> None:
+    """Persist settings to the application data directory."""
+    path = get_settings_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(settings, handle, indent=4)
