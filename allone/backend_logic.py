@@ -949,8 +949,13 @@ def build_rinven_tag_image(
                     DPI,
                 )
                 barcode_img = raw_barcode.convert("RGB")
-                margin_x = max(4, int(round(0.02 * DPI)))
-                margin_y = max(4, int(round(0.01 * DPI)))
+                # Preserve a generous quiet zone around the barcode to keep it
+                # easily scannable even after the surrounding whitespace is
+                # trimmed. Empirically a wider horizontal margin greatly
+                # improves reliability for handheld scanners, so reserve more
+                # space than the bare minimum before cropping.
+                margin_x = max(12, int(round(0.05 * DPI)))
+                margin_y = max(8, int(round(0.03 * DPI)))
                 barcode_img = _tighten_barcode_whitespace(barcode_img, margin_x, margin_y)
                 if font_warning_message:
                     has_font_warning = any(
