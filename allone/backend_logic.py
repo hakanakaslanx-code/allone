@@ -670,8 +670,9 @@ def _render_barcode_image(
 
     effective_writer_options: Dict[str, object] = {
         "write_text": False,
-        "module_width": 0.35,
-        "module_height": 15.0,
+        "module_width": 0.5,
+        "module_height": 10.0,
+        "quiet_zone": 2.0,
     }
 
     if writer_options:
