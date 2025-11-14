@@ -228,6 +228,17 @@ translations = {
         "Type:": "Type:",
         "Rug #:": "Rug #:",
         "Include Barcode": "Include Barcode",
+        "Price:": "Price:",
+        "SKU:": "SKU:",
+        "Bulk Excel Generation": "Bulk Excel Generation",
+        "Bulk Excel File:": "Bulk Excel File:",
+        "Output Folder:": "Output Folder:",
+        "Include Barcode from Excel": "Include Barcode from Excel",
+        "Generate From Excel": "Generate From Excel",
+        "Select Folder": "Select Folder",
+        "Selected file does not exist.": "Selected file does not exist.",
+        "Could not create output folder: {error}": "Could not create output folder: {error}",
+        "Starting bulk Rinven tag generation from: {path}": "Starting bulk Rinven tag generation from: {path}",
         "Include Only Filled Fields": "Include Only Filled Fields",
         "Live Preview": "Live Preview",
         "Barcode Data:": "Barcode Data:",
@@ -603,6 +614,17 @@ translations = {
         "Type:": "Tür:",
         "Rug #:": "Halı No:",
         "Include Barcode": "Barkodu Dahil Et",
+        "Price:": "Fiyat:",
+        "SKU:": "SKU:",
+        "Bulk Excel Generation": "Toplu Excel Üretimi",
+        "Bulk Excel File:": "Toplu Excel Dosyası:",
+        "Output Folder:": "Çıkış Klasörü:",
+        "Include Barcode from Excel": "Excel'deki Barkodu Dahil Et",
+        "Generate From Excel": "Excel'den Oluştur",
+        "Select Folder": "Klasör Seç",
+        "Selected file does not exist.": "Seçilen dosya mevcut değil.",
+        "Could not create output folder: {error}": "Çıkış klasörü oluşturulamadı: {error}",
+        "Starting bulk Rinven tag generation from: {path}": "Toplu Rinven etiket üretimi başlatılıyor: {path}",
         "Include Only Filled Fields": "Yalnızca dolu alanları dahil et",
         "Live Preview": "Canlı Önizleme",
         "Barcode Data:": "Barkod Verisi:",
@@ -5595,6 +5617,7 @@ class ToolApp(tk.Tk):
         frame = card.body
         frame.columnconfigure(1, weight=1)
 
+        self.rinven_price = tk.StringVar()
         self.rinven_collection = tk.StringVar()
         self.rinven_design = tk.StringVar()
         self.rinven_color = tk.StringVar()
@@ -5604,15 +5627,21 @@ class ToolApp(tk.Tk):
         self.rinven_content = tk.StringVar()
         self.rinven_type = tk.StringVar()
         self.rinven_rug_no = tk.StringVar()
+        self.rinven_sku = tk.StringVar()
         self.rinven_barcode_var = tk.StringVar()
         self.rinven_filename = tk.StringVar(value="rinven_tag.png")
         self.rinven_include_barcode = tk.BooleanVar(value=False)
         self.rinven_only_filled = tk.BooleanVar(value=True)
         self.rinven_warning_var = tk.StringVar()
 
+        self.rinven_bulk_file = tk.StringVar()
+        self.rinven_bulk_output = tk.StringVar()
+        self.rinven_bulk_include_barcode = tk.BooleanVar(value=True)
+
         self.rinven_field_widgets = {}
 
         fields = [
+            ("price", "Price:", self.rinven_price),
             ("collection", "Collection Name:", self.rinven_collection),
             ("design", "Design:", self.rinven_design),
             ("color", "Color:", self.rinven_color),
@@ -5621,6 +5650,7 @@ class ToolApp(tk.Tk):
             ("style", "Style:", self.rinven_style),
             ("content", "Content:", self.rinven_content),
             ("type", "Type:", self.rinven_type),
+            ("sku", "SKU:", self.rinven_sku),
             ("rug_no", "Rug #:", self.rinven_rug_no),
         ]
 
@@ -5709,6 +5739,66 @@ class ToolApp(tk.Tk):
         )
         generate_button.grid(row=row_offset, column=0, columnspan=2, pady=(12, 6))
         self.register_widget(generate_button, "Generate Rinven Tag")
+
+        row_offset += 1
+
+        separator = ttk.Separator(frame, orient="horizontal")
+        separator.grid(row=row_offset, column=0, columnspan=3, sticky="we", padx=6, pady=(6, 10))
+        row_offset += 1
+
+        bulk_label = ttk.Label(frame, text=self.tr("Bulk Excel Generation"))
+        bulk_label.grid(row=row_offset, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 4))
+        self.register_widget(bulk_label, "Bulk Excel Generation")
+        row_offset += 1
+
+        bulk_file_label = ttk.Label(frame, text=self.tr("Bulk Excel File:"))
+        bulk_file_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
+        self.register_widget(bulk_file_label, "Bulk Excel File:")
+
+        bulk_file_entry = ttk.Entry(frame, textvariable=self.rinven_bulk_file)
+        bulk_file_entry.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
+
+        bulk_file_button = ttk.Button(
+            frame,
+            text=self.tr("Browse..."),
+            command=self._select_rinven_bulk_file,
+        )
+        bulk_file_button.grid(row=row_offset, column=2, sticky="e", padx=6, pady=4)
+        self.register_widget(bulk_file_button, "Browse...")
+        row_offset += 1
+
+        output_label = ttk.Label(frame, text=self.tr("Output Folder:"))
+        output_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
+        self.register_widget(output_label, "Output Folder:")
+
+        output_entry = ttk.Entry(frame, textvariable=self.rinven_bulk_output)
+        output_entry.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
+
+        output_button = ttk.Button(
+            frame,
+            text=self.tr("Browse..."),
+            command=self._select_rinven_bulk_output,
+        )
+        output_button.grid(row=row_offset, column=2, sticky="e", padx=6, pady=4)
+        self.register_widget(output_button, "Browse...")
+        row_offset += 1
+
+        bulk_barcode_check = ttk.Checkbutton(
+            frame,
+            text=self.tr("Include Barcode from Excel"),
+            variable=self.rinven_bulk_include_barcode,
+        )
+        bulk_barcode_check.grid(row=row_offset, column=0, columnspan=3, sticky="w", padx=6, pady=(4, 4))
+        self.register_widget(bulk_barcode_check, "Include Barcode from Excel")
+        row_offset += 1
+
+        bulk_generate_button = ttk.Button(
+            frame,
+            text=self.tr("Generate From Excel"),
+            command=self.start_rinven_bulk_generate,
+        )
+        bulk_generate_button.grid(row=row_offset, column=0, columnspan=3, pady=(6, 4))
+        self.register_widget(bulk_generate_button, "Generate From Excel")
 
         for _, _, var in fields:
             var.trace_add("write", self._queue_rinven_preview_update)
@@ -6002,6 +6092,7 @@ class ToolApp(tk.Tk):
 
     def _collect_rinven_details(self) -> Dict[str, str]:
         return {
+            "price": self._normalize_rinven_value(self.rinven_price.get()),
             "collection": self._normalize_rinven_value(self.rinven_collection.get()),
             "design": self._normalize_rinven_value(self.rinven_design.get()),
             "color": self._normalize_rinven_value(self.rinven_color.get()),
@@ -6010,6 +6101,7 @@ class ToolApp(tk.Tk):
             "style": self._normalize_rinven_value(self.rinven_style.get()),
             "content": self._normalize_rinven_value(self.rinven_content.get()),
             "type": self._normalize_rinven_value(self.rinven_type.get()),
+            "sku": self._normalize_rinven_value(self.rinven_sku.get()),
             "rug_no": self._normalize_rinven_value(self.rinven_rug_no.get()),
         }
 
@@ -6216,6 +6308,67 @@ class ToolApp(tk.Tk):
             export_metadata["warnings"] = warnings
         self.log(log_msg)
         self._apply_rinven_warnings(export_metadata)
+
+    def _select_rinven_bulk_file(self) -> None:
+        path = filedialog.askopenfilename(
+            title=self.tr("Select Excel File"),
+            filetypes=[
+                (self.tr("Excel Files"), "*.xlsx *.xls *.csv"),
+                (self.tr("All Files"), "*.*"),
+            ],
+        )
+        if path:
+            self.rinven_bulk_file.set(path)
+            if not self.rinven_bulk_output.get():
+                default_output = os.path.join(os.path.dirname(path), "rinven_tags")
+                self.rinven_bulk_output.set(default_output)
+
+    def _select_rinven_bulk_output(self) -> None:
+        folder = filedialog.askdirectory(title=self.tr("Select Folder"))
+        if folder:
+            self.rinven_bulk_output.set(folder)
+
+    def start_rinven_bulk_generate(self) -> None:
+        file_path = self.rinven_bulk_file.get().strip()
+        if not file_path:
+            messagebox.showerror(self.tr("Error"), self.tr("Please choose an Excel file first."))
+            return
+        if not os.path.isfile(file_path):
+            messagebox.showerror(self.tr("Error"), self.tr("Selected file does not exist."))
+            return
+
+        output_dir = self.rinven_bulk_output.get().strip()
+        if not output_dir:
+            output_dir = os.path.join(os.path.dirname(file_path), "rinven_tags")
+            self.rinven_bulk_output.set(output_dir)
+
+        output_dir = os.path.abspath(output_dir)
+        self.rinven_bulk_output.set(output_dir)
+
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+        except OSError as exc:
+            messagebox.showerror(
+                self.tr("Error"),
+                self.tr("Could not create output folder: {error}").format(error=exc),
+            )
+            return
+
+        include_barcode = self.rinven_bulk_include_barcode.get()
+        only_filled = self.rinven_only_filled.get()
+
+        self.log(
+            self.tr("Starting bulk Rinven tag generation from: {path}").format(path=file_path)
+        )
+        self.run_in_thread(
+            backend.generate_rinven_tags_from_file_task,
+            file_path,
+            output_dir,
+            include_barcode,
+            only_filled,
+            self.log,
+            self.task_completion_popup,
+        )
 
     def _show_barcode_dependency_error(self, dependency_issue: str) -> None:
         message = "\n\n".join(
