@@ -668,13 +668,22 @@ def _render_barcode_image(
         img = instance.render(writer_options=options)
         return img, active_writer
 
+    effective_writer_options: Dict[str, object] = {
+        "write_text": False,
+        "module_width": 0.35,
+        "module_height": 15.0,
+    }
+
+    if writer_options:
+        effective_writer_options.update(writer_options)
+
     try:
-        return _render_with_writer(_SafeImageWriter(), writer_options)
+        return _render_with_writer(_SafeImageWriter(), effective_writer_options)
     except Exception as exc:  # noqa: BLE001 - barcode library raised an error
         if not _is_font_resource_error(exc):
             raise
 
-        fallback_options = dict(writer_options or {})
+        fallback_options = dict(effective_writer_options)
         fallback_options["write_text"] = False
 
         fallback_writer = _SafeImageWriter()
