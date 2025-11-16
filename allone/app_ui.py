@@ -230,11 +230,15 @@ translations = {
         "Include Barcode": "Include Barcode",
         "Price:": "Price:",
         "SKU:": "SKU:",
-        "Bulk Excel Generation": "Bulk Excel Generation",
-        "Bulk Excel File:": "Bulk Excel File:",
+        "Bulk Tag Generation": "Bulk Tag Generation",
+        "Tag Data Excel File:": "Tag Data Excel File:",
         "Output Folder:": "Output Folder:",
         "Include Barcode from Excel": "Include Barcode from Excel",
-        "Generate From Excel": "Generate From Excel",
+        "Generate Tags From Excel": "Generate Tags From Excel",
+        "Download Sample Excel": "Download Sample Excel",
+        "Save Sample Excel": "Save Sample Excel",
+        "Sample Excel saved to: {path}": "Sample Excel saved to: {path}",
+        "Sample Excel could not be saved: {error}": "Sample Excel could not be saved: {error}",
         "Select Folder": "Select Folder",
         "Selected file does not exist.": "Selected file does not exist.",
         "Could not create output folder: {error}": "Could not create output folder: {error}",
@@ -616,11 +620,15 @@ translations = {
         "Include Barcode": "Barkodu Dahil Et",
         "Price:": "Fiyat:",
         "SKU:": "SKU:",
-        "Bulk Excel Generation": "Toplu Excel Üretimi",
-        "Bulk Excel File:": "Toplu Excel Dosyası:",
+        "Bulk Tag Generation": "Excel'den Toplu Etiket Üretimi",
+        "Tag Data Excel File:": "Etiket Verisi Excel Dosyası:",
         "Output Folder:": "Çıkış Klasörü:",
         "Include Barcode from Excel": "Excel'deki Barkodu Dahil Et",
-        "Generate From Excel": "Excel'den Oluştur",
+        "Generate Tags From Excel": "Excel'den Etiket Üret",
+        "Download Sample Excel": "Örnek Excel İndir",
+        "Save Sample Excel": "Örnek Excel'i Kaydet",
+        "Sample Excel saved to: {path}": "Örnek Excel kaydedildi: {path}",
+        "Sample Excel could not be saved: {error}": "Örnek Excel kaydedilemedi: {error}",
         "Select Folder": "Klasör Seç",
         "Selected file does not exist.": "Seçilen dosya mevcut değil.",
         "Could not create output folder: {error}": "Çıkış klasörü oluşturulamadı: {error}",
@@ -5746,14 +5754,20 @@ class ToolApp(tk.Tk):
         separator.grid(row=row_offset, column=0, columnspan=3, sticky="we", padx=6, pady=(6, 10))
         row_offset += 1
 
-        bulk_label = ttk.Label(frame, text=self.tr("Bulk Excel Generation"))
-        bulk_label.grid(row=row_offset, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 4))
-        self.register_widget(bulk_label, "Bulk Excel Generation")
+        bulk_label = ttk.Label(frame, text=self.tr("Bulk Tag Generation"))
+        bulk_label.grid(row=row_offset, column=0, sticky="w", padx=6, pady=(0, 4))
+        self.register_widget(bulk_label, "Bulk Tag Generation")
+
+        sample_button = ttk.Button(
+            frame, text=self.tr("Download Sample Excel"), command=self._save_rinven_sample_excel
+        )
+        sample_button.grid(row=row_offset, column=2, sticky="e", padx=6, pady=(0, 4))
+        self.register_widget(sample_button, "Download Sample Excel")
         row_offset += 1
 
-        bulk_file_label = ttk.Label(frame, text=self.tr("Bulk Excel File:"))
+        bulk_file_label = ttk.Label(frame, text=self.tr("Tag Data Excel File:"))
         bulk_file_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
-        self.register_widget(bulk_file_label, "Bulk Excel File:")
+        self.register_widget(bulk_file_label, "Tag Data Excel File:")
 
         bulk_file_entry = ttk.Entry(frame, textvariable=self.rinven_bulk_file)
         bulk_file_entry.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
@@ -5794,11 +5808,11 @@ class ToolApp(tk.Tk):
 
         bulk_generate_button = ttk.Button(
             frame,
-            text=self.tr("Generate From Excel"),
+            text=self.tr("Generate Tags From Excel"),
             command=self.start_rinven_bulk_generate,
         )
         bulk_generate_button.grid(row=row_offset, column=0, columnspan=3, pady=(6, 4))
-        self.register_widget(bulk_generate_button, "Generate From Excel")
+        self.register_widget(bulk_generate_button, "Generate Tags From Excel")
 
         for _, _, var in fields:
             var.trace_add("write", self._queue_rinven_preview_update)
@@ -6308,6 +6322,79 @@ class ToolApp(tk.Tk):
             export_metadata["warnings"] = warnings
         self.log(log_msg)
         self._apply_rinven_warnings(export_metadata)
+
+    def _save_rinven_sample_excel(self) -> None:
+        headers = [
+            "Collection",
+            "Design",
+            "Color",
+            "Size",
+            "Origin",
+            "Style",
+            "Content",
+            "Type",
+            "Rug #",
+            "SKU",
+            "Price",
+            "Barcode",
+        ]
+
+        sample_rows = [
+            [
+                "Anatolian",
+                "ABC-123",
+                "Red/Blue",
+                "5' x 8'",
+                "Turkey",
+                "Traditional",
+                "Wool",
+                "Area Rug",
+                "RUG-001",
+                "SKU-001",
+                "1200",
+                "123456789012",
+            ],
+            [
+                "Modern Loft",
+                "ML-98",
+                "Gray",
+                "6' x 9'",
+                "India",
+                "Modern",
+                "Wool & Viscose",
+                "Area Rug",
+                "RUG-002",
+                "SKU-002",
+                "2300",
+                "987654321098",
+            ],
+        ]
+
+        path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[(self.tr("Excel Files"), "*.xlsx"), (self.tr("All Files"), "*.*")],
+            initialfile="rinven_tag_sample.xlsx",
+            title=self.tr("Save Sample Excel"),
+        )
+        if not path:
+            return
+
+        try:
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Rinven Tags"
+            sheet.append(headers)
+            for row in sample_rows:
+                sheet.append(row)
+            workbook.save(path)
+        except Exception as exc:  # pylint: disable=broad-except
+            message = self.tr("Sample Excel could not be saved: {error}").format(error=exc)
+            messagebox.showerror(self.tr("Error"), message)
+            return
+
+        message = self.tr("Sample Excel saved to: {path}").format(path=path)
+        self.log(message)
+        messagebox.showinfo(self.tr("Success"), message)
 
     def _select_rinven_bulk_file(self) -> None:
         path = filedialog.askopenfilename(
