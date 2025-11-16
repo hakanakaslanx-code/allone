@@ -955,8 +955,10 @@ def build_rinven_tag_image(
                 # trimmed. Empirically a wider horizontal margin greatly
                 # improves reliability for handheld scanners, so reserve more
                 # space than the bare minimum before cropping.
-                margin_x = max(12, int(round(0.05 * DPI)))
-                margin_y = max(8, int(round(0.03 * DPI)))
+                # Expand the quiet zone to keep scanners happy even when the label is
+                # trimmed closely or printed slightly off-center.
+                margin_x = max(18, int(round(0.1 * DPI)))
+                margin_y = max(12, int(round(0.06 * DPI)))
                 barcode_img = _tighten_barcode_whitespace(barcode_img, margin_x, margin_y)
                 if font_warning_message:
                     has_font_warning = any(
@@ -1031,7 +1033,7 @@ def build_rinven_tag_image(
 
             barcode_x = (width_px - barcode_img.width) // 2
             canvas.paste(barcode_img, (barcode_x, current_y))
-            current_y += barcode_img.height + int(0.08 * DPI)
+            current_y += barcode_img.height + int(0.12 * DPI)
 
         collection_name = normalized_details.get("collection", "")
         if collection_name:
