@@ -878,6 +878,7 @@ def build_rinven_tag_image(
     barcode_data: Optional[str],
     only_filled_fields: bool = True,
     output_format: str = "png",
+    label_size_in: Optional[Tuple[float, float]] = None,
 ):
     """Render the Rinven tag image and return it with rendering metadata."""
 
@@ -899,7 +900,11 @@ def build_rinven_tag_image(
 
     is_dymo_output = output_format.lower() == "dymo"
     DPI = 300
-    if is_dymo_output:
+    if label_size_in:
+        width_in, height_in = label_size_in
+        if width_in <= 0 or height_in <= 0:
+            raise ValueError("Label dimensions must be positive values.")
+    elif is_dymo_output:
         width_in = 2.3
         height_in = 4.0
     else:
@@ -1258,6 +1263,7 @@ def generate_rinven_tag_label(
     barcode_data,
     only_filled_fields: bool = True,
     output_format: str = "png",
+    label_size_in: Optional[Tuple[float, float]] = None,
 ):
     """Creates a Rinven tag label sized for a portrait 4" x 6" label."""
 
@@ -1269,6 +1275,7 @@ def generate_rinven_tag_label(
             barcode_data,
             only_filled_fields=only_filled_fields,
             output_format=output_format,
+            label_size_in=label_size_in,
         )
 
         if not metadata.get("has_content"):
