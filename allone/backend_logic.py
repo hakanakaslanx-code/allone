@@ -7,6 +7,7 @@ import shutil
 import tempfile
 import traceback
 import platform
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
@@ -1055,45 +1056,23 @@ def build_rinven_tag_image(
             # Draw the barcode before any text so it remains visually on top of the canvas.
             max_barcode_width = width_px - (padding * 2)
             max_barcode_height = int(height_px * 0.34)
-            min_barcode_width = min(
-                max_barcode_width,
-                max(int(max_barcode_width * 0.9), 360),
-            )
-            min_barcode_height = min(
-                max_barcode_height,
-                max(int(max_barcode_height * 0.9), 180),
-            )
 
-            width = max(barcode_img.width, 1)
-            height = max(barcode_img.height, 1)
-
-            scale_up = max(
-                min_barcode_width / width,
-                min_barcode_height / height,
-                1.0,
-            )
-            if scale_up > 1.0:
-                new_size = (
-                    int(round(width * scale_up)),
-                    int(round(height * scale_up)),
+            if (
+                barcode_img.width > max_barcode_width
+                or barcode_img.height > max_barcode_height
+            ):
+                scale_down = min(
+                    max_barcode_width / max(barcode_img.width, 1),
+                    max_barcode_height / max(barcode_img.height, 1),
+                    1.0,
                 )
-                # Upscaling with anti-aliasing blurs the barcode bars; use NEAREST to keep
-                # module edges crisp and scannable.
-                barcode_img = barcode_img.resize(new_size, _RESAMPLE_NEAREST)
-                width, height = barcode_img.size
-
-            scale_down = min(
-                max_barcode_width / max(width, 1),
-                max_barcode_height / max(height, 1),
-                1.0,
-            )
-            if scale_down < 1.0:
-                new_size = (
-                    int(round(width * scale_down)),
-                    int(round(height * scale_down)),
-                )
-                # Downscaling with NEAREST avoids introducing grey artifacts between bars.
-                barcode_img = barcode_img.resize(new_size, _RESAMPLE_NEAREST)
+                if scale_down < 1.0:
+                    new_size = (
+                        int(round(barcode_img.width * scale_down)),
+                        int(round(barcode_img.height * scale_down)),
+                    )
+                    # Downscaling with NEAREST avoids introducing grey artifacts between bars.
+                    barcode_img = barcode_img.resize(new_size, _RESAMPLE_NEAREST)
 
             barcode_x = (width_px - barcode_img.width) // 2
             canvas.paste(barcode_img, (barcode_x, current_y))
@@ -1550,14 +1529,17 @@ def generate_bulk_rinven_tags(
             percentage = ((index + 1) / total_rows) * 100
             _log(f"  ...Progress: {percentage:.0f}% ({index + 1}/{total_rows})")
 
-    summary_parts = [f"Generated {generated} tag(s)."]
+    summary_parts = [
+        f"Processed {total_rows} row(s).",
+        f"Generated {generated} tag(s).",
+    ]
     if skipped:
         summary_parts.append(f"Skipped {skipped} row(s) with no content.")
     if failures:
         summary_parts.append(f"Encountered {failures} error(s).")
     summary_parts.append(f"Files saved to: {output_path}")
 
-    status = "Success" if failures == 0 else "Warning"
+    status = "Success" if failures == 0 and generated == total_rows else "Warning"
     summary_message = "\n".join(summary_parts)
     _log(summary_message)
 
@@ -1655,8 +1637,8 @@ def _format_price_text(raw: str) -> str:
 
     cleaned = stripped.replace("$", "").replace(",", "")
     try:
-        value = float(cleaned)
-    except ValueError:
+        value = Decimal(cleaned).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except (InvalidOperation, ValueError):
         return text if prefix_pattern.match(text) else f"Price {text}" if text else ""
 
     formatted_value = f"{value:,.2f}".rstrip("0").rstrip(".")
