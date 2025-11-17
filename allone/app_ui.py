@@ -5737,7 +5737,7 @@ class ToolApp(tk.Tk):
         row = 0
 
         intro_label = ttk.Label(frame, text=self.tr("Single Tag Setup"), style="Secondary.TLabel")
-        intro_label.grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 2))
+        intro_label.grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(6, 2))
         row += 1
 
         intro_hint = ttk.Label(
@@ -5896,7 +5896,7 @@ class ToolApp(tk.Tk):
         row += 1
 
         bulk_label = ttk.Label(frame, text=self.tr("Bulk Tag Generation"))
-        bulk_label.grid(row=row, column=0, sticky="w", padx=6, pady=(0, 4))
+        bulk_label.grid(row=row, column=0, sticky="w", padx=6, pady=(6, 4))
         self.register_widget(bulk_label, "Bulk Tag Generation")
 
         sample_button = ttk.Button(
