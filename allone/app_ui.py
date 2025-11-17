@@ -166,6 +166,7 @@ translations = {
         "By Percentage": "By Percentage",
         "Max Width:": "Max Width:",
         "Percentage (%):": "Percentage (%):",
+        "Font Size (pt):": "Font Size (pt):",
         "JPEG Quality (1-95):": "JPEG Quality (1-95):",
         "Resize & Compress": "Resize & Compress",
         "Room Image:": "Room Image:",
@@ -348,6 +349,10 @@ translations = {
         "Export summary: {rows} rows | {fields} fields exported | Skipped: {skipped}": "Export summary: {rows} rows | {fields} fields exported | Skipped: {skipped}",
         "None": "None",
         "Shared Label Printer": "Shared Label Printer",
+        "Print Generated Tags": "Print Generated Tags",
+        "No generated tags found to print.": "No generated tags found to print.",
+        "Printed {count} tag(s) to the default printer.": "Printed {count} tag(s) to the default printer.",
+        "Printing tags failed: {error}": "Printing tags failed: {error}",
         "SHARED_PRINTER_DESCRIPTION": (
             "Expose the locally connected DYMO LabelWriter 450 to other computers on your Wi-Fi/LAN.\n"
             "Start sharing to run the embedded Flask server and accept POST /print jobs with the token below."
@@ -556,6 +561,7 @@ translations = {
         "By Percentage": "Yüzdeye Göre",
         "Max Width:": "Azami Genişlik:",
         "Percentage (%):": "Yüzde (%):",
+        "Font Size (pt):": "Yazı Boyutu (pt):",
         "JPEG Quality (1-95):": "JPEG Kalitesi (1-95):",
         "Resize & Compress": "Yeniden Boyutlandır ve Sıkıştır",
         "Room Image:": "Room Image:",
@@ -738,6 +744,10 @@ translations = {
         "Export summary: {rows} rows | {fields} fields exported | Skipped: {skipped}": "Dışa aktarma özeti: {rows} satır | {fields} alan aktarıldı | Atlanan: {skipped}",
         "None": "Yok",
         "Shared Label Printer": "Paylaşılan Etiket Yazıcısı",
+        "Print Generated Tags": "Üretilen Etiketleri Yazdır",
+        "No generated tags found to print.": "Yazdırılacak oluşturulmuş etiket bulunamadı.",
+        "Printed {count} tag(s) to the default printer.": "Varsayılan yazıcıya {count} etiket gönderildi.",
+        "Printing tags failed: {error}": "Etiketler yazdırılırken hata oluştu: {error}",
         "SHARED_PRINTER_DESCRIPTION": (
             "Yerel olarak bağlı DYMO LabelWriter 450 yazıcısını Wi-Fi/LAN üzerindeki diğer bilgisayarlarla paylaşın.\n"
             "Aşağıdaki jetonla gömülü Flask sunucusunu başlatın ve POST /print isteklerini kabul edin."
@@ -5671,6 +5681,7 @@ class ToolApp(tk.Tk):
         self.rinven_barcode_var = tk.StringVar()
         self.rinven_filename = tk.StringVar(value="rinven_tag.png")
         self.rinven_font_size = tk.StringVar(value="20")
+        self.rinven_bulk_font_size = tk.StringVar(value="20")
         self.rinven_include_barcode = tk.BooleanVar(value=False)
         self.rinven_only_filled = tk.BooleanVar(value=True)
         self.rinven_warning_var = tk.StringVar()
@@ -5711,9 +5722,9 @@ class ToolApp(tk.Tk):
 
         row_offset = len(fields)
 
-        font_size_label = ttk.Label(frame, text=self.tr("Yazı Boyutu (pt):"))
+        font_size_label = ttk.Label(frame, text=self.tr("Font Size (pt):"))
         font_size_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
-        self.register_widget(font_size_label, "Yazı Boyutu (pt):")
+        self.register_widget(font_size_label, "Font Size (pt):")
 
         font_size_entry = ttk.Entry(frame, textvariable=self.rinven_font_size)
         font_size_entry.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
@@ -5839,6 +5850,14 @@ class ToolApp(tk.Tk):
         self.register_widget(output_button, "Browse...")
         row_offset += 1
 
+        bulk_font_size_label = ttk.Label(frame, text=self.tr("Font Size (pt):"))
+        bulk_font_size_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
+        self.register_widget(bulk_font_size_label, "Font Size (pt):")
+
+        bulk_font_size_entry = ttk.Entry(frame, textvariable=self.rinven_bulk_font_size)
+        bulk_font_size_entry.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
+        row_offset += 1
+
         bulk_barcode_check = ttk.Checkbutton(
             frame,
             text=self.tr("Include Barcode from Excel"),
@@ -5855,6 +5874,16 @@ class ToolApp(tk.Tk):
         )
         bulk_generate_button.grid(row=row_offset, column=0, columnspan=3, pady=(6, 4))
         self.register_widget(bulk_generate_button, "Generate Tags From Excel")
+
+        row_offset += 1
+
+        bulk_print_button = ttk.Button(
+            frame,
+            text=self.tr("Print Generated Tags"),
+            command=self.print_rinven_bulk_tags,
+        )
+        bulk_print_button.grid(row=row_offset, column=0, columnspan=3, pady=(4, 6))
+        self.register_widget(bulk_print_button, "Print Generated Tags")
 
         for _, _, var in fields:
             var.trace_add("write", self._queue_rinven_preview_update)
@@ -6381,6 +6410,7 @@ class ToolApp(tk.Tk):
             "SKU",
             "Price",
             "Barcode",
+            "Font Size",
         ]
 
         sample_rows = [
@@ -6397,6 +6427,7 @@ class ToolApp(tk.Tk):
                 "SKU-001",
                 "1200",
                 "123456789012",
+                "20",
             ],
             [
                 "Modern Loft",
@@ -6411,6 +6442,7 @@ class ToolApp(tk.Tk):
                 "SKU-002",
                 "2300",
                 "987654321098",
+                "20",
             ],
         ]
 
@@ -6487,6 +6519,9 @@ class ToolApp(tk.Tk):
 
         include_barcode = self.rinven_bulk_include_barcode.get()
         only_filled = self.rinven_only_filled.get()
+        font_size_value = self._normalize_rinven_value(self.rinven_bulk_font_size.get())
+        if not font_size_value:
+            font_size_value = self._normalize_rinven_value(self.rinven_font_size.get())
 
         self.log(
             self.tr("Starting bulk Rinven tag generation from: {path}").format(path=file_path)
@@ -6497,9 +6532,41 @@ class ToolApp(tk.Tk):
             output_dir,
             include_barcode,
             only_filled,
+            font_size_value,
             self.log,
             self.task_completion_popup,
         )
+
+    def print_rinven_bulk_tags(self) -> None:
+        output_dir = self.rinven_bulk_output.get().strip()
+        if not output_dir:
+            file_path = self.rinven_bulk_file.get().strip()
+            if file_path:
+                output_dir = os.path.join(os.path.dirname(file_path), "rinven_tags")
+
+        if not output_dir or not os.path.isdir(output_dir):
+            messagebox.showerror(self.tr("Error"), self.tr("Please select a valid folder."))
+            return
+
+        tag_files = sorted(Path(output_dir).glob("*.png"))
+        if not tag_files:
+            messagebox.showwarning(self.tr("Warning"), self.tr("No generated tags found to print."))
+            return
+
+        try:
+            for tag_file in tag_files:
+                self.shared_printer_server.print_file(str(tag_file))
+        except Exception as exc:  # pragma: no cover - dependent on OS printing stack
+            message = self.tr("Printing tags failed: {error}").format(error=exc)
+            self.log(message)
+            messagebox.showerror(self.tr("Error"), message)
+            return
+
+        success_message = self.tr("Printed {count} tag(s) to the default printer.").format(
+            count=len(tag_files)
+        )
+        self.log(success_message)
+        messagebox.showinfo(self.tr("Success"), success_message)
 
     def _show_barcode_dependency_error(self, dependency_issue: str) -> None:
         message = "\n\n".join(

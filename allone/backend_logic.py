@@ -1290,6 +1290,7 @@ def generate_rinven_tags_from_file_task(
     output_dir: str,
     include_barcode: bool,
     only_filled_fields: bool,
+    font_size_value: Optional[str],
     log_callback,
     completion_callback,
 ):
@@ -1325,6 +1326,23 @@ def generate_rinven_tags_from_file_task(
 
     column_lookup = {str(column).strip().lower(): column for column in dataframe.columns}
 
+    def _coerce_font_size(raw_value: Optional[str]) -> Optional[str]:
+        try:
+            cleaned = str(raw_value).strip()
+        except Exception:
+            return None
+
+        if not cleaned:
+            return None
+
+        try:
+            value = int(cleaned)
+        except (TypeError, ValueError):
+            return None
+        return str(max(value, 1))
+
+    default_font_size = _coerce_font_size(font_size_value)
+
     total_rows = len(dataframe)
     generated = 0
     skipped = 0
@@ -1355,6 +1373,13 @@ def generate_rinven_tags_from_file_task(
 
         price_raw = _pick_first_value(row, column_lookup, ["price", "retail", "amount", "sp", "msrp"])
         details["price"] = _format_price_text(price_raw)
+
+        row_font_size = _coerce_font_size(
+            _pick_first_value(row, column_lookup, ["font_size", "font size", "font size (pt)"])
+        )
+        font_size = row_font_size or default_font_size
+        if font_size:
+            details["font_size"] = font_size
 
         barcode_value = _pick_first_value(row, column_lookup, ["barcode", "upc", "sku", "rugno"])
         use_barcode = bool(include_barcode and barcode_value)
