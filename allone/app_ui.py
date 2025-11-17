@@ -12,6 +12,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
+import importlib.util
 
 import pandas as pd
 import requests
@@ -55,10 +56,22 @@ for _path in _LOCAL_PATHS:
 try:
     import backend_logic as backend
 except ModuleNotFoundError as exc:  # pragma: no cover - defensive guard for packaged builds
-    raise ModuleNotFoundError(
-        "The 'backend_logic' module could not be located. "
-        "Please reinstall or re-download the application files."
-    ) from exc
+    _backend_path = Path(__file__).resolve().parent / "backend_logic.py"
+    if _backend_path.exists():
+        _spec = importlib.util.spec_from_file_location("backend_logic", _backend_path)
+        if _spec and _spec.loader:
+            backend = importlib.util.module_from_spec(_spec)
+            _spec.loader.exec_module(backend)
+            sys.modules.setdefault("backend_logic", backend)
+        else:
+            raise ModuleNotFoundError(
+                "The 'backend_logic' module could not be loaded from the local file."
+            ) from exc
+    else:
+        raise ModuleNotFoundError(
+            "The 'backend_logic' module could not be located. "
+            "Please reinstall or re-download the application files."
+        ) from exc
 
 translations = {
     "en": {
