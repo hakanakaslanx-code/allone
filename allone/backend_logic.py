@@ -861,11 +861,11 @@ def build_rinven_tag_image(
 
     DPI = 300
     width_in = 4.0
-    height_in = 6.0
-    width_px = int(width_in * DPI)
-    height_px = int(height_in * DPI)
-    padding = int(0.2 * DPI)
-    top_extra_padding = int(0.12 * DPI)
+    height_in = 2.3125  # DYMO 30256 Shipping (4" x 2-5/16")
+    width_px = int(round(width_in * DPI))
+    height_px = int(round(height_in * DPI))
+    padding = int(0.12 * DPI)
+    top_extra_padding = int(0.06 * DPI)
 
     try:
         template_candidates = [
@@ -901,7 +901,7 @@ def build_rinven_tag_image(
 
         draw = ImageDraw.Draw(canvas)
 
-        title_font_size = int(0.2 * DPI)
+        title_font_size = int(0.18 * DPI)
         title_pref_fonts = [
             "arialbd.ttf",
             "Arial Bold.ttf",
@@ -929,8 +929,8 @@ def build_rinven_tag_image(
         price_drawn = False
         if price_text:
             price_pref_fonts = title_pref_fonts
-            price_font_size = int(0.22 * DPI)
-            min_price_font = max(int(0.12 * DPI), 32)
+            price_font_size = int(0.18 * DPI)
+            min_price_font = max(int(0.1 * DPI), 30)
             price_font, price_font_size = _fit_font(
                 draw,
                 price_text,
@@ -944,7 +944,7 @@ def build_rinven_tag_image(
             price_h = bbox[3] - bbox[1]
             price_x = (width_px - price_w) // 2
             draw.text((price_x, current_y), price_text, fill="black", font=price_font)
-            current_y += price_h + int(0.08 * DPI)
+            current_y += price_h + int(0.05 * DPI)
             price_drawn = True
 
         barcode_img: Optional[Image.Image] = None
@@ -996,7 +996,7 @@ def build_rinven_tag_image(
         if barcode_img is not None:
             # Draw the barcode before any text so it remains visually on top of the canvas.
             max_barcode_width = width_px - (padding * 2)
-            max_barcode_height = int(height_px * 0.26)
+            max_barcode_height = int(height_px * 0.34)
             min_barcode_width = min(
                 max_barcode_width,
                 max(int(max_barcode_width * 0.9), 360),
@@ -1039,7 +1039,7 @@ def build_rinven_tag_image(
 
             barcode_x = (width_px - barcode_img.width) // 2
             canvas.paste(barcode_img, (barcode_x, current_y))
-            current_y += barcode_img.height + int(0.08 * DPI)
+            current_y += barcode_img.height + int(0.05 * DPI)
 
         collection_name = normalized_details.get("collection", "")
         if collection_name:
@@ -1063,11 +1063,11 @@ def build_rinven_tag_image(
         field_padding_top = max(current_y, padding)
         current_y = field_padding_top
 
-        base_colon_gap = int(0.035 * DPI)
-        base_value_gap = int(0.06 * DPI)
+        base_colon_gap = int(0.03 * DPI)
+        base_value_gap = int(0.05 * DPI)
         available_line_width = width_px - (padding * 2)
         available_height = height_px - padding - current_y
-        min_text_size = max(int(text_font_size * 0.7), 18)
+        min_text_size = max(int(text_font_size * 0.45), 14)
 
         max_label_width = colon_width = line_height = colon_gap = value_gap = 0
         max_line_width = 0
@@ -1290,6 +1290,7 @@ def generate_rinven_tags_from_file_task(
     output_dir: str,
     include_barcode: bool,
     only_filled_fields: bool,
+    font_size_value: Optional[str],
     log_callback,
     completion_callback,
 ):
@@ -1325,6 +1326,23 @@ def generate_rinven_tags_from_file_task(
 
     column_lookup = {str(column).strip().lower(): column for column in dataframe.columns}
 
+    def _coerce_font_size(raw_value: Optional[str]) -> Optional[str]:
+        try:
+            cleaned = str(raw_value).strip()
+        except Exception:
+            return None
+
+        if not cleaned:
+            return None
+
+        try:
+            value = int(cleaned)
+        except (TypeError, ValueError):
+            return None
+        return str(max(value, 1))
+
+    default_font_size = _coerce_font_size(font_size_value)
+
     total_rows = len(dataframe)
     generated = 0
     skipped = 0
@@ -1355,6 +1373,13 @@ def generate_rinven_tags_from_file_task(
 
         price_raw = _pick_first_value(row, column_lookup, ["price", "retail", "amount", "sp", "msrp"])
         details["price"] = _format_price_text(price_raw)
+
+        row_font_size = _coerce_font_size(
+            _pick_first_value(row, column_lookup, ["font_size", "font size", "font size (pt)"])
+        )
+        font_size = row_font_size or default_font_size
+        if font_size:
+            details["font_size"] = font_size
 
         barcode_value = _pick_first_value(row, column_lookup, ["barcode", "upc", "sku", "rugno"])
         use_barcode = bool(include_barcode and barcode_value)
