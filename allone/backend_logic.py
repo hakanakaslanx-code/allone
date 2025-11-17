@@ -477,7 +477,7 @@ def generate_barcode_task(data, fname, bc_format, output_type, dymo_size_info, b
                 data,
                 bc_format,
                 writer_options={
-                    "module_height": int(0.7 * 300),
+                    "module_height": 18.0,
                     "quiet_zone": 6,
                 },
             )
@@ -670,7 +670,7 @@ def _render_barcode_image(
 
     effective_writer_options: Dict[str, object] = {
         "write_text": False,
-        "module_width": 0.8,
+        "module_width": 1.2,
         "module_height": 10.0,
         "quiet_zone": 2.0,
     }
@@ -750,14 +750,14 @@ def _render_rinven_barcode(data: str, dpi: int) -> Tuple[Image.Image, str, Optio
     errors: List[Dict[str, str]] = []
     for bc_format in _select_rinven_barcode_formats(data):
         try:
-            barcode_img, writer = _render_barcode_image(
-                data,
-                bc_format,
-                writer_options={
-                    "module_height": int(0.7 * dpi),
-                    "quiet_zone": 6,
-                },
-            )
+                barcode_img, writer = _render_barcode_image(
+                    data,
+                    bc_format,
+                    writer_options={
+                        "module_height": 18.0,
+                        "quiet_zone": 6,
+                    },
+                )
             warning_message = getattr(writer, "font_warning_message", None)
             return barcode_img, bc_format, warning_message
         except Exception as exc:  # noqa: BLE001 - external library
@@ -909,7 +909,7 @@ def build_rinven_tag_image(
             "Verdana Bold.ttf",
             "LiberationSans-Bold.ttf",
         ]
-        text_font_size = int(0.14 * DPI)
+        text_font_size = int(0.16 * DPI)
         text_pref_fonts = [
             "arial.ttf",
             "Helvetica.ttf",
@@ -1061,9 +1061,10 @@ def build_rinven_tag_image(
         base_value_gap = int(0.06 * DPI)
         available_line_width = width_px - (padding * 2)
         available_height = height_px - padding - current_y
-        min_text_size = max(int(0.06 * DPI), 18)
+        min_text_size = max(int(0.08 * DPI), 18)
 
         max_label_width = colon_width = line_height = colon_gap = value_gap = 0
+        max_line_width = 0
 
         if field_entries:
 
@@ -1078,6 +1079,7 @@ def build_rinven_tag_image(
                 local_colon_width = colon_bbox[2] - colon_bbox[0]
                 local_line_height = int(font_size * 1.35)
                 widest_label = 0
+                local_max_line_width = 0
                 fits_width = True
                 for label, value in field_entries:
                     label_bbox = draw.textbbox((0, 0), label, font=font)
@@ -1092,6 +1094,7 @@ def build_rinven_tag_image(
                         + local_value_gap
                         + value_width
                     )
+                    local_max_line_width = max(local_max_line_width, line_width)
                     if line_width > available_line_width:
                         fits_width = False
                         break
@@ -1103,6 +1106,7 @@ def build_rinven_tag_image(
                     local_line_height,
                     local_colon_gap,
                     local_value_gap,
+                    local_max_line_width,
                 )
 
             text_font = _load_font(text_pref_fonts, size=text_font_size)
@@ -1113,6 +1117,7 @@ def build_rinven_tag_image(
                 line_height,
                 colon_gap,
                 value_gap,
+                max_line_width,
             ) = measurements(text_font, text_font_size)
             total_height = line_height * len(field_entries)
 
@@ -1126,6 +1131,7 @@ def build_rinven_tag_image(
                     line_height,
                     colon_gap,
                     value_gap,
+                    max_line_width,
                 ) = measurements(text_font, text_font_size)
                 total_height = line_height * len(field_entries)
 
@@ -1150,14 +1156,18 @@ def build_rinven_tag_image(
                     line_height,
                     colon_gap,
                     value_gap,
+                    max_line_width,
                 ) = measurements(text_font, text_font_size)
                 total_height = line_height * len(field_entries)
+
+            text_block_width = max_line_width
+            start_x = max(padding, (width_px - text_block_width) // 2)
 
             for label, value in field_entries:
                 label_text = label
                 value_text = value.strip()
-                draw.text((padding, current_y), label_text, fill="black", font=text_font)
-                colon_x = padding + max_label_width + colon_gap
+                draw.text((start_x, current_y), label_text, fill="black", font=text_font)
+                colon_x = start_x + max_label_width + colon_gap
                 draw.text((colon_x, current_y), ":", fill="black", font=text_font)
                 value_x = colon_x + colon_width + value_gap
                 draw.text((value_x, current_y), value_text, fill="black", font=text_font)
