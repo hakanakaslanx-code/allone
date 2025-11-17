@@ -750,14 +750,14 @@ def _render_rinven_barcode(data: str, dpi: int) -> Tuple[Image.Image, str, Optio
     errors: List[Dict[str, str]] = []
     for bc_format in _select_rinven_barcode_formats(data):
         try:
-                barcode_img, writer = _render_barcode_image(
-                    data,
-                    bc_format,
-                    writer_options={
-                        "module_height": 18.0,
-                        "quiet_zone": 6,
-                    },
-                )
+            barcode_img, writer = _render_barcode_image(
+                data,
+                bc_format,
+                writer_options={
+                    "module_height": 18.0,
+                    "quiet_zone": 6,
+                },
+            )
             warning_message = getattr(writer, "font_warning_message", None)
             return barcode_img, bc_format, warning_message
         except Exception as exc:  # noqa: BLE001 - external library
