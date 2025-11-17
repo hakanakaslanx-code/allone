@@ -909,7 +909,7 @@ def build_rinven_tag_image(
             "Verdana Bold.ttf",
             "LiberationSans-Bold.ttf",
         ]
-        text_font_size = int(0.16 * DPI)
+        text_font_size = int(0.18 * DPI)
         text_pref_fonts = [
             "arial.ttf",
             "Helvetica.ttf",
@@ -1033,7 +1033,7 @@ def build_rinven_tag_image(
 
             barcode_x = (width_px - barcode_img.width) // 2
             canvas.paste(barcode_img, (barcode_x, current_y))
-            current_y += barcode_img.height + int(0.12 * DPI)
+            current_y += barcode_img.height + int(0.08 * DPI)
 
         collection_name = normalized_details.get("collection", "")
         if collection_name:
@@ -1061,7 +1061,7 @@ def build_rinven_tag_image(
         base_value_gap = int(0.06 * DPI)
         available_line_width = width_px - (padding * 2)
         available_height = height_px - padding - current_y
-        min_text_size = max(int(0.08 * DPI), 18)
+        min_text_size = max(int(0.10 * DPI), 18)
 
         max_label_width = colon_width = line_height = colon_gap = value_gap = 0
         max_line_width = 0
