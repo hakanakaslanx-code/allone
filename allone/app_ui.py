@@ -1139,6 +1139,7 @@ class ToolApp(tk.Tk):
         self.rinven_import_editor: Optional[ttk.Entry] = None
         self.rinven_import_editor_info: Optional[Tuple[str, str]] = None
         self._rinven_import_committing = False
+        self.generated_bulk_tags: List[Tuple[Dict[str, str], str]] = []
         legacy_print = self.settings.get("print_server", {})
         shared_settings = self.settings.setdefault("shared_label_printer", {})
         shared_settings.setdefault("token", legacy_print.get("token", "change-me"))
@@ -6016,13 +6017,14 @@ class ToolApp(tk.Tk):
 
         row += 1
 
-        bulk_print_button = ttk.Button(
+        self.bulk_print_button = ttk.Button(
             frame,
             text=self.tr("Print Generated Tags"),
-            command=self.print_rinven_bulk_tags,
+            command=self.open_bulk_print_window,
+            state="disabled",
         )
-        bulk_print_button.grid(row=row, column=0, columnspan=3, pady=(4, 6))
-        self.register_widget(bulk_print_button, "Print Generated Tags")
+        self.bulk_print_button.grid(row=row, column=0, columnspan=3, pady=(4, 6))
+        self.register_widget(self.bulk_print_button, "Print Generated Tags")
 
         self.rinven_bulk_output_format.trace_add("write", lambda *_: self._update_bulk_label_size_state())
         self._update_bulk_label_size_state()
@@ -6881,49 +6883,249 @@ class ToolApp(tk.Tk):
         self.log(
             self.tr("Starting bulk Rinven tag generation from: {path}").format(path=file_path)
         )
-        self.run_in_thread(
-            backend.generate_rinven_tags_from_file_task,
-            file_path,
-            output_dir,
-            include_barcode,
-            only_filled,
-            font_size_value,
-            output_format,
-            label_size_in,
-            self.log,
-            self.task_completion_popup,
+        self.generated_bulk_tags = []
+        try:
+            self.bulk_print_button.config(state="disabled")
+        except Exception:
+            pass
+
+        thread = threading.Thread(
+            target=self._bulk_generate_thread,
+            args=(
+                file_path,
+                output_dir,
+                include_barcode,
+                only_filled,
+                font_size_value,
+                output_format,
+                label_size_in,
+            ),
+            daemon=True,
         )
+        thread.start()
+
+    def _bulk_generate_thread(
+        self,
+        file_path: str,
+        output_dir: str,
+        include_barcode: bool,
+        only_filled: bool,
+        font_size_value: Optional[str],
+        output_format: str,
+        label_size_in: Optional[Tuple[float, float]],
+    ) -> None:
+        try:
+            generated_files, summary_message, status = backend.generate_bulk_rinven_tags(
+                file_path,
+                output_dir,
+                include_barcode,
+                only_filled,
+                font_size_value,
+                output_format,
+                label_size_in,
+                log_callback=self.log,
+            )
+        except Exception as exc:  # pragma: no cover - defensive UI layer
+            def on_error() -> None:
+                self.log(str(exc))
+                messagebox.showerror(self.tr("Error"), str(exc))
+                try:
+                    self.bulk_print_button.config(state="disabled")
+                except Exception:
+                    pass
+
+            self.after(0, on_error)
+            return
+
+        def on_success() -> None:
+            self.generated_bulk_tags = generated_files
+            self.log(summary_message)
+            self.task_completion_popup(status, summary_message)
+            try:
+                state = "normal" if generated_files else "disabled"
+                self.bulk_print_button.config(state=state)
+            except Exception:
+                pass
+
+        self.after(0, on_success)
 
     def print_rinven_bulk_tags(self) -> None:
-        output_dir = self.rinven_bulk_output.get().strip()
-        if not output_dir:
-            file_path = self.rinven_bulk_file.get().strip()
-            if file_path:
-                output_dir = os.path.join(os.path.dirname(file_path), "rinven_tags")
+        self.open_bulk_print_window()
 
-        if not output_dir or not os.path.isdir(output_dir):
-            messagebox.showerror(self.tr("Error"), self.tr("Please select a valid folder."))
+    def open_bulk_print_window(self) -> None:
+        if not self.generated_bulk_tags:
+            messagebox.showwarning(
+                self.tr("Warning"), self.tr("No generated tags found to print.")
+            )
             return
 
-        tag_files = sorted(Path(output_dir).glob("*.png"))
-        if not tag_files:
-            messagebox.showwarning(self.tr("Warning"), self.tr("No generated tags found to print."))
+        if getattr(self, "bulk_print_window", None) and self.bulk_print_window.winfo_exists():
+            self.bulk_print_window.lift()
             return
 
-        try:
-            for tag_file in tag_files:
-                self.shared_printer_server.print_file(str(tag_file))
-        except Exception as exc:  # pragma: no cover - dependent on OS printing stack
-            message = self.tr("Printing tags failed: {error}").format(error=exc)
-            self.log(message)
-            messagebox.showerror(self.tr("Error"), message)
-            return
+        window = tk.Toplevel(self)
+        self.bulk_print_window = window
+        window.title(self.tr("Print Generated Tags"))
+        window.resizable(False, False)
 
-        success_message = self.tr("Printed {count} tag(s) to the default printer.").format(
-            count=len(tag_files)
+        container = ttk.Frame(window, padding=12)
+        container.pack(fill="both", expand=True)
+
+        header = ttk.Label(container, text=self.tr("Send tags to a thermal printer."))
+        header.pack(anchor="w", pady=(0, 8))
+
+        printer_row = ttk.Frame(container)
+        printer_row.pack(fill="x", pady=(0, 6))
+
+        ttk.Label(printer_row, text=self.tr("Printer:")).pack(side="left", padx=(0, 8))
+        self.bulk_print_printer_var = tk.StringVar()
+        printers = self._refresh_bulk_print_printers()
+
+        self.bulk_print_printer_combo = ttk.Combobox(
+            printer_row,
+            textvariable=self.bulk_print_printer_var,
+            values=printers,
+            state="readonly" if printers else "disabled",
+            style="Light.TCombobox",
+            width=36,
         )
-        self.log(success_message)
-        messagebox.showinfo(self.tr("Success"), success_message)
+        self.bulk_print_printer_combo.pack(side="left", fill="x", expand=True)
+
+        ttk.Button(
+            printer_row,
+            text=self.tr("Refresh"),
+            command=self._refresh_bulk_print_printers,
+        ).pack(side="left", padx=(8, 0))
+
+        progress_frame = ttk.Frame(container)
+        progress_frame.pack(fill="x", pady=(8, 4))
+
+        self.bulk_print_progress_var = tk.DoubleVar(value=0)
+        self.bulk_print_progress = ttk.Progressbar(
+            progress_frame,
+            variable=self.bulk_print_progress_var,
+            maximum=max(1, len(self.generated_bulk_tags)),
+        )
+        self.bulk_print_progress.pack(fill="x")
+
+        self.bulk_print_status_var = tk.StringVar(value=self.tr("Ready to print."))
+        ttk.Label(container, textvariable=self.bulk_print_status_var, wraplength=340).pack(
+            anchor="w", pady=(6, 10)
+        )
+
+        self.bulk_print_start_button = ttk.Button(
+            container,
+            text=self.tr("PRINT ALL"),
+            command=self.start_bulk_print_job,
+        )
+        self.bulk_print_start_button.pack(fill="x")
+
+    def _refresh_bulk_print_printers(self) -> List[str]:
+        try:
+            printers = backend.list_printers()
+        except Exception as exc:  # pragma: no cover - platform dependent
+            printers = []
+            self.log(f"Unable to list printers: {exc}")
+
+        if hasattr(self, "bulk_print_printer_combo"):
+            self.bulk_print_printer_combo["values"] = printers
+            try:
+                state = "readonly" if printers else "disabled"
+                self.bulk_print_printer_combo.configure(state=state)
+            except tk.TclError:
+                pass
+
+        if printers:
+            if self.bulk_print_printer_var.get() not in printers:
+                self.bulk_print_printer_var.set(printers[0])
+        else:
+            self.bulk_print_printer_var.set("")
+
+        return printers
+
+    def start_bulk_print_job(self) -> None:
+        if not self.generated_bulk_tags:
+            messagebox.showwarning(
+                self.tr("Warning"), self.tr("No generated tags found to print.")
+            )
+            return
+
+        printer_name = (self.bulk_print_printer_var.get() or "").strip()
+        if not printer_name:
+            messagebox.showerror(self.tr("Error"), self.tr("Please select a printer."))
+            return
+
+        if not getattr(self, "bulk_print_window", None) or not self.bulk_print_window.winfo_exists():
+            return
+
+        self.bulk_print_progress.configure(maximum=max(1, len(self.generated_bulk_tags)))
+        self.bulk_print_progress_var.set(0)
+        self.bulk_print_status_var.set(self.tr("Starting print job…"))
+        try:
+            self.bulk_print_start_button.config(state="disabled")
+        except Exception:
+            pass
+
+        font_size_value = self.rinven_font_size.get()
+
+        thread = threading.Thread(
+            target=self._run_bulk_print_thread,
+            args=(printer_name, font_size_value),
+            daemon=True,
+        )
+        thread.start()
+
+    def _run_bulk_print_thread(self, printer_name: str, font_size_value: str) -> None:
+        try:
+            backend.print_bulk_rinven_tags(
+                printer_name,
+                self.generated_bulk_tags,
+                font_size_value,
+                self._update_bulk_print_progress,
+            )
+        except Exception as exc:  # pragma: no cover - platform dependent
+            def on_error() -> None:
+                self.bulk_print_status_var.set(str(exc))
+                messagebox.showerror(self.tr("Error"), str(exc))
+                try:
+                    self.bulk_print_start_button.config(state="normal")
+                except Exception:
+                    pass
+
+            self.after(0, on_error)
+            return
+
+        def on_complete() -> None:
+            self.bulk_print_status_var.set(self.tr("Print job completed."))
+            try:
+                self.bulk_print_start_button.config(state="normal")
+            except Exception:
+                pass
+
+        self.after(0, on_complete)
+
+    def _update_bulk_print_progress(self, current: int, total: int, filename: str) -> None:
+        def _update() -> None:
+            if hasattr(self, "bulk_print_progress"):
+                try:
+                    self.bulk_print_progress.configure(maximum=max(total, 1))
+                except tk.TclError:
+                    pass
+                self.bulk_print_progress_var.set(current)
+            if hasattr(self, "bulk_print_status_var"):
+                status = self.tr("Printing {current}/{total}: {filename}").format(
+                    current=current,
+                    total=total,
+                    filename=filename,
+                )
+                self.bulk_print_status_var.set(status)
+            if current >= total and hasattr(self, "bulk_print_start_button"):
+                try:
+                    self.bulk_print_start_button.config(state="normal")
+                except Exception:
+                    pass
+
+        self.after(0, _update)
 
     def _show_barcode_dependency_error(self, dependency_issue: str) -> None:
         message = "\n\n".join(

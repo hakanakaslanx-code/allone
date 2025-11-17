@@ -946,9 +946,10 @@ def build_rinven_tag_image(
                 )
             canvas = template_image.copy()
         else:
-            mode = "1" if is_dymo_output else "RGB"
-            background = 1 if is_dymo_output else "white"
-            canvas = Image.new(mode, (width_px, height_px), background)
+            if is_dymo_output:
+                canvas = Image.new("1", (width_px, height_px), 1)
+            else:
+                canvas = Image.new("RGB", (width_px, height_px), "white")
 
         draw = ImageDraw.Draw(canvas)
         text_fill = 0 if is_dymo_output else "black"
@@ -1333,6 +1334,242 @@ def send_image_to_printer(printer_name: str, image_path: str) -> None:
         connection.printFile(printer_name, image_path, "Rinven Tag", {})
 
 
+def generate_bulk_rinven_tags(
+    file_path: str,
+    output_dir: str,
+    include_barcode: bool,
+    only_filled_fields: bool,
+    font_size_value: Optional[str],
+    output_format: str,
+    label_size_in: Optional[Tuple[float, float]],
+    log_callback=None,
+) -> Tuple[List[Tuple[Dict[str, str], str]], str, str]:
+    """Generate Rinven tags in bulk and return the created files with their details.
+
+    The returned tuple contains ``(generated_files, summary_message, status)`` where
+    ``generated_files`` is a list of ``(details, output_path)`` tuples suitable for
+    downstream printing, ``summary_message`` is a human readable description of the
+    run, and ``status`` is one of ``"Success"`` or ``"Warning"``.
+    """
+
+    def _log(message: str) -> None:
+        if log_callback is None:
+            return
+        try:
+            log_callback(message)
+        except Exception:  # pragma: no cover - defensive logging
+            pass
+
+    source = Path(file_path)
+    if not source.exists():
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    render_format = (output_format or "png").lower()
+    normalized_label_size = label_size_in if isinstance(label_size_in, tuple) else None
+
+    try:
+        output_path = Path(output_dir) if output_dir else source.parent / "rinven_tags"
+        output_path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise RuntimeError(f"Could not create output folder: {exc}") from exc
+
+    _log(f"Starting Rinven tag generation from: {source}")
+
+    try:
+        if source.suffix.lower() in {".xlsx", ".xls"}:
+            dataframe = pd.read_excel(source, dtype=str)
+        else:
+            dataframe = pd.read_csv(source, dtype=str)
+    except Exception as exc:
+        raise RuntimeError(f"Excel/CSV file could not be read: {exc}") from exc
+
+    if dataframe.empty:
+        return [], "The selected file does not contain any rows.", "Warning"
+
+    column_lookup = {str(column).strip().lower(): column for column in dataframe.columns}
+
+    def _coerce_font_size(raw_value: Optional[str]) -> Optional[str]:
+        try:
+            cleaned = str(raw_value).strip()
+        except Exception:
+            return None
+
+        if not cleaned:
+            return None
+
+        try:
+            value = int(cleaned)
+        except (TypeError, ValueError):
+            return None
+        return str(max(value, 1))
+
+    default_font_size = _coerce_font_size(font_size_value)
+
+    total_rows = len(dataframe)
+    generated = 0
+    skipped = 0
+    failures = 0
+    generated_files: List[Tuple[Dict[str, str], str]] = []
+
+    for index, row in dataframe.iterrows():
+        details = {
+            "collection": _pick_first_value(row, column_lookup, ["collection", "vcollection", "collection name"]),
+            "design": _pick_first_value(row, column_lookup, ["design", "rugno", "rug no", "rug #"]),
+            "size": _pick_first_value(row, column_lookup, ["size", "asize", "stsize"]),
+            "origin": _pick_first_value(row, column_lookup, ["origin"]),
+            "style": _pick_first_value(row, column_lookup, ["style"]),
+            "content": _pick_first_value(row, column_lookup, ["content", "material", "materials"]),
+            "type": _pick_first_value(row, column_lookup, ["type"]),
+            "rug_no": _pick_first_value(row, column_lookup, ["rug #", "rug no", "rugno", "design"]),
+            "sku": _pick_first_value(row, column_lookup, ["sku", "upc", "barcode", "item sku"]),
+        }
+
+        color_value = _pick_first_value(row, column_lookup, ["color"])
+        if not color_value:
+            ground = _pick_first_value(row, column_lookup, ["ground"])
+            border = _pick_first_value(row, column_lookup, ["border"])
+            if ground and border:
+                color_value = f"{ground}/{border}"
+            else:
+                color_value = ground or border
+        details["color"] = color_value
+
+        price_raw = _pick_first_value(row, column_lookup, ["price", "retail", "amount", "sp", "msrp"])
+        details["price"] = _format_price_text(price_raw)
+
+        row_font_size = _coerce_font_size(
+            _pick_first_value(row, column_lookup, ["font_size", "font size", "font size (pt)"])
+        )
+        font_size = row_font_size or default_font_size
+        if font_size:
+            details["font_size"] = font_size
+
+        barcode_value = _pick_first_value(row, column_lookup, ["barcode", "upc", "sku", "rugno"])
+        use_barcode = bool(include_barcode and barcode_value)
+
+        try:
+            canvas, metadata = build_rinven_tag_image(
+                details,
+                use_barcode,
+                barcode_value,
+                only_filled_fields=only_filled_fields,
+                output_format=render_format,
+                label_size_in=normalized_label_size,
+            )
+        except Exception as exc:
+            failures += 1
+            _log(f"Error rendering row {index + 1}: {exc}")
+            continue
+
+        if not metadata.get("has_content"):
+            skipped += 1
+            _log(f"Skipping row {index + 1}: No content available for tag.")
+            continue
+
+        slug_source = (
+            details.get("rug_no")
+            or details.get("design")
+            or details.get("sku")
+            or f"row-{index + 1}"
+        )
+        slug = _slugify_tag_filename(slug_source, f"row-{index + 1}")
+        output_file = output_path / f"rinven_tag_{slug}.png"
+
+        try:
+            canvas.save(output_file)
+        except Exception as exc:
+            failures += 1
+            _log(f"Failed to save tag for row {index + 1}: {exc}")
+            continue
+
+        job_details = dict(details)
+        job_details["_include_barcode"] = use_barcode
+        job_details["_barcode_value"] = barcode_value
+        job_details["_only_filled_fields"] = only_filled_fields
+        if normalized_label_size:
+            job_details["_label_size_in"] = normalized_label_size
+
+        generated_files.append((job_details, str(output_file)))
+        generated += 1
+
+        progress_interval = max(1, total_rows // 10)
+        if (index + 1) % progress_interval == 0:
+            percentage = ((index + 1) / total_rows) * 100
+            _log(f"  ...Progress: {percentage:.0f}% ({index + 1}/{total_rows})")
+
+    summary_parts = [f"Generated {generated} tag(s)."]
+    if skipped:
+        summary_parts.append(f"Skipped {skipped} row(s) with no content.")
+    if failures:
+        summary_parts.append(f"Encountered {failures} error(s).")
+    summary_parts.append(f"Files saved to: {output_path}")
+
+    status = "Success" if failures == 0 else "Warning"
+    summary_message = "\n".join(summary_parts)
+    _log(summary_message)
+
+    return generated_files, summary_message, status
+
+
+def print_bulk_rinven_tags(
+    printer_name: str,
+    generated_files: List[Tuple[Dict[str, str], str]],
+    font_size_pt: Optional[str],
+    progress_callback,
+) -> None:
+    """Render and print the provided Rinven tag details to a thermal printer."""
+
+    if not generated_files:
+        return
+
+    try:
+        override_font_size = int(str(font_size_pt).strip()) if font_size_pt else None
+    except (TypeError, ValueError):  # pragma: no cover - defensive parsing
+        override_font_size = None
+
+    total = len(generated_files)
+    for index, (details, path) in enumerate(generated_files, start=1):
+        context_details = dict(details or {})
+        include_barcode = bool(
+            context_details.pop("_include_barcode", context_details.get("include_barcode", False))
+        )
+        barcode_value = context_details.pop("_barcode_value", None)
+        if barcode_value is None:
+            barcode_value = context_details.get("barcode_value") or context_details.get("barcode")
+        only_filled_fields = bool(context_details.pop("_only_filled_fields", True))
+        label_size_in = context_details.pop("_label_size_in", None)
+
+        if override_font_size:
+            context_details.setdefault("font_size", str(override_font_size))
+
+        canvas, _ = build_rinven_tag_image(
+            context_details,
+            include_barcode,
+            barcode_value,
+            only_filled_fields=only_filled_fields,
+            output_format="dymo",
+            label_size_in=label_size_in,
+        )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".bmp") as tmp:
+            temp_path = tmp.name
+            canvas.save(temp_path, format="BMP")
+
+        try:
+            send_image_to_printer(printer_name, temp_path)
+        finally:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+        if progress_callback:
+            try:
+                progress_callback(index, total, os.path.basename(path))
+            except Exception:  # pragma: no cover - UI callback safety
+                pass
+
+
 def _pick_first_value(row, column_lookup, candidates: Iterable[str]) -> str:
     """Return the first non-empty candidate value from a row using case-insensitive names."""
 
@@ -1396,149 +1633,22 @@ def generate_rinven_tags_from_file_task(
     completion_callback,
 ):
     """Generate Rinven tag images for each row of an Excel/CSV file."""
-
-    source = Path(file_path)
-    if not source.exists():
-        completion_callback("Error", f"File not found: {file_path}")
-        return
-
-    render_format = (output_format or "png").lower()
-    label_size_in = label_size_in if isinstance(label_size_in, tuple) else None
-
     try:
-        output_path = Path(output_dir) if output_dir else source.parent / "rinven_tags"
-        output_path.mkdir(parents=True, exist_ok=True)
-    except OSError as exc:
-        completion_callback("Error", f"Could not create output folder: {exc}")
-        return
-
-    log_callback(f"Starting Rinven tag generation from: {source}")
-
-    try:
-        if source.suffix.lower() in {".xlsx", ".xls"}:
-            dataframe = pd.read_excel(source, dtype=str)
-        else:
-            dataframe = pd.read_csv(source, dtype=str)
+        generated_files, summary_message, status = generate_bulk_rinven_tags(
+            file_path,
+            output_dir,
+            include_barcode,
+            only_filled_fields,
+            font_size_value,
+            output_format,
+            label_size_in,
+            log_callback,
+        )
     except Exception as exc:
-        log_callback(f"Error reading file: {exc}")
-        completion_callback("Error", f"Excel/CSV file could not be read: {exc}")
+        log_callback(f"Error: {exc}")
+        completion_callback("Error", str(exc))
         return
 
-    if dataframe.empty:
-        completion_callback("Warning", "The selected file does not contain any rows.")
-        return
-
-    column_lookup = {str(column).strip().lower(): column for column in dataframe.columns}
-
-    def _coerce_font_size(raw_value: Optional[str]) -> Optional[str]:
-        try:
-            cleaned = str(raw_value).strip()
-        except Exception:
-            return None
-
-        if not cleaned:
-            return None
-
-        try:
-            value = int(cleaned)
-        except (TypeError, ValueError):
-            return None
-        return str(max(value, 1))
-
-    default_font_size = _coerce_font_size(font_size_value)
-
-    total_rows = len(dataframe)
-    generated = 0
-    skipped = 0
-    failures = 0
-
-    for index, row in dataframe.iterrows():
-        details = {
-            "collection": _pick_first_value(row, column_lookup, ["collection", "vcollection", "collection name"]),
-            "design": _pick_first_value(row, column_lookup, ["design", "rugno", "rug no", "rug #"]),
-            "size": _pick_first_value(row, column_lookup, ["size", "asize", "stsize"]),
-            "origin": _pick_first_value(row, column_lookup, ["origin"]),
-            "style": _pick_first_value(row, column_lookup, ["style"]),
-            "content": _pick_first_value(row, column_lookup, ["content", "material", "materials"]),
-            "type": _pick_first_value(row, column_lookup, ["type"]),
-            "rug_no": _pick_first_value(row, column_lookup, ["rug #", "rug no", "rugno", "design"]),
-            "sku": _pick_first_value(row, column_lookup, ["sku", "upc", "barcode", "item sku"]),
-        }
-
-        color_value = _pick_first_value(row, column_lookup, ["color"])
-        if not color_value:
-            ground = _pick_first_value(row, column_lookup, ["ground"])
-            border = _pick_first_value(row, column_lookup, ["border"])
-            if ground and border:
-                color_value = f"{ground}/{border}"
-            else:
-                color_value = ground or border
-        details["color"] = color_value
-
-        price_raw = _pick_first_value(row, column_lookup, ["price", "retail", "amount", "sp", "msrp"])
-        details["price"] = _format_price_text(price_raw)
-
-        row_font_size = _coerce_font_size(
-            _pick_first_value(row, column_lookup, ["font_size", "font size", "font size (pt)"])
-        )
-        font_size = row_font_size or default_font_size
-        if font_size:
-            details["font_size"] = font_size
-
-        barcode_value = _pick_first_value(row, column_lookup, ["barcode", "upc", "sku", "rugno"])
-        use_barcode = bool(include_barcode and barcode_value)
-
-        try:
-            canvas, metadata = build_rinven_tag_image(
-                details,
-                use_barcode,
-                barcode_value,
-                only_filled_fields=only_filled_fields,
-                output_format=render_format,
-                label_size_in=label_size_in,
-            )
-        except Exception as exc:
-            failures += 1
-            log_callback(f"Error rendering row {index + 1}: {exc}")
-            continue
-
-        if not metadata.get("has_content"):
-            skipped += 1
-            log_callback(f"Skipping row {index + 1}: No content available for tag.")
-            continue
-
-        slug_source = (
-            details.get("rug_no")
-            or details.get("design")
-            or details.get("sku")
-            or f"row-{index + 1}"
-        )
-        slug = _slugify_tag_filename(slug_source, f"row-{index + 1}")
-        output_file = output_path / f"rinven_tag_{slug}.png"
-
-        try:
-            canvas.save(output_file)
-        except Exception as exc:
-            failures += 1
-            log_callback(f"Failed to save tag for row {index + 1}: {exc}")
-            continue
-
-        generated += 1
-        progress_interval = max(1, total_rows // 10)
-        if (index + 1) % progress_interval == 0:
-            percentage = ((index + 1) / total_rows) * 100
-            log_callback(f"  ...Progress: {percentage:.0f}% ({index + 1}/{total_rows})")
-
-    summary_parts = [f"Generated {generated} tag(s)."]
-    if skipped:
-        summary_parts.append(f"Skipped {skipped} row(s) with no content.")
-    if failures:
-        summary_parts.append(f"Encountered {failures} error(s).")
-    summary_parts.append(f"Files saved to: {output_path}")
-
-    status = "Success" if failures == 0 else "Warning"
-    summary_message = "\n".join(summary_parts)
-    log_callback(summary_message)
     completion_callback(status, summary_message)
 
 def add_image_links_task(input_path, links_path, key_col, log_callback, completion_callback):
