@@ -1390,6 +1390,8 @@ def generate_rinven_tags_from_file_task(
     include_barcode: bool,
     only_filled_fields: bool,
     font_size_value: Optional[str],
+    output_format: str,
+    label_size_in: Optional[Tuple[float, float]],
     log_callback,
     completion_callback,
 ):
@@ -1399,6 +1401,9 @@ def generate_rinven_tags_from_file_task(
     if not source.exists():
         completion_callback("Error", f"File not found: {file_path}")
         return
+
+    render_format = (output_format or "png").lower()
+    label_size_in = label_size_in if isinstance(label_size_in, tuple) else None
 
     try:
         output_path = Path(output_dir) if output_dir else source.parent / "rinven_tags"
@@ -1489,6 +1494,8 @@ def generate_rinven_tags_from_file_task(
                 use_barcode,
                 barcode_value,
                 only_filled_fields=only_filled_fields,
+                output_format=render_format,
+                label_size_in=label_size_in,
             )
         except Exception as exc:
             failures += 1
