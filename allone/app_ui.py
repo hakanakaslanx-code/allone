@@ -11,7 +11,7 @@ import time
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 import importlib.util
 
 import pandas as pd
@@ -440,6 +440,10 @@ translations = {
         "Please select a printer.": "Please select a printer.",
         "Save PNG": "Save PNG",
         "Print Dymo": "Print Dymo",
+        "Print Preview": "Print Preview",
+        "Label Size:": "Label Size:",
+        "Preview unavailable.": "Preview unavailable.",
+        "Print": "Print",
         "No file generated for printing.": "No file generated for printing.",
         "Rinven tag sent to printer.": "Rinven tag sent to printer.",
         "Please select a file to print.": "Please select a file to print.",
@@ -828,6 +832,10 @@ translations = {
         "Please select a printer.": "Lütfen bir yazıcı seçin.",
         "Save PNG": "PNG Kaydet",
         "Print Dymo": "Dymo Yazdır",
+        "Print Preview": "Yazdırma Önizlemesi",
+        "Label Size:": "Etiket Boyutu:",
+        "Preview unavailable.": "Önizleme oluşturulamadı.",
+        "Print": "Yazdır",
         "No file generated for printing.": "Yazdırmak için dosya oluşturulamadı.",
         "Rinven tag sent to printer.": "Rinven etiketi yazıcıya gönderildi.",
         "Please select a file to print.": "Lütfen yazdırılacak bir dosya seçin.",
@@ -1076,6 +1084,11 @@ DYMO_LABELS = {
     'File Folder (30258)': {'w_in': 3.5, 'h_in': 0.5625},
 }
 
+RINVEN_DYMO_LABEL_SIZES = {
+    'Portrait 4" x 2.3" (Default)': {'w_in': 2.3, 'h_in': 4.0},
+    **DYMO_LABELS,
+}
+
 
 @dataclass
 class RugWarpResult:
@@ -1149,6 +1162,11 @@ class ToolApp(tk.Tk):
         self.rinven_preview_metadata: Optional[dict] = None
         self._rinven_preview_after: Optional[str] = None
         self.rinven_printer_var = tk.StringVar()
+        self.rinven_label_size_var = tk.StringVar(
+            value=list(RINVEN_DYMO_LABEL_SIZES.keys())[0]
+        )
+        self._rinven_last_generation_context: Optional[Dict[str, Any]] = None
+        self._rinven_print_preview_photo: Optional[ImageTk.PhotoImage] = None
         self.view_in_room_room_image: Optional[Image.Image] = None
         self.view_in_room_rug_original: Optional[Image.Image] = None
         self.view_in_room_rug_processed_cache: Dict[str, Image.Image] = {}
@@ -6375,6 +6393,48 @@ class ToolApp(tk.Tk):
         else:
             self.rinven_printer_var.set("")
 
+        return printers
+
+    def _get_selected_rinven_label_size(self) -> Tuple[float, float]:
+        size_key = self.rinven_label_size_var.get()
+        info = RINVEN_DYMO_LABEL_SIZES.get(size_key)
+        if info is None:
+            default_key = next(iter(RINVEN_DYMO_LABEL_SIZES))
+            self.rinven_label_size_var.set(default_key)
+            info = RINVEN_DYMO_LABEL_SIZES[default_key]
+        return float(info.get("w_in", 0.0)), float(info.get("h_in", 0.0))
+
+    def _build_rinven_print_preview(
+        self, label_size_in: Tuple[float, float]
+    ) -> Optional[Image.Image]:
+        context = self._rinven_last_generation_context
+        if not context:
+            return None
+
+        try:
+            canvas, _ = backend.build_rinven_tag_image(
+                context.get("details", {}),
+                context.get("include_barcode", False),
+                context.get("barcode_value", ""),
+                only_filled_fields=context.get("only_filled_fields", True),
+                output_format="dymo",
+                label_size_in=label_size_in,
+            )
+            return canvas
+        except Exception as exc:  # pragma: no cover - defensive UI guard
+            self.log(f"Failed to build print preview: {exc}")
+            return None
+
+    def _create_rinven_preview_photo(self, canvas: Image.Image) -> ImageTk.PhotoImage:
+        max_width, max_height = 380, 520
+        scale = min(max_width / canvas.width, max_height / canvas.height, 1.0)
+        if scale < 1.0:
+            canvas = canvas.resize(
+                (int(canvas.width * scale), int(canvas.height * scale)),
+                Image.Resampling.LANCZOS,
+            )
+        return ImageTk.PhotoImage(canvas)
+
     def update_rinven_history(self, details: dict):
         history = self.settings.setdefault("rinven_history", {})
         updated = False
@@ -6402,7 +6462,10 @@ class ToolApp(tk.Tk):
             for key, combobox in self.rinven_field_widgets.items():
                 combobox["values"] = history.get(key, [])
 
-    def _run_rinven_tag_generation(self, output_format: str):
+    def _run_rinven_tag_generation(
+        self, output_format: str, label_size_in: Optional[Tuple[float, float]] = None
+    ):
+        self._rinven_last_generation_context = None
         details = self._collect_rinven_details()
         include_barcode_flag = self.rinven_include_barcode.get()
         barcode_value = self._normalize_rinven_value(self.rinven_barcode_var.get())
@@ -6446,6 +6509,7 @@ class ToolApp(tk.Tk):
             barcode_value if should_draw_barcode else "",
             only_filled_fields=only_filled,
             output_format=output_format,
+            label_size_in=label_size_in,
         )
         if dependency_issue:
             export_metadata = dict(export_metadata or {})
@@ -6455,13 +6519,26 @@ class ToolApp(tk.Tk):
         self.log(log_msg)
         self._apply_rinven_warnings(export_metadata)
 
+        self._rinven_last_generation_context = {
+            "details": details,
+            "include_barcode": should_draw_barcode,
+            "barcode_value": barcode_value if should_draw_barcode else "",
+            "only_filled_fields": only_filled,
+            "output_format": output_format,
+            "label_size_in": label_size_in,
+        }
+
         return export_metadata
 
     def start_generate_rinven_tag(self):
         self._run_rinven_tag_generation("png")
 
     def start_print_rinven_tag(self):
-        export_metadata = self._run_rinven_tag_generation("dymo")
+        self._open_rinven_print_dialog()
+
+    def _open_rinven_print_dialog(self) -> None:
+        label_size_in = self._get_selected_rinven_label_size()
+        export_metadata = self._run_rinven_tag_generation("dymo", label_size_in=label_size_in)
         if not export_metadata:
             return
 
@@ -6475,21 +6552,103 @@ class ToolApp(tk.Tk):
             )
             return
 
-        printer_name = self.rinven_printer_var.get().strip()
-        if not printer_name:
-            messagebox.showerror(
-                self.tr("Error"), self.tr("Please select a printer.")
-            )
-            return
+        dialog = tk.Toplevel(self)
+        dialog.title(self.tr("Print Preview"))
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.columnconfigure(1, weight=1)
 
-        try:
-            backend.send_image_to_printer(printer_name, output_path)
-        except Exception as exc:  # pragma: no cover - platform dependent
-            messagebox.showerror(self.tr("Error"), str(exc))
-            self.log(f"Failed to print Rinven tag: {exc}")
-            return
+        preview_label = ttk.Label(dialog)
+        preview_label.grid(row=0, column=0, columnspan=3, padx=10, pady=(12, 6))
 
-        self.log(self.tr("Rinven tag sent to printer."))
+        size_label = ttk.Label(dialog, text=self.tr("Label Size:"))
+        size_label.grid(row=1, column=0, sticky="e", padx=10, pady=4)
+        size_combo = ttk.Combobox(
+            dialog,
+            textvariable=self.rinven_label_size_var,
+            values=list(RINVEN_DYMO_LABEL_SIZES.keys()),
+            state="readonly",
+        )
+        size_combo.grid(row=1, column=1, columnspan=2, sticky="we", padx=10, pady=4)
+
+        printer_label = ttk.Label(dialog, text=self.tr("Select Printer:"))
+        printer_label.grid(row=2, column=0, sticky="e", padx=10, pady=4)
+        printers = self._rinven_refresh_printers() or []
+        printer_combo = ttk.Combobox(
+            dialog,
+            textvariable=self.rinven_printer_var,
+            values=printers,
+            state="readonly",
+        )
+        printer_combo.grid(row=2, column=1, sticky="we", padx=10, pady=4)
+
+        refresh_printers_button = ttk.Button(
+            dialog,
+            text=self.tr("Refresh Local Printers"),
+            command=lambda: printer_combo.configure(
+                values=self._rinven_refresh_printers() or []
+            ),
+        )
+        refresh_printers_button.grid(row=2, column=2, sticky="e", padx=10, pady=4)
+
+        button_frame = ttk.Frame(dialog)
+        button_frame.grid(row=3, column=0, columnspan=3, sticky="e", padx=10, pady=(10, 12))
+
+        current_output_path = output_path
+
+        def refresh_preview_and_file() -> bool:
+            nonlocal current_output_path
+            chosen_size = self._get_selected_rinven_label_size()
+            metadata = self._run_rinven_tag_generation("dymo", label_size_in=chosen_size)
+            if not metadata:
+                return False
+            if isinstance(metadata, dict):
+                current_output_path = str(metadata.get("output_path") or "").strip()
+            if not current_output_path:
+                messagebox.showerror(
+                    self.tr("Error"), self.tr("No file generated for printing.")
+                )
+                return False
+
+            canvas = self._build_rinven_print_preview(chosen_size)
+            if canvas is None:
+                self._rinven_print_preview_photo = None
+                preview_label.configure(
+                    text=self.tr("Preview unavailable."), image=""
+                )
+            else:
+                photo = self._create_rinven_preview_photo(canvas)
+                self._rinven_print_preview_photo = photo
+                preview_label.configure(image=photo, text="")
+            return True
+
+        def on_print():
+            if not refresh_preview_and_file():
+                return
+            printer_name = self.rinven_printer_var.get().strip()
+            if not printer_name:
+                messagebox.showerror(
+                    self.tr("Error"), self.tr("Please select a printer.")
+                )
+                return
+            try:
+                backend.send_image_to_printer(printer_name, current_output_path)
+            except Exception as exc:  # pragma: no cover - platform dependent
+                messagebox.showerror(self.tr("Error"), str(exc))
+                self.log(f"Failed to print Rinven tag: {exc}")
+                return
+            self.log(self.tr("Rinven tag sent to printer."))
+            dialog.destroy()
+
+        print_button = ttk.Button(button_frame, text=self.tr("Print"), command=on_print)
+        print_button.pack(side="right", padx=(6, 0))
+
+        cancel_button = ttk.Button(button_frame, text=self.tr("Cancel"), command=dialog.destroy)
+        cancel_button.pack(side="right")
+
+        size_combo.bind("<<ComboboxSelected>>", lambda *_: refresh_preview_and_file())
+
+        refresh_preview_and_file()
 
     def _save_rinven_sample_excel(self) -> None:
         headers = [
