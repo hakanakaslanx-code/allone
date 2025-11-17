@@ -1313,19 +1313,59 @@ def send_image_to_printer(printer_name: str, image_path: str) -> None:
     if system == "Windows":
         if win32print is None:
             raise RuntimeError("win32print module is not available.")
+
+        import win32ui  # type: ignore
+        from PIL import ImageWin
+
         handle = win32print.OpenPrinter(printer_name)
+        hdc = None
         try:
-            job_info = ("Rinven Tag", None, "RAW")
-            win32print.StartDocPrinter(handle, 1, job_info)
-            win32print.StartPagePrinter(handle)
-            with open(image_path, "rb") as job_file:
-                data = job_file.read()
-                if not data:
-                    raise RuntimeError("File content is empty; cannot print.")
-                win32print.WritePrinter(handle, data)
-            win32print.EndPagePrinter(handle)
-            win32print.EndDocPrinter(handle)
+            hdc = win32ui.CreateDC()
+            hdc.CreatePrinterDC(printer_name)
+
+            printable_area = (
+                hdc.GetDeviceCaps(8),  # HORZRES
+                hdc.GetDeviceCaps(10),  # VERTRES
+            )
+            printer_size = (
+                hdc.GetDeviceCaps(110),  # PHYSICALWIDTH
+                hdc.GetDeviceCaps(111),  # PHYSICALHEIGHT
+            )
+
+            image = Image.open(image_path)
+            if image.mode not in {"RGB", "RGBA"}:
+                image = image.convert("RGB")
+
+            scale = min(
+                printable_area[0] / image.width if image.width else 1,
+                printable_area[1] / image.height if image.height else 1,
+            )
+            scale = min(scale, 1.0)
+
+            target_size = (
+                max(1, int(image.width * scale)),
+                max(1, int(image.height * scale)),
+            )
+            if image.size != target_size:
+                image = image.resize(target_size, resample=Image.LANCZOS)
+
+            left = int((printer_size[0] - target_size[0]) / 2)
+            top = int((printer_size[1] - target_size[1]) / 2)
+            right = left + target_size[0]
+            bottom = top + target_size[1]
+
+            hdc.StartDoc("Rinven Tag")
+            hdc.StartPage()
+            dib = ImageWin.Dib(image)
+            dib.draw(hdc.GetHandleOutput(), (left, top, right, bottom))
+            hdc.EndPage()
+            hdc.EndDoc()
         finally:
+            if hdc is not None:
+                try:
+                    hdc.DeleteDC()
+                except Exception:
+                    pass
             win32print.ClosePrinter(handle)
     else:
         if cups is None:
