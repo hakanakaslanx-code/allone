@@ -4,7 +4,9 @@ import re
 import sys
 import logging
 import shutil
+import tempfile
 import traceback
+import platform
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
@@ -12,6 +14,16 @@ import pandas as pd
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import pillow_heif
 import qrcode
+
+try:
+    import win32print  # type: ignore
+except ImportError:  # pragma: no cover - platform dependent
+    win32print = None  # type: ignore[assignment]
+
+try:
+    import cups  # type: ignore
+except ImportError:  # pragma: no cover - platform dependent
+    cups = None  # type: ignore[assignment]
 
 try:
     import barcode  # type: ignore
@@ -125,6 +137,31 @@ def get_resource_path(*path_parts: str) -> Optional[str]:
                 return candidate_str
 
     return None
+
+
+def list_printers() -> List[str]:
+    """Return available printers using platform-specific backends."""
+
+    printers: List[str] = []
+    system = platform.system()
+
+    try:
+        if system == "Windows":
+            if win32print is None:
+                return printers
+            flags = win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
+            for _, _, name, _ in win32print.EnumPrinters(flags):
+                printers.append(name)
+        else:
+            if cups is None:
+                return printers
+            connection = cups.Connection()
+            for name in connection.getPrinters().keys():
+                printers.append(name)
+    except Exception as exc:  # pragma: no cover - platform dependent
+        logging.warning("Unable to list printers: %s", exc)
+
+    return printers
 
 
 def rinven_barcode_dependency_issue() -> Optional[str]:
@@ -840,6 +877,7 @@ def build_rinven_tag_image(
     include_barcode: bool,
     barcode_data: Optional[str],
     only_filled_fields: bool = True,
+    output_format: str = "png",
 ):
     """Render the Rinven tag image and return it with rendering metadata."""
 
@@ -859,36 +897,42 @@ def build_rinven_tag_image(
     if include_barcode and not normalized_barcode:
         warnings.append({"code": "barcode_missing"})
 
+    is_dymo_output = output_format.lower() == "dymo"
     DPI = 300
-    width_in = 4.0
-    height_in = 2.3125  # DYMO 30256 Shipping (4" x 2-5/16")
+    if is_dymo_output:
+        width_in = 2.3
+        height_in = 4.0
+    else:
+        width_in = 4.0
+        height_in = 2.3125  # DYMO 30256 Shipping (4" x 2-5/16")
     width_px = int(round(width_in * DPI))
     height_px = int(round(height_in * DPI))
     padding = int(0.12 * DPI)
     top_extra_padding = int(0.06 * DPI)
 
     try:
-        template_candidates = [
-            ("rinven_tag_template.png",),
-            ("templates", "rinven_tag_template.png"),
-            ("assets", "rinven_tag_template.png"),
-        ]
         template_image = None
-        for candidate in template_candidates:
-            template_path = get_resource_path(*candidate)
-            if not template_path:
-                continue
-            try:
-                with Image.open(template_path) as img:
-                    template_image = img.convert("RGB")
-                break
-            except (FileNotFoundError, OSError) as exc:
-                logging.warning(
-                    "Failed to load Rinven tag template from '%s': %s",
-                    template_path,
-                    exc,
-                )
-                template_image = None
+        if not is_dymo_output:
+            template_candidates = [
+                ("rinven_tag_template.png",),
+                ("templates", "rinven_tag_template.png"),
+                ("assets", "rinven_tag_template.png"),
+            ]
+            for candidate in template_candidates:
+                template_path = get_resource_path(*candidate)
+                if not template_path:
+                    continue
+                try:
+                    with Image.open(template_path) as img:
+                        template_image = img.convert("RGB")
+                    break
+                except (FileNotFoundError, OSError) as exc:
+                    logging.warning(
+                        "Failed to load Rinven tag template from '%s': %s",
+                        template_path,
+                        exc,
+                    )
+                    template_image = None
 
         if template_image is not None:
             if template_image.size != (width_px, height_px):
@@ -897,9 +941,12 @@ def build_rinven_tag_image(
                 )
             canvas = template_image.copy()
         else:
-            canvas = Image.new("RGB", (width_px, height_px), "white")
+            mode = "1" if is_dymo_output else "RGB"
+            background = 1 if is_dymo_output else "white"
+            canvas = Image.new(mode, (width_px, height_px), background)
 
         draw = ImageDraw.Draw(canvas)
+        text_fill = 0 if is_dymo_output else "black"
 
         title_font_size = int(0.18 * DPI)
         title_pref_fonts = [
@@ -943,7 +990,7 @@ def build_rinven_tag_image(
             price_w = bbox[2] - bbox[0]
             price_h = bbox[3] - bbox[1]
             price_x = (width_px - price_w) // 2
-            draw.text((price_x, current_y), price_text, fill="black", font=price_font)
+            draw.text((price_x, current_y), price_text, fill=text_fill, font=price_font)
             current_y += price_h + int(0.05 * DPI)
             price_drawn = True
 
@@ -955,7 +1002,8 @@ def build_rinven_tag_image(
                     normalized_barcode,
                     DPI,
                 )
-                barcode_img = raw_barcode.convert("RGB")
+                target_mode = "1" if is_dymo_output else "RGB"
+                barcode_img = raw_barcode.convert(target_mode)
                 # Preserve a generous quiet zone around the barcode to keep it
                 # easily scannable even after the surrounding whitespace is
                 # trimmed. Empirically a wider horizontal margin greatly
@@ -1057,7 +1105,7 @@ def build_rinven_tag_image(
             title_w = bbox[2] - bbox[0]
             title_h = bbox[3] - bbox[1]
             title_x = (width_px - title_w) // 2
-            draw.text((title_x, current_y), collection_name, fill="black", font=title_font)
+            draw.text((title_x, current_y), collection_name, fill=text_fill, font=title_font)
             current_y += title_h + int(0.07 * DPI)
 
         field_padding_top = max(current_y, padding)
@@ -1172,11 +1220,11 @@ def build_rinven_tag_image(
             for label, value in field_entries:
                 label_text = label
                 value_text = value.strip()
-                draw.text((start_x, current_y), label_text, fill="black", font=text_font)
+                draw.text((start_x, current_y), label_text, fill=text_fill, font=text_font)
                 colon_x = start_x + max_label_width + colon_gap
-                draw.text((colon_x, current_y), ":", fill="black", font=text_font)
+                draw.text((colon_x, current_y), ":", fill=text_fill, font=text_font)
                 value_x = colon_x + colon_width + value_gap
-                draw.text((value_x, current_y), value_text, fill="black", font=text_font)
+                draw.text((value_x, current_y), value_text, fill=text_fill, font=text_font)
                 current_y += line_height
 
         has_content = bool(
@@ -1209,29 +1257,73 @@ def generate_rinven_tag_label(
     include_barcode,
     barcode_data,
     only_filled_fields: bool = True,
+    output_format: str = "png",
 ):
     """Creates a Rinven tag label sized for a portrait 4" x 6" label."""
 
     try:
+        is_dymo_output = output_format.lower() == "dymo"
         canvas, metadata = build_rinven_tag_image(
             details,
             include_barcode,
             barcode_data,
             only_filled_fields=only_filled_fields,
+            output_format=output_format,
         )
 
         if not metadata.get("has_content"):
             return ("⚠️ No content available to export.", None, metadata)
 
-        canvas.save(fname)
+        if is_dymo_output:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".bmp") as tmp_file:
+                saved_path = Path(tmp_file.name)
+            canvas.save(saved_path, format="BMP")
+        else:
+            canvas.save(fname)
+            saved_path = Path(fname)
+        metadata = dict(metadata or {})
+        metadata["output_path"] = str(saved_path)
         return (
-            f"✅ Rinven tag saved as '{fname}'",
-            f"Rinven tag saved to:\n{os.path.abspath(fname)}",
+            f"✅ Rinven tag saved as '{saved_path}'",
+            f"Rinven tag saved to:\n{saved_path.resolve()}",
             metadata,
         )
     except Exception as exc:  # pragma: no cover - GUI feedback
         logging.exception("Error generating Rinven tag")
         return (f"Error generating Rinven tag: {exc}", None, {"warnings": ["render_error"]})
+
+
+def send_image_to_printer(printer_name: str, image_path: str) -> None:
+    """Send the specified image to a system printer."""
+
+    if not printer_name:
+        raise RuntimeError("Printer name is required.")
+    if not image_path or not os.path.exists(image_path):
+        raise RuntimeError(f"File not found: {image_path}")
+
+    system = platform.system()
+    if system == "Windows":
+        if win32print is None:
+            raise RuntimeError("win32print module is not available.")
+        handle = win32print.OpenPrinter(printer_name)
+        try:
+            job_info = ("Rinven Tag", None, "RAW")
+            win32print.StartDocPrinter(handle, 1, job_info)
+            win32print.StartPagePrinter(handle)
+            with open(image_path, "rb") as job_file:
+                data = job_file.read()
+                if not data:
+                    raise RuntimeError("File content is empty; cannot print.")
+                win32print.WritePrinter(handle, data)
+            win32print.EndPagePrinter(handle)
+            win32print.EndDocPrinter(handle)
+        finally:
+            win32print.ClosePrinter(handle)
+    else:
+        if cups is None:
+            raise RuntimeError("cups module is not available.")
+        connection = cups.Connection()
+        connection.printFile(printer_name, image_path, "Rinven Tag", {})
 
 
 def _pick_first_value(row, column_lookup, candidates: Iterable[str]) -> str:

@@ -438,6 +438,10 @@ translations = {
         "Remote": "Remote",
         "No printers available.": "No printers available.",
         "Please select a printer.": "Please select a printer.",
+        "Save PNG": "Save PNG",
+        "Print Dymo": "Print Dymo",
+        "No file generated for printing.": "No file generated for printing.",
+        "Rinven tag sent to printer.": "Rinven tag sent to printer.",
         "Please select a file to print.": "Please select a file to print.",
         "PRINT_JOB_SENT": "Print job sent successfully.",
         "PRINT_JOB_FAILED": "Failed to send print job: {error}",
@@ -822,6 +826,10 @@ translations = {
         "Remote": "Uzak",
         "No printers available.": "Kullanılabilir yazıcı yok.",
         "Please select a printer.": "Lütfen bir yazıcı seçin.",
+        "Save PNG": "PNG Kaydet",
+        "Print Dymo": "Dymo Yazdır",
+        "No file generated for printing.": "Yazdırmak için dosya oluşturulamadı.",
+        "Rinven tag sent to printer.": "Rinven etiketi yazıcıya gönderildi.",
         "Please select a file to print.": "Lütfen yazdırılacak bir dosya seçin.",
         "PRINT_JOB_SENT": "Yazdırma isteği gönderildi.",
         "PRINT_JOB_FAILED": "Yazdırma isteği başarısız: {error}",
@@ -1140,6 +1148,7 @@ class ToolApp(tk.Tk):
         self.rinven_preview_photo: Optional[ImageTk.PhotoImage] = None
         self.rinven_preview_metadata: Optional[dict] = None
         self._rinven_preview_after: Optional[str] = None
+        self.rinven_printer_var = tk.StringVar()
         self.view_in_room_room_image: Optional[Image.Image] = None
         self.view_in_room_rug_original: Optional[Image.Image] = None
         self.view_in_room_rug_processed_cache: Dict[str, Image.Image] = {}
@@ -5666,6 +5675,7 @@ class ToolApp(tk.Tk):
         self._mark_advanced_card(card)
         frame = card.body
         frame.columnconfigure(1, weight=1)
+        frame.columnconfigure(2, weight=1)
 
         self.rinven_price = tk.StringVar()
         self.rinven_collection = tk.StringVar()
@@ -5793,15 +5803,47 @@ class ToolApp(tk.Tk):
         )
         row_offset += 1
 
-        generate_button = ttk.Button(
+        printer_label = ttk.Label(frame, text=self.tr("Select Printer:"))
+        printer_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
+        self.register_widget(printer_label, "Select Printer:")
+
+        self.rinven_printer_combo = ttk.Combobox(
             frame,
-            text=self.tr("Generate Rinven Tag"),
-            command=self.start_generate_rinven_tag,
+            textvariable=self.rinven_printer_var,
+            state="readonly",
+            style="Light.TCombobox",
         )
-        generate_button.grid(row=row_offset, column=0, columnspan=2, pady=(12, 6))
-        self.register_widget(generate_button, "Generate Rinven Tag")
+        self.rinven_printer_combo.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
+
+        refresh_printers_button = ttk.Button(
+            frame,
+            text=self.tr("Refresh Local Printers"),
+            command=self._rinven_refresh_printers,
+        )
+        refresh_printers_button.grid(row=row_offset, column=2, sticky="e", padx=6, pady=4)
+        self.register_widget(refresh_printers_button, "Refresh Local Printers")
 
         row_offset += 1
+
+        save_png_button = ttk.Button(
+            frame,
+            text=self.tr("Save PNG"),
+            command=self.start_generate_rinven_tag,
+        )
+        save_png_button.grid(row=row_offset, column=0, sticky="we", pady=(12, 6))
+        self.register_widget(save_png_button, "Save PNG")
+
+        print_dymo_button = ttk.Button(
+            frame,
+            text=self.tr("Print Dymo"),
+            command=self.start_print_rinven_tag,
+        )
+        print_dymo_button.grid(row=row_offset, column=1, columnspan=2, sticky="we", pady=(12, 6))
+        self.register_widget(print_dymo_button, "Print Dymo")
+
+        row_offset += 1
+
+        self._rinven_refresh_printers()
 
         separator = ttk.Separator(frame, orient="horizontal")
         separator.grid(row=row_offset, column=0, columnspan=3, sticky="we", padx=6, pady=(6, 10))
@@ -6317,6 +6359,22 @@ class ToolApp(tk.Tk):
             self.rinven_warning_var.set("")
             self.rinven_warning_label.grid_remove()
 
+    def _rinven_refresh_printers(self):
+        try:
+            printers = backend.list_printers()
+        except Exception as exc:  # pragma: no cover - platform dependent
+            printers = []
+            self.log(f"Unable to list printers: {exc}")
+
+        if hasattr(self, "rinven_printer_combo"):
+            self.rinven_printer_combo["values"] = printers
+
+        if printers:
+            if self.rinven_printer_var.get() not in printers:
+                self.rinven_printer_var.set(printers[0])
+        else:
+            self.rinven_printer_var.set("")
+
     def update_rinven_history(self, details: dict):
         history = self.settings.setdefault("rinven_history", {})
         updated = False
@@ -6344,7 +6402,7 @@ class ToolApp(tk.Tk):
             for key, combobox in self.rinven_field_widgets.items():
                 combobox["values"] = history.get(key, [])
 
-    def start_generate_rinven_tag(self):
+    def _run_rinven_tag_generation(self, output_format: str):
         details = self._collect_rinven_details()
         include_barcode_flag = self.rinven_include_barcode.get()
         barcode_value = self._normalize_rinven_value(self.rinven_barcode_var.get())
@@ -6377,7 +6435,7 @@ class ToolApp(tk.Tk):
         if not metadata.get("has_content"):
             self._apply_rinven_warnings(metadata)
             self.log(self.tr("Nothing to export yet. Add at least one field."))
-            return
+            return None
 
         self.update_rinven_history(details)
 
@@ -6387,6 +6445,7 @@ class ToolApp(tk.Tk):
             should_draw_barcode,
             barcode_value if should_draw_barcode else "",
             only_filled_fields=only_filled,
+            output_format=output_format,
         )
         if dependency_issue:
             export_metadata = dict(export_metadata or {})
@@ -6395,6 +6454,42 @@ class ToolApp(tk.Tk):
             export_metadata["warnings"] = warnings
         self.log(log_msg)
         self._apply_rinven_warnings(export_metadata)
+
+        return export_metadata
+
+    def start_generate_rinven_tag(self):
+        self._run_rinven_tag_generation("png")
+
+    def start_print_rinven_tag(self):
+        export_metadata = self._run_rinven_tag_generation("dymo")
+        if not export_metadata:
+            return
+
+        output_path = ""
+        if isinstance(export_metadata, dict):
+            output_path = str(export_metadata.get("output_path") or "").strip()
+
+        if not output_path:
+            messagebox.showerror(
+                self.tr("Error"), self.tr("No file generated for printing.")
+            )
+            return
+
+        printer_name = self.rinven_printer_var.get().strip()
+        if not printer_name:
+            messagebox.showerror(
+                self.tr("Error"), self.tr("Please select a printer.")
+            )
+            return
+
+        try:
+            backend.send_image_to_printer(printer_name, output_path)
+        except Exception as exc:  # pragma: no cover - platform dependent
+            messagebox.showerror(self.tr("Error"), str(exc))
+            self.log(f"Failed to print Rinven tag: {exc}")
+            return
+
+        self.log(self.tr("Rinven tag sent to printer."))
 
     def _save_rinven_sample_excel(self) -> None:
         headers = [
