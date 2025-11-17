@@ -909,7 +909,13 @@ def build_rinven_tag_image(
             "Verdana Bold.ttf",
             "LiberationSans-Bold.ttf",
         ]
-        text_font_size = int(0.18 * DPI)
+        font_size_value = details.get("font_size", "20")
+        try:
+            font_size_pt = int(str(font_size_value).strip())
+        except (TypeError, ValueError):
+            font_size_pt = 20
+        base_font_px = max(int(round((font_size_pt / 72.0) * DPI)), 1)
+        text_font_size = base_font_px
         text_pref_fonts = [
             "arial.ttf",
             "Helvetica.ttf",
@@ -1061,7 +1067,7 @@ def build_rinven_tag_image(
         base_value_gap = int(0.06 * DPI)
         available_line_width = width_px - (padding * 2)
         available_height = height_px - padding - current_y
-        min_text_size = max(int(0.10 * DPI), 18)
+        min_text_size = max(int(text_font_size * 0.7), 18)
 
         max_label_width = colon_width = line_height = colon_gap = value_gap = 0
         max_line_width = 0

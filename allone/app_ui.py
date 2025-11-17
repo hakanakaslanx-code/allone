@@ -5670,6 +5670,7 @@ class ToolApp(tk.Tk):
         self.rinven_sku = tk.StringVar()
         self.rinven_barcode_var = tk.StringVar()
         self.rinven_filename = tk.StringVar(value="rinven_tag.png")
+        self.rinven_font_size = tk.StringVar(value="20")
         self.rinven_include_barcode = tk.BooleanVar(value=False)
         self.rinven_only_filled = tk.BooleanVar(value=True)
         self.rinven_warning_var = tk.StringVar()
@@ -5709,6 +5710,15 @@ class ToolApp(tk.Tk):
             self.rinven_field_widgets[field_key] = combobox
 
         row_offset = len(fields)
+
+        font_size_label = ttk.Label(frame, text=self.tr("Yazı Boyutu (pt):"))
+        font_size_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
+        self.register_widget(font_size_label, "Yazı Boyutu (pt):")
+
+        font_size_entry = ttk.Entry(frame, textvariable=self.rinven_font_size)
+        font_size_entry.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
+        font_size_entry.bind("<KeyRelease>", lambda *_: self._queue_rinven_preview_update())
+        row_offset += 1
 
         only_filled_check = ttk.Checkbutton(
             frame,
@@ -5850,6 +5860,7 @@ class ToolApp(tk.Tk):
             var.trace_add("write", self._queue_rinven_preview_update)
         self.rinven_include_barcode.trace_add("write", self._queue_rinven_preview_update)
         self.rinven_barcode_var.trace_add("write", self._queue_rinven_preview_update)
+        self.rinven_font_size.trace_add("write", self._queue_rinven_preview_update)
 
         self._queue_rinven_preview_update()
 
@@ -6149,6 +6160,7 @@ class ToolApp(tk.Tk):
             "type": self._normalize_rinven_value(self.rinven_type.get()),
             "sku": self._normalize_rinven_value(self.rinven_sku.get()),
             "rug_no": self._normalize_rinven_value(self.rinven_rug_no.get()),
+            "font_size": self.rinven_font_size.get(),
         }
 
     def _queue_rinven_preview_update(self, *_args):
