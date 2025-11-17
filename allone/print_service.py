@@ -259,6 +259,14 @@ class SharedLabelPrinterServer:
     # ------------------------------------------------------------------
     # Genel API
     # ------------------------------------------------------------------
+    def print_file(self, file_path: str) -> None:
+        """Public wrapper to send a file to the configured printer."""
+
+        if not file_path or not os.path.exists(file_path):
+            raise RuntimeError(self._tr("Please select a file to print."))
+
+        self._send_to_printer(file_path)
+
     def start(self, port: int, token: str) -> None:
         """Sunucuyu belirtilen port ve jetonla başlatır."""
         cleaned_token = token.strip()
