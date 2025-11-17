@@ -251,6 +251,8 @@ translations = {
         "Output Type:": "Output Type:",
         "Generate Barcode": "Generate Barcode",
         "Rinven Tag": "Rinven Tag",
+        "Single Tag Setup": "Single Tag Setup",
+        "Single tag preview updates as you type.": "Single tag preview updates as you type.",
         "Collection Name:": "Collection Name:",
         "Design:": "Design:",
         "Color:": "Color:",
@@ -264,8 +266,12 @@ translations = {
         "Price:": "Price:",
         "SKU:": "SKU:",
         "Bulk Tag Generation": "Bulk Tag Generation",
+        "Output Format:": "Output Format:",
         "Tag Data Excel File:": "Tag Data Excel File:",
         "Output Folder:": "Output Folder:",
+        "Standard PNG (Color)": "Standard PNG (Color)",
+        "Dymo Label (B/W)": "Dymo Label (B/W)",
+        "Bulk labels will use this size when Dymo is selected.": "Bulk labels will use this size when Dymo is selected.",
         "Include Barcode from Excel": "Include Barcode from Excel",
         "Generate Tags From Excel": "Generate Tags From Excel",
         "Download Sample Excel": "Download Sample Excel",
@@ -654,6 +660,8 @@ translations = {
         "Output Type:": "Çıktı Türü",
         "Generate Barcode": "Barkod Oluştur",
         "Rinven Tag": "Rinven Etiketi",
+        "Single Tag Setup": "Tekil Etiket Ayarları",
+        "Single tag preview updates as you type.": "Yazarken tekil etiket önizlemesi otomatik güncellenir.",
         "Collection Name:": "Koleksiyon Adı:",
         "Design:": "Desen:",
         "Color:": "Renk:",
@@ -667,8 +675,12 @@ translations = {
         "Price:": "Fiyat:",
         "SKU:": "SKU:",
         "Bulk Tag Generation": "Excel'den Toplu Etiket Üretimi",
+        "Output Format:": "Çıktı Formatı:",
         "Tag Data Excel File:": "Etiket Verisi Excel Dosyası:",
         "Output Folder:": "Çıkış Klasörü:",
+        "Standard PNG (Color)": "Standart PNG (Renkli)",
+        "Dymo Label (B/W)": "Dymo Etiketi (S/B)",
+        "Bulk labels will use this size when Dymo is selected.": "Dymo formatı seçildiğinde toplu etiketler bu boyutu kullanır.",
         "Include Barcode from Excel": "Excel'deki Barkodu Dahil Et",
         "Generate Tags From Excel": "Excel'den Etiket Üret",
         "Download Sample Excel": "Örnek Excel İndir",
@@ -5717,8 +5729,24 @@ class ToolApp(tk.Tk):
         self.rinven_bulk_file = tk.StringVar()
         self.rinven_bulk_output = tk.StringVar()
         self.rinven_bulk_include_barcode = tk.BooleanVar(value=True)
+        self.rinven_bulk_output_format = tk.StringVar(value="png")
 
         self.rinven_field_widgets = {}
+
+        row = 0
+
+        intro_label = ttk.Label(frame, text=self.tr("Single Tag Setup"), style="Secondary.TLabel")
+        intro_label.grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 2))
+        row += 1
+
+        intro_hint = ttk.Label(
+            frame,
+            text=self.tr("Single tag preview updates as you type."),
+            wraplength=360,
+            justify="left",
+        )
+        intro_hint.grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 8))
+        row += 1
 
         fields = [
             ("price", "Price:", self.rinven_price),
@@ -5734,7 +5762,7 @@ class ToolApp(tk.Tk):
             ("rug_no", "Rug #:", self.rinven_rug_no),
         ]
 
-        for row, (field_key, label_key, var) in enumerate(fields):
+        for field_key, label_key, var in fields:
             label = ttk.Label(frame, text=self.tr(label_key))
             label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
             self.register_widget(label, label_key)
@@ -5747,17 +5775,16 @@ class ToolApp(tk.Tk):
             )
             combobox.grid(row=row, column=1, sticky="we", padx=6, pady=4)
             self.rinven_field_widgets[field_key] = combobox
-
-        row_offset = len(fields)
+            row += 1
 
         font_size_label = ttk.Label(frame, text=self.tr("Font Size (pt):"))
-        font_size_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
+        font_size_label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
         self.register_widget(font_size_label, "Font Size (pt):")
 
         font_size_entry = ttk.Entry(frame, textvariable=self.rinven_font_size)
-        font_size_entry.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
+        font_size_entry.grid(row=row, column=1, sticky="we", padx=6, pady=4)
         font_size_entry.bind("<KeyRelease>", lambda *_: self._queue_rinven_preview_update())
-        row_offset += 1
+        row += 1
 
         only_filled_check = ttk.Checkbutton(
             frame,
@@ -5765,9 +5792,9 @@ class ToolApp(tk.Tk):
             variable=self.rinven_only_filled,
             command=self._queue_rinven_preview_update,
         )
-        only_filled_check.grid(row=row_offset, column=0, columnspan=2, sticky="w", padx=6, pady=(10, 4))
+        only_filled_check.grid(row=row, column=0, columnspan=2, sticky="w", padx=6, pady=(10, 4))
         self.register_widget(only_filled_check, "Include Only Filled Fields")
-        row_offset += 1
+        row += 1
 
         barcode_check = ttk.Checkbutton(
             frame,
@@ -5775,26 +5802,26 @@ class ToolApp(tk.Tk):
             variable=self.rinven_include_barcode,
             command=self._on_rinven_include_barcode_toggle,
         )
-        barcode_check.grid(row=row_offset, column=0, columnspan=2, sticky="w", padx=6, pady=(4, 4))
+        barcode_check.grid(row=row, column=0, columnspan=2, sticky="w", padx=6, pady=(4, 4))
         self.register_widget(barcode_check, "Include Barcode")
-        row_offset += 1
+        row += 1
 
         barcode_label = ttk.Label(frame, text=self.tr("Barcode Data:"))
-        barcode_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
+        barcode_label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
         self.register_widget(barcode_label, "Barcode Data:")
 
         self.rinven_barcode_entry = ttk.Entry(frame, textvariable=self.rinven_barcode_var, state="disabled")
-        self.rinven_barcode_entry.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
-        row_offset += 1
+        self.rinven_barcode_entry.grid(row=row, column=1, sticky="we", padx=6, pady=4)
+        row += 1
 
         preview_frame = ttk.LabelFrame(frame, text=self.tr("Live Preview"))
         self.register_widget(preview_frame, "Live Preview")
-        preview_frame.grid(row=row_offset, column=0, columnspan=2, sticky="nsew", padx=6, pady=(8, 4))
+        preview_frame.grid(row=row, column=0, columnspan=2, sticky="nsew", padx=6, pady=(8, 4))
         preview_frame.columnconfigure(0, weight=1)
 
         self.rinven_preview_label = ttk.Label(preview_frame)
         self.rinven_preview_label.grid(row=0, column=0, padx=6, pady=6)
-        row_offset += 1
+        row += 1
 
         self.rinven_warning_label = tk.Label(
             frame,
@@ -5807,22 +5834,22 @@ class ToolApp(tk.Tk):
             relief="flat",
         )
         self.rinven_warning_label.grid(
-            row=row_offset, column=0, columnspan=2, sticky="we", padx=6, pady=(0, 4)
+            row=row, column=0, columnspan=2, sticky="we", padx=6, pady=(0, 4)
         )
         self.rinven_warning_label.grid_remove()
-        row_offset += 1
+        row += 1
 
         filename_label = ttk.Label(frame, text=self.tr("Filename:"))
-        filename_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
+        filename_label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
         self.register_widget(filename_label, "Filename:")
 
         ttk.Entry(frame, textvariable=self.rinven_filename).grid(
-            row=row_offset, column=1, sticky="we", padx=6, pady=4
+            row=row, column=1, sticky="we", padx=6, pady=4
         )
-        row_offset += 1
+        row += 1
 
         printer_label = ttk.Label(frame, text=self.tr("Select Printer:"))
-        printer_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
+        printer_label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
         self.register_widget(printer_label, "Select Printer:")
 
         self.rinven_printer_combo = ttk.Combobox(
@@ -5831,24 +5858,24 @@ class ToolApp(tk.Tk):
             state="readonly",
             style="Light.TCombobox",
         )
-        self.rinven_printer_combo.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
+        self.rinven_printer_combo.grid(row=row, column=1, sticky="we", padx=6, pady=4)
 
         refresh_printers_button = ttk.Button(
             frame,
             text=self.tr("Refresh Local Printers"),
             command=self._rinven_refresh_printers,
         )
-        refresh_printers_button.grid(row=row_offset, column=2, sticky="e", padx=6, pady=4)
+        refresh_printers_button.grid(row=row, column=2, sticky="e", padx=6, pady=4)
         self.register_widget(refresh_printers_button, "Refresh Local Printers")
 
-        row_offset += 1
+        row += 1
 
         save_png_button = ttk.Button(
             frame,
             text=self.tr("Save PNG"),
             command=self.start_generate_rinven_tag,
         )
-        save_png_button.grid(row=row_offset, column=0, sticky="we", pady=(12, 6))
+        save_png_button.grid(row=row, column=0, sticky="we", pady=(12, 6))
         self.register_widget(save_png_button, "Save PNG")
 
         print_dymo_button = ttk.Button(
@@ -5856,94 +5883,149 @@ class ToolApp(tk.Tk):
             text=self.tr("Print Dymo"),
             command=self.start_print_rinven_tag,
         )
-        print_dymo_button.grid(row=row_offset, column=1, columnspan=2, sticky="we", pady=(12, 6))
+        print_dymo_button.grid(row=row, column=1, columnspan=2, sticky="we", pady=(12, 6))
         self.register_widget(print_dymo_button, "Print Dymo")
 
-        row_offset += 1
+        row += 1
 
         self._rinven_refresh_printers()
 
         separator = ttk.Separator(frame, orient="horizontal")
-        separator.grid(row=row_offset, column=0, columnspan=3, sticky="we", padx=6, pady=(6, 10))
-        row_offset += 1
+        separator.grid(row=row, column=0, columnspan=3, sticky="we", padx=6, pady=(6, 10))
+        row += 1
 
         bulk_label = ttk.Label(frame, text=self.tr("Bulk Tag Generation"))
-        bulk_label.grid(row=row_offset, column=0, sticky="w", padx=6, pady=(0, 4))
+        bulk_label.grid(row=row, column=0, sticky="w", padx=6, pady=(0, 4))
         self.register_widget(bulk_label, "Bulk Tag Generation")
 
         sample_button = ttk.Button(
             frame, text=self.tr("Download Sample Excel"), command=self._save_rinven_sample_excel
         )
-        sample_button.grid(row=row_offset, column=2, sticky="e", padx=6, pady=(0, 4))
+        sample_button.grid(row=row, column=2, sticky="e", padx=6, pady=(0, 4))
         self.register_widget(sample_button, "Download Sample Excel")
-        row_offset += 1
+        row += 1
 
         bulk_file_label = ttk.Label(frame, text=self.tr("Tag Data Excel File:"))
-        bulk_file_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
+        bulk_file_label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
         self.register_widget(bulk_file_label, "Tag Data Excel File:")
 
         bulk_file_entry = ttk.Entry(frame, textvariable=self.rinven_bulk_file)
-        bulk_file_entry.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
+        bulk_file_entry.grid(row=row, column=1, sticky="we", padx=6, pady=4)
 
         bulk_file_button = ttk.Button(
             frame,
             text=self.tr("Browse..."),
             command=self._select_rinven_bulk_file,
         )
-        bulk_file_button.grid(row=row_offset, column=2, sticky="e", padx=6, pady=4)
+        bulk_file_button.grid(row=row, column=2, sticky="e", padx=6, pady=4)
         self.register_widget(bulk_file_button, "Browse...")
-        row_offset += 1
+        row += 1
 
         output_label = ttk.Label(frame, text=self.tr("Output Folder:"))
-        output_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
+        output_label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
         self.register_widget(output_label, "Output Folder:")
 
         output_entry = ttk.Entry(frame, textvariable=self.rinven_bulk_output)
-        output_entry.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
+        output_entry.grid(row=row, column=1, sticky="we", padx=6, pady=4)
 
         output_button = ttk.Button(
             frame,
             text=self.tr("Browse..."),
             command=self._select_rinven_bulk_output,
         )
-        output_button.grid(row=row_offset, column=2, sticky="e", padx=6, pady=4)
+        output_button.grid(row=row, column=2, sticky="e", padx=6, pady=4)
         self.register_widget(output_button, "Browse...")
-        row_offset += 1
+        row += 1
+
+        output_format_label = ttk.Label(frame, text=self.tr("Output Format:"))
+        output_format_label.grid(row=row, column=0, sticky="ne", padx=6, pady=4)
+        self.register_widget(output_format_label, "Output Format:")
+
+        format_frame = ttk.Frame(frame)
+        format_frame.grid(row=row, column=1, columnspan=2, sticky="w", padx=6, pady=4)
+
+        png_radio = ttk.Radiobutton(
+            format_frame,
+            text=self.tr("Standard PNG (Color)"),
+            variable=self.rinven_bulk_output_format,
+            value="png",
+            command=self._update_bulk_label_size_state,
+        )
+        png_radio.pack(anchor="w")
+        self.register_widget(png_radio, "Standard PNG (Color)")
+
+        dymo_radio = ttk.Radiobutton(
+            format_frame,
+            text=self.tr("Dymo Label (B/W)"),
+            variable=self.rinven_bulk_output_format,
+            value="dymo",
+            command=self._update_bulk_label_size_state,
+        )
+        dymo_radio.pack(anchor="w")
+        self.register_widget(dymo_radio, "Dymo Label (B/W)")
+        row += 1
+
+        bulk_label_size_label = ttk.Label(frame, text=self.tr("Label Size:"))
+        bulk_label_size_label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
+        self.register_widget(bulk_label_size_label, "Label Size:")
+
+        self.rinven_bulk_label_size_combo = ttk.Combobox(
+            frame,
+            textvariable=self.rinven_label_size_var,
+            values=list(RINVEN_DYMO_LABEL_SIZES.keys()),
+            state="disabled",
+            style="Light.TCombobox",
+        )
+        self.rinven_bulk_label_size_combo.grid(row=row, column=1, sticky="we", padx=6, pady=4)
+        row += 1
+
+        label_size_hint = ttk.Label(
+            frame,
+            text=self.tr("Bulk labels will use this size when Dymo is selected."),
+            style="Secondary.TLabel",
+            wraplength=360,
+            justify="left",
+        )
+        label_size_hint.grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 8))
+        row += 1
 
         bulk_font_size_label = ttk.Label(frame, text=self.tr("Font Size (pt):"))
-        bulk_font_size_label.grid(row=row_offset, column=0, sticky="e", padx=6, pady=4)
+        bulk_font_size_label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
         self.register_widget(bulk_font_size_label, "Font Size (pt):")
 
         bulk_font_size_entry = ttk.Entry(frame, textvariable=self.rinven_bulk_font_size)
-        bulk_font_size_entry.grid(row=row_offset, column=1, sticky="we", padx=6, pady=4)
-        row_offset += 1
+        bulk_font_size_entry.grid(row=row, column=1, sticky="we", padx=6, pady=4)
+        row += 1
 
         bulk_barcode_check = ttk.Checkbutton(
             frame,
             text=self.tr("Include Barcode from Excel"),
             variable=self.rinven_bulk_include_barcode,
         )
-        bulk_barcode_check.grid(row=row_offset, column=0, columnspan=3, sticky="w", padx=6, pady=(4, 4))
+        bulk_barcode_check.grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(4, 4))
         self.register_widget(bulk_barcode_check, "Include Barcode from Excel")
-        row_offset += 1
+        row += 1
 
         bulk_generate_button = ttk.Button(
             frame,
             text=self.tr("Generate Tags From Excel"),
             command=self.start_rinven_bulk_generate,
         )
-        bulk_generate_button.grid(row=row_offset, column=0, columnspan=3, pady=(6, 4))
+        bulk_generate_button.grid(row=row, column=0, columnspan=3, pady=(6, 4))
         self.register_widget(bulk_generate_button, "Generate Tags From Excel")
 
-        row_offset += 1
+        row += 1
 
         bulk_print_button = ttk.Button(
             frame,
             text=self.tr("Print Generated Tags"),
             command=self.print_rinven_bulk_tags,
         )
-        bulk_print_button.grid(row=row_offset, column=0, columnspan=3, pady=(4, 6))
+        bulk_print_button.grid(row=row, column=0, columnspan=3, pady=(4, 6))
         self.register_widget(bulk_print_button, "Print Generated Tags")
+
+        self.rinven_bulk_output_format.trace_add("write", lambda *_: self._update_bulk_label_size_state())
+        self._update_bulk_label_size_state()
 
         for _, _, var in fields:
             var.trace_add("write", self._queue_rinven_preview_update)
@@ -6404,6 +6486,20 @@ class ToolApp(tk.Tk):
             info = RINVEN_DYMO_LABEL_SIZES[default_key]
         return float(info.get("w_in", 0.0)), float(info.get("h_in", 0.0))
 
+    def _get_bulk_output_format(self) -> str:
+        output_format = (self.rinven_bulk_output_format.get() or "").strip().lower()
+        if output_format == "dymo":
+            return "dymo"
+        return "png"
+
+    def _update_bulk_label_size_state(self) -> None:
+        selected_format = self._get_bulk_output_format()
+        state = "readonly" if selected_format == "dymo" else "disabled"
+        try:
+            self.rinven_bulk_label_size_combo.configure(state=state)
+        except tk.TclError:
+            pass
+
     def _build_rinven_print_preview(
         self, label_size_in: Tuple[float, float]
     ) -> Optional[Image.Image]:
@@ -6777,6 +6873,11 @@ class ToolApp(tk.Tk):
         if not font_size_value:
             font_size_value = self._normalize_rinven_value(self.rinven_font_size.get())
 
+        output_format = self._get_bulk_output_format()
+        label_size_in: Optional[Tuple[float, float]] = None
+        if output_format == "dymo":
+            label_size_in = self._get_selected_rinven_label_size()
+
         self.log(
             self.tr("Starting bulk Rinven tag generation from: {path}").format(path=file_path)
         )
@@ -6787,6 +6888,8 @@ class ToolApp(tk.Tk):
             include_barcode,
             only_filled,
             font_size_value,
+            output_format,
+            label_size_in,
             self.log,
             self.task_completion_popup,
         )
