@@ -8,6 +8,7 @@ import threading
 import os
 import math
 import time
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
@@ -39,7 +40,25 @@ from updater import (
     perform_update_installation,
 )
 from version import __version__
-import backend_logic as backend
+
+
+# Ensure bundled modules (e.g., when frozen with PyInstaller) are discoverable
+_LOCAL_PATHS = [
+    Path(__file__).resolve().parent,
+    Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)),
+]
+for _path in _LOCAL_PATHS:
+    _path_str = str(_path)
+    if _path_str not in sys.path:
+        sys.path.insert(0, _path_str)
+
+try:
+    import backend_logic as backend
+except ModuleNotFoundError as exc:  # pragma: no cover - defensive guard for packaged builds
+    raise ModuleNotFoundError(
+        "The 'backend_logic' module could not be located. "
+        "Please reinstall or re-download the application files."
+    ) from exc
 
 translations = {
     "en": {
