@@ -886,6 +886,10 @@ def build_rinven_tag_image(
         details, only_filled_fields
     )
 
+    formatted_price = _format_price_text(normalized_details.get("price"))
+    if formatted_price:
+        normalized_details["price"] = formatted_price
+
     included_keys = list(included_keys)
     has_price_value = bool(_normalize_tag_value(normalized_details.get("price")))
     if has_price_value and "price" not in included_keys:
@@ -1450,6 +1454,7 @@ def generate_bulk_rinven_tags(
     skipped = 0
     failures = 0
     generated_files: List[Tuple[Dict[str, str], str]] = []
+    slug_counts: Dict[str, int] = {}
 
     for index, row in dataframe.iterrows():
         details = {
@@ -1513,6 +1518,14 @@ def generate_bulk_rinven_tags(
             or f"row-{index + 1}"
         )
         slug = _slugify_tag_filename(slug_source, f"row-{index + 1}")
+        slug_occurrence = slug_counts.get(slug, 0)
+        slug_counts[slug] = slug_occurrence + 1
+        if slug_occurrence:
+            new_slug = f"{slug}-{slug_occurrence + 1}"
+            _log(
+                f"Duplicate filename slug '{slug}' on row {index + 1}; saving as '{new_slug}'."
+            )
+            slug = new_slug
         output_file = output_path / f"rinven_tag_{slug}.png"
 
         try:
@@ -1637,17 +1650,17 @@ def _format_price_text(raw: str) -> str:
     if not text:
         return ""
 
-    lower_text = text.lower()
-    if lower_text.startswith("price"):
-        return text
+    prefix_pattern = re.compile(r"^price[:\s\$]*", re.IGNORECASE)
+    stripped = prefix_pattern.sub("", text)
 
-    cleaned = text.replace("$", "").replace(",", "")
+    cleaned = stripped.replace("$", "").replace(",", "")
     try:
         value = float(cleaned)
     except ValueError:
-        return f"Price {text}" if text else ""
-    else:
-        return f"Price ${value:,.2f}"
+        return text if prefix_pattern.match(text) else f"Price {text}" if text else ""
+
+    formatted_value = f"{value:,.2f}".rstrip("0").rstrip(".")
+    return f"Price ${formatted_value}"
 
 
 def _slugify_tag_filename(text: str, fallback: str) -> str:
