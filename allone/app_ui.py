@@ -425,6 +425,12 @@ translations = {
         "W: {width} in | H: {height} in | Area: {area} sqft": "W: {width} in | H: {height} in | Area: {area} sqft",
         "Please select a file and specify a column.": "Please select a file and specify a column.",
         "Please fill in all file paths and the column name.": "Please fill in all file paths and the column name.",
+        "Scanner Comma Joiner": "Scanner Comma Joiner",
+        "Scan Input (Auto-adds comma):": "Scan Input (Auto-adds comma):",
+        "Joined Text:": "Joined Text:",
+        "Copy Text": "Copy Text",
+        "Clear Text": "Clear Text",
+        "Text copied to clipboard.": "Text copied to clipboard.",
         "Data and filename are required.": "Data and filename are required.",
         "Error: {message}": "Error: {message}",
         "Network Printers": "Network Printers",
@@ -872,6 +878,12 @@ translations = {
         "W: {width} in | H: {height} in | Area: {area} sqft": "G: {width} in | Y: {height} in | Alan: {area} ft²",
         "Please select a file and specify a column.": "Lütfen bir dosya seçin ve bir sütun belirtin.",
         "Please fill in all file paths and the column name.": "Lütfen tüm dosya yollarını ve sütun adını doldurun.",
+        "Scanner Comma Joiner": "Tarayıcı Virgül Birleştirici",
+        "Scan Input (Auto-adds comma):": "Tarama Girişi (Oto-Virgül):",
+        "Joined Text:": "Birleşen Metin:",
+        "Copy Text": "Metni Kopyala",
+        "Clear Text": "Metni Temizle",
+        "Text copied to clipboard.": "Metin panoya kopyalandı.",
         "Data and filename are required.": "Veri ve dosya adı gereklidir.",
         "Error: {message}": "Hata: {message}",
         "ABOUT_CONTENT": (
@@ -4521,8 +4533,10 @@ class ToolApp(tk.Tk):
         parent.columnconfigure(0, weight=1)
         parent.columnconfigure(1, weight=1)
         parent.rowconfigure(1, weight=1)
-        parent.rowconfigure(3, weight=1)
+        parent.rowconfigure(2, weight=1)
         parent.rowconfigure(4, weight=1)
+        parent.rowconfigure(5, weight=1)
+        parent.rowconfigure(6, weight=1)
 
         identifier_heading = ttk.Label(
             parent,
@@ -4553,18 +4567,48 @@ class ToolApp(tk.Tk):
         format_button.grid(row=0, column=3, padx=6, pady=6)
         self.register_widget(format_button, "Format")
 
+        self.scanner_input_var = tk.StringVar()
+        scanner_card = self.create_section_card(parent, "Scanner Comma Joiner")
+        scanner_card.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
+        scanner_frame = scanner_card.body
+        scanner_frame.columnconfigure(1, weight=1)
+
+        scanner_label = ttk.Label(scanner_frame, text=self.tr("Scan Input (Auto-adds comma):"))
+        scanner_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
+        self.register_widget(scanner_label, "Scan Input (Auto-adds comma):")
+
+        self.scanner_input_entry = ttk.Entry(scanner_frame, textvariable=self.scanner_input_var)
+        self.scanner_input_entry.grid(row=0, column=1, columnspan=2, sticky="we", padx=6, pady=6)
+        self.scanner_input_entry.bind("<Return>", self._on_scanner_input_submit)
+        self.scanner_input_entry.bind("<KP_Enter>", self._on_scanner_input_submit)
+
+        joined_label = ttk.Label(scanner_frame, text=self.tr("Joined Text:"))
+        joined_label.grid(row=1, column=0, sticky="w", padx=6, pady=(6, 0))
+        self.register_widget(joined_label, "Joined Text:")
+
+        self.scanner_text_area = ScrolledText(scanner_frame, height=4, wrap=tk.WORD)
+        self.scanner_text_area.grid(row=2, column=0, columnspan=3, sticky="we", padx=6, pady=6)
+
+        copy_button = ttk.Button(scanner_frame, text=self.tr("Copy Text"), command=self._copy_scanner_text)
+        copy_button.grid(row=3, column=0, sticky="w", padx=6, pady=(0, 6))
+        self.register_widget(copy_button, "Copy Text")
+
+        clear_button = ttk.Button(scanner_frame, text=self.tr("Clear Text"), command=self._clear_scanner_text)
+        clear_button.grid(row=3, column=1, sticky="w", padx=6, pady=(0, 6))
+        self.register_widget(clear_button, "Clear Text")
+
         dimension_heading = ttk.Label(
             parent,
             text=self.tr("DIMENSION & MEASUREMENT TOOLS"),
             style="Primary.TLabel",
         )
-        dimension_heading.grid(row=2, column=0, columnspan=2, sticky="w", padx=8, pady=(16, 4))
+        dimension_heading.grid(row=3, column=0, columnspan=2, sticky="w", padx=8, pady=(16, 4))
         self.register_widget(dimension_heading, "DIMENSION & MEASUREMENT TOOLS")
 
         self.rug_dim_input = tk.StringVar()
         self.rug_result_label = tk.StringVar()
         single_rug_card = self.create_section_card(parent, "Quick Dimension Calculator")
-        single_rug_card.grid(row=3, column=0, sticky="nsew", padx=8, pady=8)
+        single_rug_card.grid(row=4, column=0, sticky="nsew", padx=8, pady=8)
         single_rug_frame = single_rug_card.body
         single_rug_frame.columnconfigure(1, weight=1)
 
@@ -4587,7 +4631,7 @@ class ToolApp(tk.Tk):
         self.bulk_rug_file = tk.StringVar()
         self.bulk_rug_col = tk.StringVar(value="Size")
         bulk_rug_card = self.create_section_card(parent, "Bulk Dimension Processor")
-        bulk_rug_card.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
+        bulk_rug_card.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
         bulk_rug_frame = bulk_rug_card.body
         bulk_rug_frame.columnconfigure(1, weight=1)
 
@@ -4612,7 +4656,7 @@ class ToolApp(tk.Tk):
         self.register_widget(bulk_process, "Process File")
 
         unit_card = self.create_section_card(parent, "Unit Converter")
-        unit_card.grid(row=3, column=1, sticky="nsew", padx=8, pady=8)
+        unit_card.grid(row=4, column=1, sticky="nsew", padx=8, pady=8)
         unit_frame = unit_card.body
         unit_frame.columnconfigure(1, weight=1)
 
@@ -4638,7 +4682,7 @@ class ToolApp(tk.Tk):
             entry.bind("<<Cut>>", lambda _event, key=unit_key: self._on_unit_field_change(key))
 
         image_link_card = self.create_section_card(parent, "8. Match Image Links")
-        image_link_card.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
+        image_link_card.grid(row=6, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
         self._mark_advanced_card(image_link_card)
         image_link_frame = image_link_card.body
         image_link_frame.columnconfigure(1, weight=1)
@@ -6227,6 +6271,44 @@ class ToolApp(tk.Tk):
         )
         if file_path:
             variable.set(file_path)
+
+    def _on_scanner_input_submit(self, event: Optional[tk.Event] = None) -> str:
+        text = self.scanner_input_var.get().strip()
+        existing_text = self.scanner_text_area.get("1.0", tk.END).strip()
+
+        if text:
+            if existing_text:
+                self.scanner_text_area.insert(tk.END, f", {text}")
+            else:
+                self.scanner_text_area.insert(tk.END, text)
+            self.scanner_text_area.see(tk.END)
+
+        self.scanner_input_var.set("")
+        try:
+            self.scanner_input_entry.focus_set()
+        except tk.TclError:
+            pass
+
+        return "break"
+
+    def _copy_scanner_text(self) -> None:
+        text = self.scanner_text_area.get("1.0", tk.END).strip()
+        if not text:
+            return
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self.log(self.tr("Text copied to clipboard."))
+        except tk.TclError:
+            pass
+
+    def _clear_scanner_text(self) -> None:
+        self.scanner_input_var.set("")
+        try:
+            self.scanner_text_area.delete("1.0", tk.END)
+            self.scanner_input_entry.focus_set()
+        except tk.TclError:
+            pass
 
     def _on_unit_field_change(self, source_unit: str) -> None:
         """Synchronize unit inputs when one of the fields changes."""
