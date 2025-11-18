@@ -297,6 +297,7 @@ translations = {
         "Nothing to export yet. Add at least one field.": "Nothing to export yet. Add at least one field.",
         "Rinven Import Sheet Generator": "Rinven Import Sheet Generator",
         "Paste RugNo List": "Paste RugNo List",
+        "Scan RugNo/Barcode:": "Scan RugNo/Barcode:",
         "Load Excel/CSV": "Load Excel/CSV",
         "Select Image Folder": "Select Image Folder",
         "Fill Images": "Fill Images",
@@ -334,6 +335,8 @@ translations = {
         "RugNo Column:": "RugNo Column:",
         "Image folder updated.": "Image folder updated.",
         "Added {count} RugNo rows.": "Added {count} RugNo rows.",
+        "Scanned RugNo added: {value}": "Scanned RugNo added: {value}",
+        "RugNo already exists: {value}": "RugNo already exists: {value}",
         "No RugNo values were added.": "No RugNo values were added.",
         "Unable to read file: {error}": "Unable to read file: {error}",
         "Please enter valid multipliers.": "Please enter valid multipliers.",
@@ -704,6 +707,7 @@ translations = {
         "Barcode support is unavailable.": "Barkod özelliği kullanılamıyor.",
         "Rinven Import Sheet Generator": "Rinven İçe Aktarma Tablosu Oluşturucu",
         "Paste RugNo List": "RugNo Listesini Yapıştır",
+        "Scan RugNo/Barcode:": "RugNo/Barkod Oku:",
         "Load Excel/CSV": "Excel/CSV Yükle",
         "Select Image Folder": "Görsel Klasörü Seç",
         "Fill Images": "Görselleri Doldur",
@@ -741,6 +745,8 @@ translations = {
         "RugNo Column:": "RugNo Sütunu:",
         "Image folder updated.": "Görsel klasörü güncellendi.",
         "Added {count} RugNo rows.": "{count} RugNo satırı eklendi.",
+        "Scanned RugNo added: {value}": "Okutulan RugNo eklendi: {value}",
+        "RugNo already exists: {value}": "RugNo zaten mevcut: {value}",
         "No RugNo values were added.": "Herhangi bir RugNo değeri eklenmedi.",
         "Unable to read file: {error}": "Dosya okunamadı: {error}",
         "Please enter valid multipliers.": "Lütfen geçerli katsayılar girin.",
@@ -1139,6 +1145,8 @@ class ToolApp(tk.Tk):
         self.rinven_import_editor: Optional[ttk.Entry] = None
         self.rinven_import_editor_info: Optional[Tuple[str, str]] = None
         self._rinven_import_committing = False
+        self.rinven_scanner_value = tk.StringVar()
+        self.rinven_scanner_entry: Optional[ttk.Entry] = None
         self.generated_bulk_tags: List[Tuple[Dict[str, str], str]] = []
         legacy_print = self.settings.get("print_server", {})
         shared_settings = self.settings.setdefault("shared_label_printer", {})
@@ -4871,7 +4879,7 @@ class ToolApp(tk.Tk):
 
         frame = card.body
         frame.columnconfigure(0, weight=1)
-        frame.rowconfigure(2, weight=1)
+        frame.rowconfigure(3, weight=1)
 
         toolbar = ttk.Frame(frame, style="TFrame")
         toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 6))
@@ -4897,8 +4905,20 @@ class ToolApp(tk.Tk):
             self.register_widget(button, label_key)
         toolbar.columnconfigure(len(toolbar_buttons), weight=1)
 
+        scanner_frame = ttk.Frame(frame, style="TFrame")
+        scanner_frame.grid(row=1, column=0, sticky="w", pady=(0, 6))
+        scanner_label = ttk.Label(scanner_frame, text=self.tr("Scan RugNo/Barcode:"), style="Secondary.TLabel")
+        scanner_label.pack(side="left")
+        self.register_widget(scanner_label, "Scan RugNo/Barcode:")
+        scanner_entry = ttk.Entry(scanner_frame, textvariable=self.rinven_scanner_value, width=28)
+        scanner_entry.pack(side="left", padx=(8, 0))
+        scanner_entry.bind("<Return>", self._on_rinven_scanner_submit)
+        scanner_entry.bind("<KP_Enter>", self._on_rinven_scanner_submit)
+        self.rinven_scanner_entry = scanner_entry
+        self.register_widget(scanner_entry, "Scan RugNo/Barcode:")
+
         folder_frame = ttk.Frame(frame, style="TFrame")
-        folder_frame.grid(row=1, column=0, sticky="w", pady=(0, 6))
+        folder_frame.grid(row=2, column=0, sticky="w", pady=(0, 6))
         folder_label = ttk.Label(folder_frame, text=self.tr("Active Image Folder:"), style="Secondary.TLabel")
         folder_label.pack(side="left")
         self.register_widget(folder_label, "Active Image Folder:")
@@ -4908,7 +4928,7 @@ class ToolApp(tk.Tk):
         self._update_rinven_image_folder_display()
 
         tree_container = ttk.Frame(frame, style="PanelBody.TFrame")
-        tree_container.grid(row=2, column=0, sticky="nsew")
+        tree_container.grid(row=3, column=0, sticky="nsew")
         tree_container.columnconfigure(0, weight=1)
         tree_container.rowconfigure(0, weight=1)
         tree_container.rowconfigure(1, weight=0)
@@ -4959,7 +4979,7 @@ class ToolApp(tk.Tk):
         self._refresh_rinven_import_tree()
 
         pricing_frame = ttk.Labelframe(frame, text=self.tr("Pricing Multipliers"))
-        pricing_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+        pricing_frame.grid(row=4, column=0, sticky="ew", pady=(12, 0))
         self.register_widget(pricing_frame, "Pricing Multipliers")
 
         pricing_frame.columnconfigure(6, weight=1)
@@ -5174,6 +5194,25 @@ class ToolApp(tk.Tk):
         cancel_button = ttk.Button(button_frame, text=self.tr("Cancel"), command=on_cancel)
         cancel_button.pack(side="left")
         dialog.protocol("WM_DELETE_WINDOW", on_cancel)
+
+    def _on_rinven_scanner_submit(self, event: tk.Event) -> str:
+        value = self.rinven_scanner_value.get().strip()
+        if not value:
+            return "break"
+
+        existing_rugnos = {row.get("RugNo", "") for row in self.rinven_import_rows}
+        if value in existing_rugnos:
+            self.log(self.tr("RugNo already exists: {value}").format(value=value))
+        else:
+            added = self._rinven_import_add_rugnos([value])
+            if added:
+                self.log(self.tr("Scanned RugNo added: {value}").format(value=value))
+
+        self.rinven_scanner_value.set("")
+        if self.rinven_scanner_entry:
+            self.rinven_scanner_entry.focus_set()
+
+        return "break"
 
     def _rinven_import_add_rugnos(self, rugnos: Iterable[str]) -> int:
         added = 0
