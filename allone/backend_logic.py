@@ -1444,7 +1444,7 @@ def generate_bulk_rinven_tags(
             "style": _pick_first_value(row, column_lookup, ["style"]),
             "content": _pick_first_value(row, column_lookup, ["content", "material", "materials"]),
             "type": _pick_first_value(row, column_lookup, ["type"]),
-            "rug_no": _pick_first_value(row, column_lookup, ["rug #", "rug no", "rugno", "design"]),
+            "rug_no": _pick_first_value(row, column_lookup, ["rug #", "rug no", "rugno"]),
             "sku": _pick_first_value(row, column_lookup, ["sku", "upc", "barcode", "item sku"]),
         }
 
