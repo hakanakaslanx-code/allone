@@ -430,6 +430,10 @@ translations = {
         "Joined Text:": "Joined Text:",
         "Copy Text": "Copy Text",
         "Clear Text": "Clear Text",
+        "Export to TXT": "Export to TXT",
+        "No text to export.": "No text to export.",
+        "Text exported to {path}.": "Text exported to {path}.",
+        "Text Files": "Text Files",
         "Text copied to clipboard.": "Text copied to clipboard.",
         "Data and filename are required.": "Data and filename are required.",
         "Error: {message}": "Error: {message}",
@@ -887,6 +891,10 @@ translations = {
         "Joined Text:": "Birleşen Metin:",
         "Copy Text": "Metni Kopyala",
         "Clear Text": "Metni Temizle",
+        "Export to TXT": "TXT'ye Aktar",
+        "No text to export.": "Aktarılacak metin yok.",
+        "Text exported to {path}.": "Metin {path} konumuna kaydedildi.",
+        "Text Files": "Metin Dosyaları",
         "Text copied to clipboard.": "Metin panoya kopyalandı.",
         "Data and filename are required.": "Veri ve dosya adı gereklidir.",
         "Error: {message}": "Hata: {message}",
@@ -4597,13 +4605,22 @@ class ToolApp(tk.Tk):
         self.scanner_text_area = ScrolledText(scanner_frame, height=4, wrap=tk.WORD)
         self.scanner_text_area.grid(row=2, column=0, columnspan=3, sticky="we", padx=6, pady=6)
 
-        copy_button = ttk.Button(scanner_frame, text=self.tr("Copy Text"), command=self._copy_scanner_text)
-        copy_button.grid(row=3, column=0, sticky="w", padx=6, pady=(0, 6))
+        scanner_button_frame = ttk.Frame(scanner_frame)
+        scanner_button_frame.grid(row=3, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 6))
+
+        copy_button = ttk.Button(scanner_button_frame, text=self.tr("Copy Text"), command=self._copy_scanner_text)
+        copy_button.pack(side="left", padx=(0, 4))
         self.register_widget(copy_button, "Copy Text")
 
-        clear_button = ttk.Button(scanner_frame, text=self.tr("Clear Text"), command=self._clear_scanner_text)
-        clear_button.grid(row=3, column=1, sticky="w", padx=6, pady=(0, 6))
+        clear_button = ttk.Button(scanner_button_frame, text=self.tr("Clear Text"), command=self._clear_scanner_text)
+        clear_button.pack(side="left", padx=(0, 4))
         self.register_widget(clear_button, "Clear Text")
+
+        export_button = ttk.Button(
+            scanner_button_frame, text=self.tr("Export to TXT"), command=self._export_scanner_text
+        )
+        export_button.pack(side="left")
+        self.register_widget(export_button, "Export to TXT")
 
         dimension_heading = ttk.Label(
             parent,
@@ -6317,6 +6334,33 @@ class ToolApp(tk.Tk):
             self.scanner_input_entry.focus_set()
         except tk.TclError:
             pass
+
+    def _export_scanner_text(self) -> None:
+        text = self.scanner_text_area.get("1.0", tk.END).strip()
+        if not text:
+            messagebox.showinfo(self.tr("Export to TXT"), self.tr("No text to export."))
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[
+                (self.tr("Text Files"), "*.txt"),
+                (self.tr("All Files"), "*.*"),
+            ],
+        )
+
+        if not file_path:
+            return
+
+        try:
+            Path(file_path).write_text(text, encoding="utf-8")
+            success_message = self.tr("Text exported to {path}.").format(path=file_path)
+            self.log(success_message)
+            messagebox.showinfo(self.tr("Export to TXT"), success_message)
+        except OSError as exc:
+            messagebox.showerror(
+                self.tr("Error"), self.tr("File could not be saved: {error}").format(error=exc)
+            )
 
     def _on_unit_field_change(self, source_unit: str) -> None:
         """Synchronize unit inputs when one of the fields changes."""
