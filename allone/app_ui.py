@@ -472,6 +472,15 @@ translations = {
         "Printer backend unavailable.": "Printer backend unavailable.",
         "Network printer discovery is not available on this platform.": "Network printer discovery is not available on this platform.",
         "Select a file to send to the printer.": "Select a file to send to the printer.",
+        "Support & Donate": "Support & Donate",
+        "DONATION_MESSAGE": (
+            "Thank you for using AllOne Tools! If you would like to support ongoing development, "
+            "you can send a BTC donation using the address below."
+        ),
+        "BTC Address": "BTC Address",
+        "Copy Address": "Copy Address",
+        "Donation address copied to clipboard.": "Donation address copied to clipboard.",
+        "Close": "Close",
         "ABOUT_CONTENT": (
             "AllOne Tools - v{version}\n"
             "A unified desktop workspace for file, image, data, and labeling workflows.\n"
@@ -877,6 +886,15 @@ translations = {
         "Printer backend unavailable.": "Yazıcı altyapısı kullanılamıyor.",
         "Network printer discovery is not available on this platform.": "Bu platformda ağ yazıcı keşfi desteklenmiyor.",
         "Select a file to send to the printer.": "Yazıcıya gönderilecek dosyayı seçin.",
+        "Support & Donate": "Destekle ve Bağış Yap",
+        "DONATION_MESSAGE": (
+            "AllOne Tools'u kullandığınız için teşekkürler! Geliştirmeyi desteklemek isterseniz, "
+            "aşağıdaki BTC adresiyle bağış gönderebilirsiniz."
+        ),
+        "BTC Address": "BTC Adresi",
+        "Copy Address": "Adresi Kopyala",
+        "Donation address copied to clipboard.": "Bağış adresi panoya kopyalandı.",
+        "Close": "Kapat",
         "Please select a valid folder.": "Lütfen geçerli bir klasör seçin.",
         "Please select a valid image folder.": "Lütfen geçerli bir görsel klasörü seçin.",
         "Resize values and quality must be valid numbers.": "Yeniden boyutlandırma değerleri ve kalite geçerli sayılar olmalıdır.",
@@ -1188,6 +1206,8 @@ class ToolApp(tk.Tk):
         self.language = self.settings.get("language", "en")
         if self.language not in translations:
             self.language = "en"
+
+        self.donation_btc_address = "bc1q789yvmn0lhgee7hqm05hvsax8uc9372j4lsyz6"
 
         self.update_settings = self.settings.setdefault("updates", {})
         auto_update_default = bool(self.update_settings.get("auto_update_on_startup", True))
@@ -4236,6 +4256,50 @@ class ToolApp(tk.Tk):
             self.help_text_area.insert(tk.END, help_content)
             self.help_text_area.config(state=tk.DISABLED)
 
+    def show_donation_popup(self) -> None:
+        window = tk.Toplevel(self)
+        window.title(self.tr("Support & Donate"))
+        window.transient(self)
+        window.resizable(False, False)
+        window.columnconfigure(0, weight=1)
+        window.rowconfigure(0, weight=1)
+
+        frame = ttk.Frame(window, padding=12, style="TFrame")
+        frame.grid(row=0, column=0, sticky="nsew")
+        frame.columnconfigure(1, weight=1)
+
+        description = ttk.Label(
+            frame,
+            text=self.tr("DONATION_MESSAGE"),
+            wraplength=420,
+            justify="left",
+        )
+        description.grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+
+        address_label = ttk.Label(frame, text=self.tr("BTC Address"))
+        address_label.grid(row=1, column=0, sticky="w")
+
+        address_entry = ttk.Entry(frame, width=46)
+        address_entry.insert(0, self.donation_btc_address)
+        address_entry.configure(state="readonly")
+        address_entry.grid(row=1, column=1, sticky="we", padx=(6, 0))
+
+        copy_button = ttk.Button(frame, text=self.tr("Copy Address"), command=self._copy_donation_address)
+        copy_button.grid(row=1, column=2, sticky="e", padx=(6, 0))
+
+        close_button = ttk.Button(frame, text=self.tr("Close"), command=window.destroy)
+        close_button.grid(row=2, column=2, sticky="e", pady=(12, 0))
+
+    def _copy_donation_address(self) -> None:
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(self.donation_btc_address)
+            success_text = self.tr("Donation address copied to clipboard.")
+            self.log(success_text)
+            messagebox.showinfo(self.tr("Support & Donate"), success_text)
+        except tk.TclError:
+            pass
+
     def _format_shared_status(self, state: str, host: Optional[str], port: Optional[int]) -> str:
         """Durum anahtarına göre kullanıcıya gösterilecek metni hazırlar."""
         mapping = {
@@ -6183,6 +6247,14 @@ class ToolApp(tk.Tk):
             textvariable=self.update_status_var,
         )
         self.update_status_label.pack(side="left", padx=(12, 0))
+
+        donation_button = ttk.Button(
+            top_frame,
+            text=self.tr("Support & Donate"),
+            command=self.show_donation_popup,
+        )
+        donation_button.pack(side="right")
+        self.register_widget(donation_button, "Support & Donate")
 
         self.help_text_area = ScrolledText(
             frame,
