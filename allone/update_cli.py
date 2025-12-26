@@ -18,6 +18,8 @@ from updater import (
     _fetch_latest_release_asset,
     _remote_version_string,
     _version_is_not_newer,
+    load_current_release,
+    resolve_release_executable,
     start_update_installation,
 )
 
@@ -137,6 +139,15 @@ def main(argv: list[str] | None = None) -> int:
     logger = _printer
     install_root = _normalize_install_root(args.install_root)
     target_executable = install_root / args.exe_name
+    release_state = load_current_release(install_root)
+    current_version = __version__
+    if release_state:
+        release_version = release_state.get("version")
+        if release_version:
+            current_version = release_version
+        release_executable = resolve_release_executable(install_root, args.exe_name)
+        if release_executable is not None:
+            target_executable = release_executable
 
     if args.enable_auto_update or args.disable_auto_update:
         try:
@@ -162,8 +173,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Failed to check for updates: {exc}", file=sys.stderr)
         return 1
 
-    if not args.force and _version_is_not_newer(remote_version, __version__):
-        print(f"Already up-to-date (v{__version__}).")
+    if not args.force and _version_is_not_newer(remote_version, current_version):
+        print(f"Already up-to-date (v{current_version}).")
         return 0
 
     if args.check_only:

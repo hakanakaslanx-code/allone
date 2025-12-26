@@ -33,6 +33,9 @@ CHUNK_SIZE = 1024 * 1024
 
 DETACHED_PROCESS = 0x00000008
 
+RELEASES_DIRNAME = "releases"
+CURRENT_RELEASE_FILE = "current.json"
+
 
 @dataclass
 class UpdateInfo:
@@ -70,9 +73,85 @@ def _paths(root: Optional[Path] = None) -> Dict[str, Path]:
     return {
         "lock": base / "update.lock",
         "updater": base / "run_update.bat",
+        "release_updater": base / "run_update_release.bat",
         "log": base / "last_update.log",
         "success": base / "update_success.json",
     }
+
+
+def _release_paths(base_dir: Path) -> Dict[str, Path]:
+    resolved = Path(base_dir).resolve()
+    return {
+        "base": resolved,
+        "releases": resolved / RELEASES_DIRNAME,
+        "current": resolved / CURRENT_RELEASE_FILE,
+    }
+
+
+def _uses_release_layout(base_dir: Path) -> bool:
+    release_paths = _release_paths(base_dir)
+    return release_paths["current"].exists() or release_paths["releases"].exists()
+
+
+def _resolve_install_root(target_executable: Path) -> Path:
+    resolved = target_executable.resolve()
+    if resolved.parent.parent.name == RELEASES_DIRNAME:
+        return resolved.parent.parent.parent
+    return resolved.parent
+
+
+def load_current_release(base_dir: Path) -> Optional[Dict[str, str]]:
+    release_paths = _release_paths(base_dir)
+    current_path = release_paths["current"]
+    if not current_path.exists():
+        return None
+    try:
+        with current_path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return {str(key): str(value) for key, value in payload.items() if value is not None}
+
+
+def find_latest_release_executable(
+    base_dir: Path, exe_name: str
+) -> Optional[Path]:
+    release_paths = _release_paths(base_dir)
+    releases_dir = release_paths["releases"]
+    if not releases_dir.exists():
+        return None
+
+    candidates: List[Tuple[Tuple[Tuple[int, object], ...], Path]] = []
+    for entry in releases_dir.iterdir():
+        if not entry.is_dir():
+            continue
+        version_key = _parse_version(entry.name)
+        candidates.append((version_key, entry))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    for _, folder in candidates:
+        candidate_exe = folder / exe_name
+        if candidate_exe.exists():
+            return candidate_exe
+    return None
+
+
+def resolve_release_executable(base_dir: Path, exe_name: str) -> Optional[Path]:
+    current = load_current_release(base_dir)
+    if current:
+        path_value = current.get("path")
+        if path_value:
+            candidate = Path(path_value)
+            if not candidate.is_absolute():
+                candidate = (Path(base_dir) / candidate).resolve()
+            if candidate.exists():
+                return candidate
+    return find_latest_release_executable(base_dir, exe_name)
 
 
 def _get_latest_release_payload(owner: str, repo: str, timeout: int) -> dict:
@@ -399,6 +478,98 @@ exit /B !EXIT_CODE!
     script_path.write_text(content, encoding="utf-8")
 
 
+def _prepare_release_updater_script(script_path: Path) -> None:
+    paths = _paths()
+    log_path = paths["log"]
+    content = """@echo off
+setlocal EnableExtensions EnableDelayedExpansion
+set "TARGET_EXE=%~1"
+set "TARGET_PID=%~2"
+set "PACKAGE=%~3"
+set "WORKDIR=%~4"
+set "TARGET_NAME=%~5"
+set "LOG_FILE=%~6"
+set "SUCCESS_FILE=%~7"
+set "LOCK_FILE=%~8"
+set "VERSION_STR=%~9"
+
+>>"%LOG_FILE%" echo [%%date%% %%time%%] Release update script started. Waiting for PID !TARGET_PID!.
+:waitloop
+if "!TARGET_PID!"=="" goto continue
+for /f "tokens=1" %%p in ('tasklist /FI "PID eq !TARGET_PID!" ^| find " !TARGET_PID! "') do (
+    timeout /T 1 /NOBREAK >NUL
+    goto waitloop
+)
+:continue
+>>"%LOG_FILE%" echo [%%date%% %%time%%] Process exited. Preparing release workspace.
+if exist "%WORKDIR%" rd /S /Q "%WORKDIR%"
+mkdir "%WORKDIR%" >NUL 2>&1
+set "EXTRACT_DIR=%WORKDIR%\extracted"
+mkdir "%EXTRACT_DIR%" >NUL 2>&1
+
+set "TARGET_DIR=%~dp1"
+for %%I in ("%TARGET_DIR%..\\") do set "RELEASES_DIR=%%~fI"
+for %%I in ("%RELEASES_DIR%..\\") do set "BASE_DIR=%%~fI"
+set "CURRENT_FILE=%BASE_DIR%\\current.json"
+set "RELEASE_DIR=%RELEASES_DIR%\\%VERSION_STR%"
+
+set "NEW_PAYLOAD=%PACKAGE%"
+for %%I in ("%PACKAGE%") do set "PKG_EXT=%%~xI"
+if /I "!PKG_EXT!"==".zip" (
+    powershell -NoProfile -NoLogo -Command "Expand-Archive -LiteralPath '%PACKAGE%' -DestinationPath '%EXTRACT_DIR%' -Force" >>"%LOG_FILE%" 2>&1
+    if errorlevel 1 goto fail
+    if exist "!EXTRACT_DIR!\\%TARGET_NAME%" set "NEW_PAYLOAD=!EXTRACT_DIR!\\%TARGET_NAME%"
+)
+
+if exist "!RELEASE_DIR!" rd /S /Q "!RELEASE_DIR!"
+mkdir "!RELEASE_DIR!" >NUL 2>&1
+
+if /I "!PKG_EXT!"==".zip" (
+    robocopy "!EXTRACT_DIR!" "!RELEASE_DIR!" /E /NFL /NDL /NJH /NJS /NP >>"%LOG_FILE%" 2>&1
+    set "ROBOCODE=!errorlevel!"
+    if !ROBOCODE! GEQ 8 goto fail
+) else (
+    copy /Y "!NEW_PAYLOAD!" "!RELEASE_DIR!\\%TARGET_NAME%" >>"%LOG_FILE%" 2>&1
+    if errorlevel 1 goto fail
+)
+
+set "CURRENT_EXE=!RELEASE_DIR!\\%TARGET_NAME%"
+if not exist "!CURRENT_EXE!" (
+    >>"%LOG_FILE%" echo [%%date%% %%time%%] Expected executable not found: !CURRENT_EXE!.
+    goto fail
+)
+
+(
+    echo {
+    echo   "version": "!VERSION_STR!",
+    echo   "path": "!CURRENT_EXE!",
+    echo   "timestamp": "%%date%% %%time%%"
+    echo }
+) >"!CURRENT_FILE!"
+
+start "" "!CURRENT_EXE!" >>"%LOG_FILE%" 2>&1
+if exist "%SUCCESS_FILE%" del "%SUCCESS_FILE%"
+(
+    echo {
+    echo   "version": "!VERSION_STR!",
+    echo   "timestamp": "%%date%% %%time%%"
+    echo }
+) >"%SUCCESS_FILE%"
+set "EXIT_CODE=0"
+goto cleanup
+
+:fail
+set "EXIT_CODE=1"
+:cleanup
+if exist "%PACKAGE%" del "%PACKAGE%" >>"%LOG_FILE%" 2>&1
+if exist "%WORKDIR%" rd /S /Q "%WORKDIR%" >>"%LOG_FILE%" 2>&1
+if exist "%LOCK_FILE%" del "%LOCK_FILE%" >>"%LOG_FILE%" 2>&1
+>>"%LOG_FILE%" echo [%%date%% %%time%%] Release update script completed with exit code !EXIT_CODE!.
+exit /B !EXIT_CODE!
+"""
+    script_path.write_text(content, encoding="utf-8")
+
+
 def _launch_updater(
     script_path: Path,
     args: list[str],
@@ -428,6 +599,7 @@ class PreparedUpdate:
     success_path: Path
     package_path: Path
     temp_dir: Path
+    use_release_layout: bool
 
 
 def _cleanup_prepared_update(prepared: Optional["PreparedUpdate"]) -> None:
@@ -462,7 +634,10 @@ def _prepare_update_environment(
     paths = _paths(resolved_base)
     lock_path = paths["lock"]
     log_path = paths["log"]
-    updater_path = paths["updater"]
+    use_release_layout = _uses_release_layout(resolved_base)
+    updater_path = (
+        paths["release_updater"] if use_release_layout else paths["updater"]
+    )
     success_path = paths["success"]
 
     if lock_path.exists():
@@ -491,7 +666,10 @@ def _prepare_update_environment(
             )
 
         log_callback("Preparing installer…")
-        _prepare_updater_script(updater_path)
+        if use_release_layout:
+            _prepare_release_updater_script(updater_path)
+        else:
+            _prepare_updater_script(updater_path)
     except Exception:
         _cleanup_prepared_update(
             PreparedUpdate(
@@ -502,6 +680,7 @@ def _prepare_update_environment(
                 success_path=success_path,
                 package_path=package_path,
                 temp_dir=temp_dir,
+                use_release_layout=use_release_layout,
             )
         )
         raise
@@ -514,6 +693,7 @@ def _prepare_update_environment(
         success_path=success_path,
         package_path=package_path,
         temp_dir=temp_dir,
+        use_release_layout=use_release_layout,
     )
 
 
@@ -571,7 +751,11 @@ def start_update_installation(
     if not target_executable.exists():
         raise UpdateError(f"Target executable not found: {target_executable}")
 
-    resolved_base = Path(base_dir) if base_dir is not None else target_executable.parent
+    resolved_base = (
+        Path(base_dir).resolve()
+        if base_dir is not None
+        else _resolve_install_root(target_executable)
+    )
     return _launch_update_process(
         target_executable,
         target_pid,
@@ -747,11 +931,10 @@ def consume_update_success_message() -> Optional[Dict[str, str]]:
 
 def cleanup_update_artifacts() -> None:
     paths = _paths()
-    for key in ("lock", "updater"):
+    for key in ("lock", "updater", "release_updater"):
         path = paths[key]
         if path.exists():
             try:
                 path.unlink()
             except OSError:
                 pass
-
