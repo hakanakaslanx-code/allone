@@ -22,8 +22,6 @@ import numpy as np
 from PIL import Image, ImageTk, ImageDraw, ImageFilter, ImageOps, ImageChops
 from openpyxl import Workbook
 
-from print_service import SharedLabelPrinterServer, resolve_local_ip
-
 from settings_manager import load_settings, save_settings
 from rinven_import_manager import (
     DEFAULT_PRICING,
@@ -357,54 +355,15 @@ translations = {
         "No fields selected to export.": "No fields selected to export.",
         "Export summary: {rows} rows | {fields} fields exported | Skipped: {skipped}": "Export summary: {rows} rows | {fields} fields exported | Skipped: {skipped}",
         "None": "None",
-        "Shared Label Printer": "Shared Label Printer",
         "Print Generated Tags": "Print Generated Tags",
         "No generated tags found to print.": "No generated tags found to print.",
         "Printed {count} tag(s) to the default printer.": "Printed {count} tag(s) to the default printer.",
         "Printing tags failed: {error}": "Printing tags failed: {error}",
-        "SHARED_PRINTER_DESCRIPTION": (
-            "Expose the locally connected DYMO LabelWriter 450 to other computers on your Wi-Fi/LAN.\n"
-            "Start sharing to run the embedded Flask server and accept POST /print jobs with the token below."
-        ),
-        "Authorization Token:": "Authorization Token:",
-        "Listen Port:": "Listen Port:",
-        "Server Status: ⚪ Stopped": "Server Status: ⚪ Stopped",
-        "Server Status: 🟢 Running": "Server Status: 🟢 Running",
-        "Server Status: ⏳ Checking...": "Server Status: ⏳ Checking...",
-        "Start Sharing": "Start Sharing",
-        "Stop Sharing": "Stop Sharing",
-        "Check Status": "Check Status",
-        "SHARED_PRINTER_STARTED": "Shared label printer server started on {host}:{port}.",
-        "SHARED_PRINTER_STOPPED": "Shared label printer server stopped.",
-        "SHARED_PRINTER_START_FAILED": "Failed to start sharing: {error}",
-        "SHARED_PRINTER_STATUS_FAILED": "Status request failed: {error}",
-        "SHARED_PRINTER_TOKEN_REQUIRED": "Please enter an authorization token.",
-        "SHARED_PRINTER_AUTOSTARTED": "Shared label printer server auto-started on {host}:{port}.",
-        "SHARED_PRINTER_AUTOSTART_FAILED": "Automatic start failed: {error}",
-        "SHARED_PRINTER_STATUS_DETAIL": "Server Status: 🟢 Running — {host}:{port}",
-        "SHARED_PRINTER_HELP_TEXT": (
-            "Other PCs on this same Wi-Fi / LAN can print to this label printer by sending a POST /print request to http://{host}:{port}/print with the same bearer token. Do not expose this port to the internet."
-        ),
-        "SHARED_PRINTER_DISABLED": "Shared label printer sharing is currently disabled.",
-        "SHARED_PRINTER_NOT_READY": "Shared label printer server is not ready yet.",
-        "Server port is not configured.": "Server port is not configured.",
-        "Please enter a valid port number.": "Please enter a valid port number.",
         "Please fill in all Rinven Tag fields.": "Please fill in all Rinven Tag fields.",
         "Barcode data is required when barcode is enabled.": "Barcode data is required when barcode is enabled.",
         "Filename is required.": "Filename is required.",
         "win32print is only available on Windows.": "win32print is only available on Windows.",
         "win32print module could not be loaded. Please check the pywin32 installation.": "win32print module could not be loaded. Please check the pywin32 installation.",
-        "Server token is not configured.": "Server token is not configured.",
-        "Invalid or missing authorization token.": "Invalid or missing authorization token.",
-        "No file found in request.": "No file found in request.",
-        "No valid filename provided.": "No valid filename provided.",
-        "Printer name could not be determined.": "Printer name could not be determined.",
-        "File content is empty; cannot print.": "File content is empty; cannot print.",
-        "Shared printer server error: {error}": "Shared printer server error: {error}",
-        "Server is already running.": "Server is already running.",
-        "Authorization token cannot be empty.": "Authorization token cannot be empty.",
-        "Port {port} is not available: {error}": "Port {port} is not available: {error}",
-        "Print error: %s": "Print error: %s",
         "Check for Updates": "Check for Updates",
         "Warning": "Warning",
         "Information": "Information",
@@ -503,8 +462,6 @@ translations = {
             "Rinven Tools:\n"
             "  • Build Rinven import sheets with editable tables and pricing multipliers.\n"
             "  • Design Rinven tags with live preview, single/bulk export, and optional barcodes.\n"
-            "Shared Label Printer:\n"
-            "  • Discover local/remote printers and send jobs through the shared print service.\n"
             "---------------------------------\n"
             "Created by Hakan Akaslan"
         ),
@@ -792,54 +749,15 @@ translations = {
         "No fields selected to export.": "Dışa aktarılacak alan seçilmedi.",
         "Export summary: {rows} rows | {fields} fields exported | Skipped: {skipped}": "Dışa aktarma özeti: {rows} satır | {fields} alan aktarıldı | Atlanan: {skipped}",
         "None": "Yok",
-        "Shared Label Printer": "Paylaşılan Etiket Yazıcısı",
         "Print Generated Tags": "Üretilen Etiketleri Yazdır",
         "No generated tags found to print.": "Yazdırılacak oluşturulmuş etiket bulunamadı.",
         "Printed {count} tag(s) to the default printer.": "Varsayılan yazıcıya {count} etiket gönderildi.",
         "Printing tags failed: {error}": "Etiketler yazdırılırken hata oluştu: {error}",
-        "SHARED_PRINTER_DESCRIPTION": (
-            "Yerel olarak bağlı DYMO LabelWriter 450 yazıcısını Wi-Fi/LAN üzerindeki diğer bilgisayarlarla paylaşın.\n"
-            "Aşağıdaki jetonla gömülü Flask sunucusunu başlatın ve POST /print isteklerini kabul edin."
-        ),
-        "Authorization Token:": "Yetkilendirme Jetonu:",
-        "Listen Port:": "Dinleme Portu:",
-        "Server Status: ⚪ Stopped": "Sunucu Durumu: ⚪ Kapalı",
-        "Server Status: 🟢 Running": "Sunucu Durumu: 🟢 Çalışıyor",
-        "Server Status: ⏳ Checking...": "Sunucu Durumu: ⏳ Kontrol ediliyor...",
-        "Start Sharing": "Paylaşımı Başlat",
-        "Stop Sharing": "Paylaşımı Durdur",
-        "Check Status": "Durumu Kontrol Et",
-        "SHARED_PRINTER_STARTED": "Etiket yazıcısı paylaşımı {host}:{port} adresinde başlatıldı.",
-        "SHARED_PRINTER_STOPPED": "Etiket yazıcısı paylaşımı durduruldu.",
-        "SHARED_PRINTER_START_FAILED": "Paylaşım başlatılamadı: {error}",
-        "SHARED_PRINTER_STATUS_FAILED": "Durum isteği başarısız: {error}",
-        "SHARED_PRINTER_TOKEN_REQUIRED": "Lütfen bir yetkilendirme jetonu girin.",
-        "SHARED_PRINTER_AUTOSTARTED": "Etiket yazıcısı paylaşımı otomatik olarak {host}:{port} adresinde başlatıldı.",
-        "SHARED_PRINTER_AUTOSTART_FAILED": "Otomatik başlatma başarısız oldu: {error}",
-        "SHARED_PRINTER_STATUS_DETAIL": "Sunucu Durumu: 🟢 Çalışıyor — {host}:{port}",
-        "SHARED_PRINTER_HELP_TEXT": (
-            "Aynı Wi-Fi / LAN içindeki diğer bilgisayarlar http://{host}:{port}/print adresine aynı bearer jetonuyla POST /print isteği göndererek bu yazıcıya çıktı alabilir. Bu portu internete açmayın."
-        ),
-        "SHARED_PRINTER_DISABLED": "Etiket yazıcısı paylaşımı şu anda devre dışı.",
-        "SHARED_PRINTER_NOT_READY": "Paylaşılan etiket yazıcısı sunucusu henüz hazır değil.",
-        "Server port is not configured.": "Sunucu portu yapılandırılmadı.",
-        "Please enter a valid port number.": "Lütfen geçerli bir port numarası girin.",
         "Please fill in all Rinven Tag fields.": "Lütfen tüm Rinven Etiketi alanlarını doldurun.",
         "Barcode data is required when barcode is enabled.": "Barkod etkinleştirildiğinde barkod verisi gereklidir.",
         "Filename is required.": "Dosya adı gereklidir.",
         "win32print is only available on Windows.": "win32print sadece Windows üzerinde kullanılabilir.",
         "win32print module could not be loaded. Please check the pywin32 installation.": "win32print modülü yüklenemedi. Lütfen pywin32 kurulumunu kontrol edin.",
-        "Server token is not configured.": "Sunucu jetonu yapılandırılmamış.",
-        "Invalid or missing authorization token.": "Geçersiz veya eksik yetkilendirme jetonu.",
-        "No file found in request.": "Yüklenecek dosya bulunamadı.",
-        "No valid filename provided.": "Geçerli bir dosya adı gönderilmedi.",
-        "Printer name could not be determined.": "Yazıcı adı bulunamadı.",
-        "File content is empty; cannot print.": "Dosya içeriği boş olduğu için yazdırma yapılamadı.",
-        "Shared printer server error: {error}": "Paylaşılan yazıcı sunucusu hata verdi: {error}",
-        "Server is already running.": "Sunucu zaten çalışıyor.",
-        "Authorization token cannot be empty.": "Yetkilendirme jetonu boş olamaz.",
-        "Port {port} is not available: {error}": "Port {port} kullanılamıyor: {error}",
-        "Print error: %s": "Yazdırma sırasında hata oluştu: %s",
         "Check for Updates": "Güncellemeleri Kontrol Et",
         "Warning": "Uyarı",
         "Information": "Bilgi",
@@ -1012,7 +930,6 @@ PANEL_INFO = {
         "9. Barcode Generator": "Create printable barcodes in multiple formats, including DYMO labels.",
         "Rinven Tag": "Design branded Rinven tags with collection details and optional barcode.",
         "Rinven Import Sheet Generator": "Manage Rinven import rows in a grid with bulk paste, automatic sizing, pricing, and Excel export.",
-        "Shared Label Printer": "Share your local DYMO printer securely with other devices on the network.",
         "Help & About": "Review update status, helpful links and support information for the app.",
     },
     "tr": {
@@ -1030,7 +947,6 @@ PANEL_INFO = {
         "9. Barcode Generator": "PNG veya DYMO dahil birden çok formatta baskıya hazır barkod oluşturur.",
         "Rinven Tag": "Koleksiyon bilgileri ve isteğe bağlı barkod içeren Rinven etiketleri tasarlar.",
         "Rinven Import Sheet Generator": "Rinven ana ithalat tablosu satırlarını tablo düzenleyicide yönetir; toplu yapıştırma, otomatik boyut/fiyat ve Excel dışa aktarma sunar.",
-        "Shared Label Printer": "Yerel DYMO yazıcınızı ağdaki diğer cihazlarla güvenle paylaşmanızı sağlar.",
         "Help & About": "Uygulama sürümünü, rehberleri ve destek bağlantılarını tek yerde gösterir.",
     },
 }
@@ -1194,15 +1110,6 @@ class ToolApp(tk.Tk):
         self.rinven_scanner_value = tk.StringVar()
         self.rinven_scanner_entry: Optional[ttk.Entry] = None
         self.generated_bulk_tags: List[Tuple[Dict[str, str], str]] = []
-        legacy_print = self.settings.get("print_server", {})
-        shared_settings = self.settings.setdefault("shared_label_printer", {})
-        shared_settings.setdefault("token", legacy_print.get("token", "change-me"))
-        shared_settings.setdefault("port", legacy_print.get("port", 5151))
-        shared_settings.setdefault("autostart_on_launch", False)
-        if "print_server" in self.settings:
-            # Eski ayar anahtarını temizleyerek tek bir kaynaktan devam ediyoruz.
-            self.settings.pop("print_server", None)
-            save_settings(self.settings)
         self.language = self.settings.get("language", "en")
         if self.language not in translations:
             self.language = "en"
@@ -1337,16 +1244,6 @@ class ToolApp(tk.Tk):
         self.create_view_toolbar()
         self.create_language_selector()
 
-        self.shared_token_var = tk.StringVar(value=str(shared_settings.get("token", "change-me")))
-        self.shared_port_var = tk.StringVar(value=str(shared_settings.get("port", 5151)))
-        self.shared_status_var = tk.StringVar(value=self.tr("Server Status: ⚪ Stopped"))
-        self.shared_status_state = "stopped"
-        self.shared_status_host: Optional[str] = None
-        self.shared_status_port: Optional[int] = None
-        self.shared_printer_server = SharedLabelPrinterServer(self.log, translator=self.tr)
-        self.shared_status_lock = threading.RLock()
-        self.shared_port_var.trace_add("write", lambda *args: self._update_shared_help_text())
-
         self.main_body = ttk.Frame(self, style="TFrame")
         self.main_body.pack(pady=(5, 12), padx=12, fill="both", expand=True)
         self.main_body.columnconfigure(1, weight=1)
@@ -1384,7 +1281,6 @@ class ToolApp(tk.Tk):
             "Code Generators",
             "Rinven Import Sheet Generator",
             "Rinven Tag",
-            "Shared Label Printer",
             "Help & About",
         ):
             tab = ScrollableTab(self.section_notebook)
@@ -1405,7 +1301,6 @@ class ToolApp(tk.Tk):
         self.create_code_gen_panels(self.section_frames["Code Generators"])
         self.create_rinven_import_panel(self.section_frames["Rinven Import Sheet Generator"])
         self.create_rinven_tag_panel(self.section_frames["Rinven Tag"])
-        self.create_shared_printer_panel(self.section_frames["Shared Label Printer"])
         self.create_about_panel(self.section_frames["Help & About"])
 
         self.log_area = ScrolledText(self.content_frame, height=8)
@@ -1437,7 +1332,6 @@ class ToolApp(tk.Tk):
         )
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.after(0, self._maybe_auto_start_shared_printer)
         self.after(1200, self._show_pending_update_notice)
 
     def _parse_zoom_level(self, value: str) -> float:
@@ -1763,11 +1657,6 @@ class ToolApp(tk.Tk):
             save_settings(self.settings)
         except Exception:
             pass
-        if self.shared_printer_server.is_running():
-            try:
-                self.shared_printer_server.stop()
-            except Exception as exc:
-                self.log(f"{self.tr('Error')}: {exc}")
         self._join_background_threads()
         self.log(self.tr("Unsaved work saved automatically before update."))
 
@@ -4199,14 +4088,8 @@ class ToolApp(tk.Tk):
             for frame, title_key in self.notebook_tabs:
                 self.section_notebook.tab(frame, text=self.tr(title_key))
         self.update_help_tab_content()
-        if hasattr(self, "shared_status_var"):
-            self._apply_shared_status_translation()
-        if hasattr(self, "shared_help_text"):
-            self._update_shared_help_text(self.shared_status_host, self.shared_status_port)
         if hasattr(self, "rug_control_tree"):
             self.populate_rug_no_control_tree(getattr(self, "rug_control_results", []))
-        if hasattr(self, "shared_printer_server"):
-            self.shared_printer_server.set_translator(self.tr)
         if hasattr(self, "view_in_room_canvas") and not self.view_in_room_preview_has_image:
             self._show_view_in_room_message(self.tr("Preview will appear here."))
         self._update_manual_prompt_label()
@@ -4300,312 +4183,13 @@ class ToolApp(tk.Tk):
         except tk.TclError:
             pass
 
-    def _format_shared_status(self, state: str, host: Optional[str], port: Optional[int]) -> str:
-        """Durum anahtarına göre kullanıcıya gösterilecek metni hazırlar."""
-        mapping = {
-            "running": "Server Status: 🟢 Running",
-            "stopped": "Server Status: ⚪ Stopped",
-            "checking": "Server Status: ⏳ Checking...",
-        }
-        if state == "running" and host and port:
-            return self.tr("SHARED_PRINTER_STATUS_DETAIL").format(host=host, port=port)
-        return self.tr(mapping.get(state, "Server Status: ⚪ Stopped"))
-
-    def _set_shared_status(self, state: str, host: Optional[str] = None, port: Optional[int] = None) -> None:
-        """Durum değiştiğinde etiket ve yardım metnini günceller."""
-        with self.shared_status_lock:
-            self.shared_status_state = state
-            if host is not None:
-                self.shared_status_host = host
-            if port is not None:
-                self.shared_status_port = port
-            host_value = self.shared_status_host or self.shared_printer_server.current_host()
-            port_value = self.shared_status_port
-            if port_value is None:
-                current_port = self.shared_printer_server.current_port()
-                if current_port:
-                    port_value = current_port
-            status_text = self._format_shared_status(state, host_value, port_value)
-            self.shared_status_var.set(status_text)
-        self._update_shared_help_text(host_value, port_value)
-
-    def _apply_shared_status_translation(self) -> None:
-        """Dil değiştiğinde mevcut durumu tekrar yazar."""
-        with self.shared_status_lock:
-            state = self.shared_status_state
-            host = self.shared_status_host
-            port = self.shared_status_port
-        self.shared_status_var.set(self._format_shared_status(state, host, port))
-
-    def _update_shared_help_text(self, host: Optional[str] = None, port: Optional[int] = None) -> None:
-        """Yardım kutusundaki açıklama metnini günceller."""
-        if not hasattr(self, "shared_help_text"):
-            return
-        host_value = host or self.shared_printer_server.current_host() or resolve_local_ip() or "127.0.0.1"
-        port_value = port
-        if port_value is None:
-            try:
-                port_value = int(self.shared_port_var.get().strip())
-            except (ValueError, AttributeError):
-                port_value = 5151
-            current_port = self.shared_printer_server.current_port()
-            if current_port:
-                port_value = current_port
-        message = self.tr("SHARED_PRINTER_HELP_TEXT").format(host=host_value, port=port_value)
-        self.shared_help_text.config(state=tk.NORMAL)
-        self.shared_help_text.delete("1.0", tk.END)
-        self.shared_help_text.insert(tk.END, message)
-        self.shared_help_text.config(state=tk.DISABLED)
-
-    def start_shared_printer(self) -> None:
-        """Gömülü Flask sunucusunu başlatır."""
-        self._start_shared_printer(show_dialogs=True)
-
-    def _start_shared_printer(self, *, show_dialogs: bool) -> bool:
-        """Paylaşılan yazıcı sunucusunu başlatır ve başarı durumunu döndürür."""
-        if self.shared_printer_server.is_running():
-            host = self.shared_printer_server.current_host()
-            port = self.shared_printer_server.current_port()
-            self._set_shared_status("running", host, port)
-            return True
-
-        shared_settings = self.settings.setdefault("shared_label_printer", {})
-
-        token = self.shared_token_var.get().strip()
-        if not token:
-            message = self.tr("SHARED_PRINTER_TOKEN_REQUIRED")
-            if show_dialogs:
-                messagebox.showerror(self.tr("Error"), message)
-            else:
-                self.log(message)
-                if shared_settings.get("autostart_on_launch"):
-                    shared_settings["autostart_on_launch"] = False
-                    save_settings(self.settings)
-                auto_error = self.tr("SHARED_PRINTER_AUTOSTART_FAILED").format(error=message)
-                self.log(auto_error)
-            return False
-
-        port_value = self.shared_port_var.get().strip()
-        try:
-            port_int = int(port_value)
-            if not (1 <= port_int <= 65535):
-                raise ValueError
-        except ValueError:
-            message = self.tr("Please enter a valid port number.")
-            if show_dialogs:
-                messagebox.showerror(self.tr("Error"), message)
-            else:
-                self.log(message)
-                if shared_settings.get("autostart_on_launch"):
-                    shared_settings["autostart_on_launch"] = False
-                    save_settings(self.settings)
-                auto_error = self.tr("SHARED_PRINTER_AUTOSTART_FAILED").format(error=message)
-                self.log(auto_error)
-            return False
-
-        try:
-            self.shared_printer_server.start(port_int, token)
-        except Exception as exc:
-            if show_dialogs:
-                error_message = self.tr("SHARED_PRINTER_START_FAILED").format(error=exc)
-                self.log(error_message)
-                messagebox.showerror(self.tr("Error"), error_message)
-            else:
-                auto_error = self.tr("SHARED_PRINTER_AUTOSTART_FAILED").format(error=exc)
-                self.log(auto_error)
-                if shared_settings.get("autostart_on_launch"):
-                    shared_settings["autostart_on_launch"] = False
-                    save_settings(self.settings)
-            self._set_shared_status("stopped")
-            return False
-
-        shared_settings["token"] = token
-        shared_settings["port"] = port_int
-        shared_settings["autostart_on_launch"] = True
-        save_settings(self.settings)
-
-        host = self.shared_printer_server.current_host()
-        self._set_shared_status("running", host, port_int)
-
-        if show_dialogs:
-            success_message = self.tr("SHARED_PRINTER_STARTED").format(host=host, port=port_int)
-            self.log(success_message)
-            messagebox.showinfo(self.tr("Information"), success_message)
-        else:
-            auto_message = self.tr("SHARED_PRINTER_AUTOSTARTED").format(host=host, port=port_int)
-            self.log(auto_message)
-
-        return True
-
-    def stop_shared_printer(self) -> None:
-        """Arka planda çalışan Flask sunucusunu durdurur."""
-        shared_settings = self.settings.setdefault("shared_label_printer", {})
-        if shared_settings.get("autostart_on_launch"):
-            shared_settings["autostart_on_launch"] = False
-            save_settings(self.settings)
-
-        if not self.shared_printer_server.is_running():
-            self._set_shared_status("stopped")
-            return
-        try:
-            self.shared_printer_server.stop()
-        except Exception as exc:
-            self.log(f"{self.tr('Error')}: {exc}")
-        self._set_shared_status("stopped")
-        stop_message = self.tr("SHARED_PRINTER_STOPPED")
-        self.log(stop_message)
-        messagebox.showinfo(self.tr("Information"), stop_message)
-
-    def _maybe_auto_start_shared_printer(self) -> None:
-        """Uygulama açıldığında gerekirse paylaşılan yazıcıyı başlatır."""
-        shared_settings = self.settings.get("shared_label_printer", {})
-        if not shared_settings.get("autostart_on_launch"):
-            return
-
-        if self.shared_printer_server.is_running():
-            return
-
-        self._start_shared_printer(show_dialogs=False)
-
-    def check_shared_printer_status(self) -> None:
-        """Sunucunun sağlık durumunu HTTP üzerinden sorgular."""
-        token = self.shared_token_var.get().strip()
-        if not token:
-            messagebox.showerror(self.tr("Error"), self.tr("SHARED_PRINTER_TOKEN_REQUIRED"))
-            return
-
-        port_value = self.shared_port_var.get().strip()
-        try:
-            port_int = int(port_value)
-            if not (1 <= port_int <= 65535):
-                raise ValueError
-        except ValueError:
-            messagebox.showerror(self.tr("Error"), self.tr("Please enter a valid port number."))
-            return
-
-        self._set_shared_status("checking")
-        self.run_in_thread(self._fetch_shared_printer_status, port_int, token)
-
-    def _fetch_shared_printer_status(self, port: int, token: str) -> None:
-        """Durum isteğini arka planda gerçekleştirir."""
-        url = f"http://127.0.0.1:{port}/status"
-        headers = {"Authorization": f"Bearer {token}"}
-        try:
-            response = requests.get(url, headers=headers, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                host = data.get("host") or self.shared_printer_server.current_host()
-                remote_port = data.get("port") or port
-                self.after(0, lambda: self._set_shared_status("running", host, remote_port))
-            else:
-                try:
-                    payload = response.json()
-                    error_text = payload.get("error") or response.text
-                except ValueError:
-                    error_text = response.text
-                self.after(0, lambda: self._handle_status_failure(error_text))
-        except Exception as exc:
-            self.after(0, lambda: self._handle_status_failure(str(exc)))
-
-    def _handle_status_failure(self, error_message: str) -> None:
-        """Durum sorgusu başarısız olduğunda kullanıcıyı bilgilendirir."""
-        self._set_shared_status("stopped")
-        message = self.tr("SHARED_PRINTER_STATUS_FAILED").format(error=error_message)
-        self.log(message)
-        messagebox.showerror(self.tr("Error"), message)
-
-    def create_shared_printer_panel(self, parent: ttk.Frame):
-        """Paylaşılan yazıcı sekmesini oluşturur."""
-        parent.columnconfigure(0, weight=1)
-        card = self.create_section_card(parent, "Shared Label Printer")
-        card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
-        self._mark_advanced_card(card)
-        frame = card.body
-        frame.columnconfigure(1, weight=1)
-
-        description = ttk.Label(
-            frame,
-            text=self.tr("SHARED_PRINTER_DESCRIPTION"),
-            style="Description.TLabel",
-            wraplength=620,
-            justify="left",
-        )
-        description.grid(row=0, column=0, columnspan=2, sticky="w", padx=6, pady=(0, 12))
-        self.register_widget(description, "SHARED_PRINTER_DESCRIPTION")
-
-        token_label = ttk.Label(frame, text=self.tr("Authorization Token:"))
-        token_label.grid(row=1, column=0, sticky="w", padx=6, pady=(0, 6))
-        self.register_widget(token_label, "Authorization Token:")
-
-        token_entry = ttk.Entry(frame, textvariable=self.shared_token_var)
-        token_entry.grid(row=1, column=1, sticky="we", padx=6, pady=(0, 6))
-
-        port_label = ttk.Label(frame, text=self.tr("Listen Port:"))
-        port_label.grid(row=2, column=0, sticky="w", padx=6, pady=(0, 6))
-        self.register_widget(port_label, "Listen Port:")
-
-        port_entry = ttk.Entry(frame, textvariable=self.shared_port_var)
-        port_entry.grid(row=2, column=1, sticky="we", padx=6, pady=(0, 6))
-
-        status_label = ttk.Label(frame, textvariable=self.shared_status_var)
-        status_label.grid(row=3, column=0, columnspan=2, sticky="w", padx=6, pady=(6, 6))
-
-        button_frame = ttk.Frame(frame, style="PanelBody.TFrame")
-        button_frame.grid(row=4, column=0, columnspan=2, sticky="w", padx=6, pady=(0, 6))
-
-        start_button = ttk.Button(button_frame, text=self.tr("Start Sharing"), command=self.start_shared_printer)
-        start_button.pack(side="left")
-        self.register_widget(start_button, "Start Sharing")
-
-        stop_button = ttk.Button(button_frame, text=self.tr("Stop Sharing"), command=self.stop_shared_printer)
-        stop_button.pack(side="left", padx=(8, 0))
-        self.register_widget(stop_button, "Stop Sharing")
-
-        check_button = ttk.Button(button_frame, text=self.tr("Check Status"), command=self.check_shared_printer_status)
-        check_button.pack(side="left", padx=(8, 0))
-        self.register_widget(check_button, "Check Status")
-
-        help_frame = ttk.Frame(frame, style="PanelBody.TFrame")
-        help_frame.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=6, pady=(12, 6))
-        help_frame.grid_columnconfigure(0, weight=1)
-
-        self.shared_help_text = tk.Text(
-            help_frame,
-            height=5,
-            wrap=tk.WORD,
-            state=tk.DISABLED,
-            background=self.theme_colors["card_bg"],
-            foreground=self.theme_colors["text_primary"],
-            insertbackground=self.theme_colors["text_primary"],
-            relief="flat",
-            borderwidth=0,
-        )
-        self.shared_help_text.grid(row=0, column=0, sticky="nsew")
-        try:
-            self.shared_help_text.configure(
-                disabledforeground=self.theme_colors["text_primary"],
-                disabledbackground=self.theme_colors["card_bg"],
-            )
-        except tk.TclError:
-            pass
-        scrollbar = ttk.Scrollbar(help_frame, orient="vertical", command=self.shared_help_text.yview)
-        scrollbar.grid(row=0, column=1, sticky="ns")
-        self.shared_help_text.configure(yscrollcommand=scrollbar.set)
-
-        self._set_shared_status("stopped")
-
     def on_close(self):
-        """Uygulama kapanırken paylaşılan yazıcı sunucusunu durdurur."""
+        """Uygulama kapanırken tercihleri kaydeder ve pencereyi kapatır."""
         try:
             try:
                 self._persist_view_preferences()
             except Exception:
                 pass
-            if self.shared_printer_server.is_running():
-                try:
-                    self.shared_printer_server.stop()
-                except Exception as exc:
-                    self.log(f"{self.tr('Error')}: {exc}")
         finally:
             self.destroy()
 
