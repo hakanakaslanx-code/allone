@@ -145,9 +145,11 @@ def main(argv: list[str] | None = None) -> int:
         release_version = release_state.get("version")
         if release_version:
             current_version = release_version
-        release_executable = resolve_release_executable(install_root, args.exe_name)
-        if release_executable is not None:
-            target_executable = release_executable
+    release_executable = resolve_release_executable(install_root, args.exe_name)
+    if release_executable is not None:
+        target_executable = release_executable
+        if not release_state:
+            current_version = release_executable.parent.name
 
     if args.enable_auto_update or args.disable_auto_update:
         try:
