@@ -27,40 +27,44 @@ class GoogleMapsScraperTab:
         self._build_ui()
 
     def _build_ui(self) -> None:
-        card = self.app.create_section_card(self.parent, "Google Maps Scraper")
-        body = card.body
+        self.card = self.app.create_section_card(self.parent, "Google Maps Scraper")
+        self.card.pack(fill="both", expand=True, padx=8, pady=8)
+        body = self.card.body
         body.columnconfigure(1, weight=1)
-        body.rowconfigure(6, weight=1)
+        body.rowconfigure(7, weight=1)
+
+        loaded_label = ttk.Label(body, text=self.app.tr("Google Maps Scraper Loaded"))
+        loaded_label.grid(row=0, column=0, columnspan=2, sticky="w", padx=6, pady=(0, 6))
 
         search_label = ttk.Label(body, text=self.app.tr("Search Term"), style="Secondary.TLabel")
         search_label.grid(
-            row=0, column=0, sticky="w", padx=6, pady=6
+            row=1, column=0, sticky="w", padx=6, pady=6
         )
         self.app.register_widget(search_label, "Search Term")
         ttk.Entry(body, textvariable=self.search_term_var).grid(
-            row=0, column=1, sticky="ew", padx=6, pady=6
+            row=1, column=1, sticky="ew", padx=6, pady=6
         )
 
         location_label = ttk.Label(body, text=self.app.tr("Location"), style="Secondary.TLabel")
         location_label.grid(
-            row=1, column=0, sticky="w", padx=6, pady=6
+            row=2, column=0, sticky="w", padx=6, pady=6
         )
         self.app.register_widget(location_label, "Location")
         ttk.Entry(body, textvariable=self.location_var).grid(
-            row=1, column=1, sticky="ew", padx=6, pady=6
+            row=2, column=1, sticky="ew", padx=6, pady=6
         )
 
         listings_label = ttk.Label(body, text=self.app.tr("Max Listings"), style="Secondary.TLabel")
         listings_label.grid(
-            row=2, column=0, sticky="w", padx=6, pady=6
+            row=3, column=0, sticky="w", padx=6, pady=6
         )
         self.app.register_widget(listings_label, "Max Listings")
         ttk.Entry(body, textvariable=self.max_listings_var, width=10).grid(
-            row=2, column=1, sticky="w", padx=6, pady=6
+            row=3, column=1, sticky="w", padx=6, pady=6
         )
 
         options_frame = ttk.Frame(body, style="PanelBody.TFrame")
-        options_frame.grid(row=3, column=0, columnspan=2, sticky="w", padx=6, pady=6)
+        options_frame.grid(row=4, column=0, columnspan=2, sticky="w", padx=6, pady=6)
         headless_check = ttk.Checkbutton(
             options_frame,
             text=self.app.tr("Headless"),
@@ -77,7 +81,7 @@ class GoogleMapsScraperTab:
         self.app.register_widget(socials_check, "Include Socials/Email")
 
         button_frame = ttk.Frame(body, style="PanelBody.TFrame")
-        button_frame.grid(row=4, column=0, columnspan=2, sticky="w", padx=6, pady=6)
+        button_frame.grid(row=5, column=0, columnspan=2, sticky="w", padx=6, pady=6)
 
         self.start_button = ttk.Button(button_frame, text=self.app.tr("Start"), command=self.start_scrape)
         self.start_button.grid(row=0, column=0, padx=(0, 8))
@@ -104,7 +108,7 @@ class GoogleMapsScraperTab:
         self.app.register_widget(self.export_csv_button, "Export CSV")
 
         progress_frame = ttk.Frame(body, style="PanelBody.TFrame")
-        progress_frame.grid(row=5, column=0, columnspan=2, sticky="ew", padx=6, pady=(6, 0))
+        progress_frame.grid(row=6, column=0, columnspan=2, sticky="ew", padx=6, pady=(6, 0))
         progress_frame.columnconfigure(0, weight=1)
         self.progress_bar = ttk.Progressbar(progress_frame, mode="determinate", maximum=100)
         self.progress_bar.grid(row=0, column=0, sticky="ew")
@@ -113,8 +117,14 @@ class GoogleMapsScraperTab:
         )
 
         self.log_text = ScrolledText(body, height=8)
-        self.log_text.grid(row=6, column=0, columnspan=2, sticky="nsew", padx=6, pady=6)
+        self.log_text.grid(row=7, column=0, columnspan=2, sticky="nsew", padx=6, pady=6)
         self.log_text.config(state=tk.DISABLED)
+
+    def show(self) -> None:
+        self.card.pack(fill="both", expand=True, padx=8, pady=8)
+
+    def hide(self) -> None:
+        self.card.pack_forget()
 
     def _set_progress(self, value: int, total: int) -> None:
         def apply() -> None:

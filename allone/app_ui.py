@@ -1453,6 +1453,18 @@ class ToolApp(tk.Tk):
                 button.configure(style="Sidebar.TButton")
 
     def _on_tab_changed(self, _event=None) -> None:
+        if not hasattr(self, "section_notebook"):
+            return
+        current = self.section_notebook.select()
+        if hasattr(self, "google_maps_scraper_tab") and hasattr(self, "notebook_tabs"):
+            for tab, title in self.notebook_tabs:
+                if title != "Google Maps Scraper":
+                    continue
+                if str(tab) == current:
+                    self.google_maps_scraper_tab.show()
+                else:
+                    self.google_maps_scraper_tab.hide()
+                break
         self._update_nav_highlight()
 
     def _apply_sidebar_visibility(self, initial: bool = False) -> None:
