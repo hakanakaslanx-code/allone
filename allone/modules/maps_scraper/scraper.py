@@ -12,7 +12,7 @@ from typing import Callable, Dict, Set, Tuple
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
-from modules.maps_scraper.models import Business, BusinessList
+from allone.modules.maps_scraper.models import Business, BusinessList
 
 EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 FACEBOOK_PATTERN = re.compile(r"https?://(?:www\.)?facebook\.com/[^\s\"'<>]+", re.IGNORECASE)

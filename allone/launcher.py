@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from updater import load_current_release, resolve_release_executable
+from allone.updater import load_current_release, resolve_release_executable
 
 
 def _default_install_root() -> Path:

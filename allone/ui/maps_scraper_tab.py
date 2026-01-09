@@ -5,8 +5,12 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 
-from modules.maps_scraper.models import BusinessList
-from modules.maps_scraper.scraper import build_output_filename, build_query, scrape_google_maps
+from allone.modules.maps_scraper.models import BusinessList
+from allone.modules.maps_scraper.scraper import (
+    build_output_filename,
+    build_query,
+    scrape_google_maps,
+)
 
 
 class GoogleMapsScraperTab:

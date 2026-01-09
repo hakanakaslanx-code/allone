@@ -8,8 +8,8 @@ import sys
 from pathlib import Path
 from typing import Callable, Any
 
-from version import __version__
-from updater import (
+from allone.version import __version__
+from allone.updater import (
     CHECK_TIMEOUT_INTERACTIVE,
     OWNER,
     REPO,
