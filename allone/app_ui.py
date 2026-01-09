@@ -39,6 +39,7 @@ from updater import (
     perform_update_installation,
 )
 from version import __version__
+from ui.maps_scraper_tab import GoogleMapsScraperTab
 
 
 # Ensure bundled modules (e.g., when frozen with PyInstaller) are discoverable
@@ -117,6 +118,26 @@ translations = {
         "Language changed to {language}.": "Language changed to {language}.",
         "1. Copy/Move Files by List": "1. Copy/Move Files by List",
         "View in Room": "View in Room",
+        "Google Maps Scraper": "Google Maps Scraper",
+        "Search Term": "Search Term",
+        "Location": "Location",
+        "Max Listings": "Max Listings",
+        "Headless": "Headless",
+        "Include Socials/Email": "Include Socials/Email",
+        "Start": "Start",
+        "Stop/Cancel": "Stop/Cancel",
+        "Export Excel": "Export Excel",
+        "Export CSV": "Export CSV",
+        "Progress": "Progress: {value}/{total}",
+        "Ready": "Ready",
+        "Starting scrape...": "Starting scrape...",
+        "Starting Google Maps scrape...": "Starting Google Maps scrape...",
+        "Scraper already running.": "Scraper already running.",
+        "Search term is required.": "Search term is required.",
+        "Stop requested.": "Stop requested.",
+        "No active scrape to stop.": "No active scrape to stop.",
+        "No data to export.": "No data to export.",
+        "Saved: {path}": "Saved: {path}",
         "Source Folder:": "Source Folder:",
         "Target Folder:": "Target Folder:",
         "Numbers File (List):": "Numbers File (List):",
@@ -511,6 +532,26 @@ translations = {
         "Language changed to {language}.": "Dil {language} olarak değiştirildi.",
         "1. Copy/Move Files by List": "1. Listeye Göre Dosya Kopyala/Taşı",
         "View in Room": "View in Room",
+        "Google Maps Scraper": "Google Maps Scraper",
+        "Search Term": "Arama Terimi",
+        "Location": "Konum",
+        "Max Listings": "Maksimum Liste",
+        "Headless": "Başlıksız",
+        "Include Socials/Email": "Sosyal/E-posta Dahil",
+        "Start": "Başlat",
+        "Stop/Cancel": "Durdur/İptal",
+        "Export Excel": "Excel Aktar",
+        "Export CSV": "CSV Aktar",
+        "Progress": "İlerleme: {value}/{total}",
+        "Ready": "Hazır",
+        "Starting scrape...": "Tarama başlatılıyor...",
+        "Starting Google Maps scrape...": "Google Maps taraması başlatılıyor...",
+        "Scraper already running.": "Tarayıcı zaten çalışıyor.",
+        "Search term is required.": "Arama terimi gerekli.",
+        "Stop requested.": "Durdurma istendi.",
+        "No active scrape to stop.": "Durdurulacak aktif tarama yok.",
+        "No data to export.": "Dışa aktarılacak veri yok.",
+        "Saved: {path}": "Kaydedildi: {path}",
         "Source Folder:": "Kaynak Klasör:",
         "Target Folder:": "Hedef Klasör:",
         "Numbers File (List):": "Numara Dosyası (Liste):",
@@ -920,6 +961,7 @@ PANEL_INFO = {
         "2. Convert HEIC/WEBP to JPG": "Convert entire folders of HEIC or WEBP photos into widely compatible JPG images.",
         "3. Batch Image Resizer": "Resize and compress images in bulk using width- or percentage-based rules.",
         "View in Room": "Preview rugs inside a selected room photo with scaling and transparency controls.",
+        "Google Maps Scraper": "Scrape Google Maps listings and export them to Excel/CSV.",
         "ID Column Formatter": "Format and standardize ID values in bulk.",
         "Quick Dimension Calculator": "Calculate area instantly for a single item size.",
         "Bulk Dimension Processor": "Normalize dimension strings and auto-calculate area.",
@@ -937,6 +979,7 @@ PANEL_INFO = {
         "2. Convert HEIC/WEBP to JPG": "HEIC veya WEBP fotoğraflarını tek seferde yaygın kullanılan JPG formatına dönüştürür.",
         "3. Batch Image Resizer": "Görselleri genişliğe ya da yüzdeye göre toplu biçimde yeniden boyutlandırıp sıkıştırır.",
         "View in Room": "Seçtiğiniz oda fotoğrafında halıyı ölçek ve saydamlıkla yerleştirerek önizleyin.",
+        "Google Maps Scraper": "Google Maps sonuçlarını toplayıp Excel/CSV formatında dışa aktarır.",
         "ID Column Formatter": "ID değerlerini toplu olarak biçimlendirin ve standartlaştırın.",
         "Quick Dimension Calculator": "Tek ürün ölçüsünün alanını anında hesaplayın.",
         "Bulk Dimension Processor": "Ölçü metinlerini normalize edip alanı otomatik hesaplayın.",
@@ -1277,6 +1320,7 @@ class ToolApp(tk.Tk):
             "File & Image Tools",
             "View in Room",
             "Utility",
+            "Google Maps Scraper",
             "Column Match & Report",
             "Code Generators",
             "Rinven Import Sheet Generator",
@@ -1297,6 +1341,7 @@ class ToolApp(tk.Tk):
         self.create_file_image_panels(self.section_frames["File & Image Tools"])
         self.create_view_in_room_tab(self.section_frames["View in Room"])
         self.create_data_calc_panels(self.section_frames["Utility"])
+        self.create_google_maps_scraper_tab(self.section_frames["Google Maps Scraper"])
         self.create_rug_no_control_tab(self.section_frames["Column Match & Report"])
         self.create_code_gen_panels(self.section_frames["Code Generators"])
         self.create_rinven_import_panel(self.section_frames["Rinven Import Sheet Generator"])
@@ -4138,6 +4183,9 @@ class ToolApp(tk.Tk):
             help_content = self.tr("ABOUT_CONTENT").format(version=__version__)
             self.help_text_area.insert(tk.END, help_content)
             self.help_text_area.config(state=tk.DISABLED)
+
+    def create_google_maps_scraper_tab(self, parent: ttk.Frame) -> None:
+        self.google_maps_scraper_tab = GoogleMapsScraperTab(parent, self)
 
     def show_donation_popup(self) -> None:
         window = tk.Toplevel(self)
