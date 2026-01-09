@@ -40,6 +40,7 @@ from updater import (
 )
 from version import __version__
 from ui.maps_scraper_tab import GoogleMapsScraperTab
+from modules.setup.dependency_setup import run_setup
 
 
 # Ensure bundled modules (e.g., when frozen with PyInstaller) are discoverable
@@ -120,6 +121,10 @@ translations = {
         "UpdateStatus.Error": "Update check failed: {error}",
         "UpdateStatus.Timeout": "Update check timed out. Possibly offline.",
         "Updated to v{version}": "Updated to v{version}",
+        "Setup / Install Dependencies": "Setup / Install Dependencies",
+        "SetupMissingPackagesPrompt": "Missing packages detected: {packages}\n\nInstall now?",
+        "SetupMissingModulesFrozen": "This build is missing required modules. Please install the latest version.",
+        "SetupRunning": "Dependency setup is already running.",
         "Sections": "Sections",
         "Automatic compact mode enabled for small screens.": "Automatic compact mode enabled for small screens.",
         "Language changed to {language}.": "Language changed to {language}.",
@@ -540,6 +545,10 @@ translations = {
         "UpdateStatus.Error": "Güncelleme kontrolü başarısız: {error}",
         "UpdateStatus.Timeout": "Güncelleme kontrolü zaman aşımına uğradı. İnternet bağlantınızı kontrol edin.",
         "Updated to v{version}": "v{version} sürümüne güncellendi",
+        "Setup / Install Dependencies": "Setup / Install Dependencies",
+        "SetupMissingPackagesPrompt": "Missing packages detected: {packages}\n\nInstall now?",
+        "SetupMissingModulesFrozen": "This build is missing required modules. Please install the latest version.",
+        "SetupRunning": "Dependency setup is already running.",
         "Sections": "Bölümler",
         "Automatic compact mode enabled for small screens.": "Küçük ekranlar için otomatik kompakt mod etkinleştirildi.",
         "Language changed to {language}.": "Dil {language} olarak değiştirildi.",
@@ -1402,6 +1411,8 @@ class ToolApp(tk.Tk):
         self._shutdown_event = threading.Event()
         self._update_dialog: Optional[tk.Toplevel] = None
         self._update_in_progress = False
+        self._dependency_setup_in_progress = False
+        self._dependency_setup_cancel = threading.Event()
 
         self.run_in_thread(
             check_for_updates,
@@ -1466,6 +1477,25 @@ class ToolApp(tk.Tk):
             relief="flat",
             borderwidth=0,
         )
+
+    def _apply_setup_log_theme(self) -> None:
+        if not hasattr(self, "setup_log_area"):
+            return
+        self.setup_log_area.configure(
+            background=self.theme_colors["card_bg"],
+            foreground=self.theme_colors["text_primary"],
+            insertbackground=self.theme_colors["text_primary"],
+            font=("Cascadia Code", self._scaled_size(9)),
+            highlightthickness=0,
+            borderwidth=0,
+        )
+        try:
+            self.setup_log_area.configure(
+                disabledforeground=self.theme_colors["text_primary"],
+                disabledbackground=self.theme_colors["card_bg"],
+            )
+        except tk.TclError:
+            pass
 
     def _create_sidebar_button(self, title: str, tab: ttk.Frame) -> None:
         button = ttk.Button(
@@ -2166,6 +2196,7 @@ class ToolApp(tk.Tk):
         self.option_add("*Foreground", text_primary)
 
         self._apply_log_theme()
+        self._apply_setup_log_theme()
         if hasattr(self, "help_text_area"):
             self.help_text_area.configure(font=("Helvetica", self._scaled_size(10)))
         self._update_nav_highlight()
@@ -5988,6 +6019,71 @@ class ToolApp(tk.Tk):
         donation_button.pack(side="right")
         self.register_widget(donation_button, "Support & Donate")
 
+        setup_card = ttk.Labelframe(
+            frame,
+            text=self.tr("Setup / Install Dependencies"),
+            style="Card.TLabelframe",
+        )
+        setup_card.pack(fill="x", padx=0, pady=(12, 8))
+        self.register_widget(setup_card, "Setup / Install Dependencies")
+
+        setup_body = ttk.Frame(setup_card, style="PanelBody.TFrame")
+        setup_body.pack(fill="both", expand=True)
+        setup_body.columnconfigure(0, weight=1)
+        setup_body.columnconfigure(1, weight=0)
+
+        self.setup_run_button = ttk.Button(
+            setup_body,
+            text=self.tr("Setup / Install Dependencies"),
+            command=self.start_dependency_setup,
+        )
+        self.setup_run_button.grid(row=0, column=0, sticky="w", padx=6, pady=6)
+        self.register_widget(self.setup_run_button, "Setup / Install Dependencies")
+
+        self.setup_cancel_button = ttk.Button(
+            setup_body,
+            text=self.tr("Stop/Cancel"),
+            command=self.cancel_dependency_setup,
+            state="disabled",
+        )
+        self.setup_cancel_button.grid(row=0, column=1, sticky="e", padx=6, pady=6)
+        self.register_widget(self.setup_cancel_button, "Stop/Cancel")
+
+        self.setup_progress_var = tk.DoubleVar(value=0)
+        self.setup_progress_bar = ttk.Progressbar(
+            setup_body,
+            mode="determinate",
+            maximum=100,
+            variable=self.setup_progress_var,
+        )
+        self.setup_progress_bar.grid(row=1, column=0, columnspan=2, sticky="we", padx=6, pady=(0, 6))
+
+        self.setup_log_area = ScrolledText(
+            setup_body,
+            wrap=tk.WORD,
+            height=6,
+            padx=10,
+            pady=10,
+            font=("Cascadia Code", self._scaled_size(9)),
+        )
+        self.setup_log_area.configure(
+            background=self.theme_colors["card_bg"],
+            foreground=self.theme_colors["text_primary"],
+            insertbackground=self.theme_colors["text_primary"],
+            highlightthickness=0,
+            borderwidth=0,
+        )
+        try:
+            self.setup_log_area.configure(
+                disabledforeground=self.theme_colors["text_primary"],
+                disabledbackground=self.theme_colors["card_bg"],
+            )
+        except tk.TclError:
+            pass
+        self.setup_log_area.configure(state=tk.DISABLED)
+        self.setup_log_area.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=6, pady=(0, 6))
+        setup_body.rowconfigure(2, weight=1)
+
         self.help_text_area = ScrolledText(
             frame,
             wrap=tk.WORD,
@@ -6012,6 +6108,86 @@ class ToolApp(tk.Tk):
             pass
         self.help_text_area.pack(fill="both", expand=True)
         self.update_help_tab_content()
+
+    def start_dependency_setup(self) -> None:
+        if self._dependency_setup_in_progress:
+            messagebox.showinfo(self.tr("Setup / Install Dependencies"), self.tr("SetupRunning"))
+            return
+
+        self._dependency_setup_in_progress = True
+        self._dependency_setup_cancel = threading.Event()
+        self._clear_setup_log()
+        self._append_setup_log(self.tr("Setup / Install Dependencies"))
+        self.setup_progress_var.set(0)
+        self.setup_run_button.configure(state="disabled")
+        self.setup_cancel_button.configure(state="normal")
+
+        self.run_in_thread(self._run_dependency_setup)
+
+    def cancel_dependency_setup(self) -> None:
+        if not self._dependency_setup_in_progress:
+            return
+        self._dependency_setup_cancel.set()
+        self._append_setup_log(self.tr("Stop requested."))
+
+    def _run_dependency_setup(self) -> None:
+        summary = run_setup(
+            self._setup_log_callback,
+            self._setup_progress_callback,
+            self._dependency_setup_cancel,
+            prompt_callback=self._prompt_install_packages,
+        )
+
+        def finish() -> None:
+            self._dependency_setup_in_progress = False
+            self.setup_run_button.configure(state="normal")
+            self.setup_cancel_button.configure(state="disabled")
+            self.setup_progress_var.set(100)
+            if summary.get("frozen_missing_required"):
+                messagebox.showwarning(
+                    self.tr("Setup / Install Dependencies"),
+                    self.tr("SetupMissingModulesFrozen"),
+                )
+
+        self.after(0, finish)
+
+    def _prompt_install_packages(self, packages: List[str]) -> bool:
+        package_text = ", ".join(packages)
+        prompt = self.tr("SetupMissingPackagesPrompt").format(packages=package_text)
+        return self._ask_yes_no(self.tr("Setup / Install Dependencies"), prompt)
+
+    def _ask_yes_no(self, title: str, message: str) -> bool:
+        response: Dict[str, bool] = {"value": False}
+        event = threading.Event()
+
+        def ask() -> None:
+            response["value"] = messagebox.askyesno(title, message)
+            event.set()
+
+        self.after(0, ask)
+        event.wait()
+        return response["value"]
+
+    def _setup_log_callback(self, message: str) -> None:
+        self.after(0, lambda: self._append_setup_log(message))
+
+    def _setup_progress_callback(self, value: int) -> None:
+        self.after(0, lambda: self.setup_progress_var.set(value))
+
+    def _clear_setup_log(self) -> None:
+        if not hasattr(self, "setup_log_area"):
+            return
+        self.setup_log_area.configure(state=tk.NORMAL)
+        self.setup_log_area.delete("1.0", tk.END)
+        self.setup_log_area.configure(state=tk.DISABLED)
+
+    def _append_setup_log(self, message: str) -> None:
+        if not hasattr(self, "setup_log_area"):
+            return
+        self.setup_log_area.configure(state=tk.NORMAL)
+        self.setup_log_area.insert(tk.END, f"{message}\n")
+        self.setup_log_area.see(tk.END)
+        self.setup_log_area.configure(state=tk.DISABLED)
 
     def save_folder_settings(self):
         src = self.source_folder.get()
