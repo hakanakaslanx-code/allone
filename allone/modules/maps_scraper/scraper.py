@@ -3,13 +3,12 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import os
+import io
 import re
-import shutil
-import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Callable, Dict, Iterable, Set, Tuple
+from typing import Callable, Dict, Set, Tuple
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
@@ -34,23 +33,6 @@ def sanitize_filename(value: str) -> str:
 def build_output_filename(query: str, extension: str) -> str:
     safe_query = sanitize_filename(query)
     return f"google_maps_data_{safe_query}.{extension}"
-
-
-def _log_command_output(process: subprocess.Popen, log: Callable[[str], None]) -> None:
-    for line in process.stdout or []:
-        log(line.rstrip())
-
-
-def _run_command(command: Iterable[str], log: Callable[[str], None]) -> int:
-    log(f"Running: {' '.join(command)}")
-    process = subprocess.Popen(
-        list(command),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    _log_command_output(process, log)
-    return process.wait()
 
 
 def _playwright_installed() -> bool:
@@ -89,68 +71,77 @@ def _is_frozen() -> bool:
     return bool(getattr(sys, "frozen", False))
 
 
-def _bundled_browsers_path() -> Path | None:
-    if not _is_frozen():
-        return None
-    bundle_root = getattr(sys, "_MEIPASS", None)
-    if not bundle_root:
-        return None
-    bundled = Path(bundle_root) / "playwright-browsers"
-    return bundled if bundled.exists() else None
+def _persistent_browsers_path() -> Path:
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        return Path(appdata) / "AllOneTool" / "pw-browsers"
+    return Path.home() / ".local" / "share" / "AllOneTool" / "pw-browsers"
 
 
-def _find_system_python_command() -> list[str] | None:
-    candidates = []
-    if sys.platform.startswith("win"):
-        if shutil.which("py"):
-            return ["py", "-3"]
-        candidates.extend(["python", "python3"])
-    else:
-        candidates.extend(["python3", "python"])
-    for candidate in candidates:
-        if shutil.which(candidate):
-            return [candidate]
-    return None
+class _LogWriter(io.TextIOBase):
+    def __init__(self, log: Callable[[str], None]) -> None:
+        self._log = log
+        self._buffer = ""
+
+    def write(self, text: str) -> int:
+        self._buffer += text
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            if line:
+                self._log(line)
+        return len(text)
+
+    def flush(self) -> None:
+        if self._buffer:
+            self._log(self._buffer)
+            self._buffer = ""
+
+
+def _install_chromium(log: Callable[[str], None]) -> None:
+    playwright_main = importlib.import_module("playwright.__main__").main
+    log("Installing Playwright Chromium...")
+    writer = _LogWriter(log)
+    stdout = sys.stdout
+    stderr = sys.stderr
+    try:
+        sys.stdout = writer
+        sys.stderr = writer
+        playwright_main(["install", "chromium"])
+    finally:
+        writer.flush()
+        sys.stdout = stdout
+        sys.stderr = stderr
 
 
 def ensure_playwright_ready(log: Callable[[str], None]) -> None:
+    browsers_path = _persistent_browsers_path()
+    os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(browsers_path))
+    log(f"Playwright browsers path: {os.environ['PLAYWRIGHT_BROWSERS_PATH']}")
+
     if _is_frozen():
         log("Running from a frozen app. Skipping runtime pip installs.")
         if not _playwright_installed():
             log("Playwright module missing in frozen build. Rebuild with --collect-all playwright.")
             return
 
-        bundled_browsers = _bundled_browsers_path()
-        if bundled_browsers:
-            os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(bundled_browsers))
-            log(f"Using bundled Playwright browsers at {bundled_browsers}.")
-
         if _chromium_installed():
             log("Playwright Chromium already installed.")
             return
 
-        system_python = _find_system_python_command()
-        if system_python:
-            log("Chromium not found. Installing with system Python...")
-            _run_command([*system_python, "-m", "playwright", "install", "chromium"], log)
-        else:
-            log(
-                "Chromium not found and no system Python detected. "
-                "Bundle browsers or install Chromium with a system Python."
-            )
+        log("Chromium not found. Downloading...")
+        _install_chromium(log)
         return
 
     if not _playwright_installed():
-        log("Playwright not found. Installing...")
-        _run_command([sys.executable, "-m", "pip", "install", "playwright"], log)
-    else:
-        log("Playwright already installed.")
+        log("Playwright not found. Install it before running the scraper.")
+        return
 
-    if not _chromium_installed():
-        log("Chromium not found. Installing Playwright Chromium...")
-        _run_command([sys.executable, "-m", "playwright", "install", "chromium"], log)
-    else:
+    if _chromium_installed():
         log("Playwright Chromium already installed.")
+        return
+
+    log("Chromium not found. Downloading...")
+    _install_chromium(log)
 
 
 def _safe_inner_text(locator, label: str, log: Callable[[str], None]) -> str:
