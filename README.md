@@ -18,3 +18,28 @@ Spaces in the query are converted to underscores.
 
 - On first run, Playwright and Chromium are installed automatically.
 - Toggle **Headless** off to watch the browser automation.
+
+## PyInstaller (Windows one-file)
+
+When packaging, Playwright must be bundled with the app. Runtime installs using the
+exe are not supported.
+
+**Option A (bundle Playwright + browsers):**
+
+1. Install Playwright + Chromium on the build machine:
+   `python -m pip install playwright`
+   `python -m playwright install chromium`
+2. Build with Playwright collected and the browser cache bundled as
+   `playwright-browsers`:
+
+   ```bash
+   pyinstaller --onefile --collect-all playwright --hidden-import=playwright.sync_api \
+     --add-data "%LOCALAPPDATA%\\ms-playwright;playwright-browsers" \
+     allone/main.py
+   ```
+
+**Option B (bundle Playwright only, install Chromium via system Python):**
+
+```bash
+pyinstaller --onefile --collect-all playwright --hidden-import=playwright.sync_api allone/main.py
+```

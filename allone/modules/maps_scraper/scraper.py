@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -56,20 +58,88 @@ def _playwright_installed() -> bool:
 
 
 def _chromium_installed() -> bool:
+    candidates = []
+    browsers_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+    if browsers_path:
+        candidates.append(Path(browsers_path))
+
     home = Path.home()
-    candidates = [
-        home / ".cache" / "ms-playwright",
-        home / "AppData" / "Local" / "ms-playwright",
-        home / "Library" / "Caches" / "ms-playwright",
+    candidates.extend(
+        [
+            home / ".cache" / "ms-playwright",
+            home / "AppData" / "Local" / "ms-playwright",
+            home / "Library" / "Caches" / "ms-playwright",
+        ]
+    )
+    chromium_globs = [
+        "chromium-*/chrome-linux/chrome",
+        "chromium-*/chrome.exe",
+        "chromium-*/chrome-win/chrome.exe",
+        "chromium-*/chrome-mac/Chromium.app/Contents/MacOS/Chromium",
     ]
     for base in candidates:
         if base.exists():
-            if any(base.glob("chromium-*/chrome-linux")) or any(base.glob("chromium-*/chrome.exe")):
-                return True
+            for pattern in chromium_globs:
+                if any(base.glob(pattern)):
+                    return True
     return False
 
 
+def _is_frozen() -> bool:
+    return bool(getattr(sys, "frozen", False))
+
+
+def _bundled_browsers_path() -> Path | None:
+    if not _is_frozen():
+        return None
+    bundle_root = getattr(sys, "_MEIPASS", None)
+    if not bundle_root:
+        return None
+    bundled = Path(bundle_root) / "playwright-browsers"
+    return bundled if bundled.exists() else None
+
+
+def _find_system_python_command() -> list[str] | None:
+    candidates = []
+    if sys.platform.startswith("win"):
+        if shutil.which("py"):
+            return ["py", "-3"]
+        candidates.extend(["python", "python3"])
+    else:
+        candidates.extend(["python3", "python"])
+    for candidate in candidates:
+        if shutil.which(candidate):
+            return [candidate]
+    return None
+
+
 def ensure_playwright_ready(log: Callable[[str], None]) -> None:
+    if _is_frozen():
+        log("Running from a frozen app. Skipping runtime pip installs.")
+        if not _playwright_installed():
+            log("Playwright module missing in frozen build. Rebuild with --collect-all playwright.")
+            return
+
+        bundled_browsers = _bundled_browsers_path()
+        if bundled_browsers:
+            os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(bundled_browsers))
+            log(f"Using bundled Playwright browsers at {bundled_browsers}.")
+
+        if _chromium_installed():
+            log("Playwright Chromium already installed.")
+            return
+
+        system_python = _find_system_python_command()
+        if system_python:
+            log("Chromium not found. Installing with system Python...")
+            _run_command([*system_python, "-m", "playwright", "install", "chromium"], log)
+        else:
+            log(
+                "Chromium not found and no system Python detected. "
+                "Bundle browsers or install Chromium with a system Python."
+            )
+        return
+
     if not _playwright_installed():
         log("Playwright not found. Installing...")
         _run_command([sys.executable, "-m", "pip", "install", "playwright"], log)
