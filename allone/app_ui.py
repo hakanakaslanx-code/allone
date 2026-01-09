@@ -53,7 +53,8 @@ for _path in _LOCAL_PATHS:
         sys.path.insert(0, _path_str)
 
 try:
-    import backend_logic as backend
+import backend_logic as backend
+from speech_queue import SpeechQueue
 except ModuleNotFoundError as exc:  # pragma: no cover - defensive guard for packaged builds
     _backend_path = Path(__file__).resolve().parent / "backend_logic.py"
     if _backend_path.exists():
@@ -96,6 +97,12 @@ translations = {
         "Update Available": "Update Available",
         "Update": "Update",
         "Auto-update on startup": "Auto-update on startup",
+        "Speak scanned barcode": "Speak scanned barcode",
+        "Speak digits individually": "Speak digits individually",
+        "Scan speech feedback:": "Scan speech feedback:",
+        "None": "None",
+        "TTS (OK/Error)": "TTS (OK/Error)",
+        "Beep": "Beep",
         "UpdatePromptMessage": "A new version ({version}) is ready to install. Unsaved work will be saved automatically.",
         "UpdatePromptCountdown": "Updating automatically in {seconds}s…",
         "Update now": "Update now",
@@ -510,6 +517,12 @@ translations = {
         "Update Available": "Güncelleme Mevcut",
         "Update": "Güncelleme",
         "Auto-update on startup": "Başlangıçta otomatik güncelle",
+        "Speak scanned barcode": "Taranan barkodu seslendir",
+        "Speak digits individually": "Rakamları tek tek seslendir",
+        "Scan speech feedback:": "Tarama ses geri bildirimi:",
+        "None": "Yok",
+        "TTS (OK/Error)": "TTS (Tamam/Hata)",
+        "Beep": "Bip",
         "UpdatePromptMessage": "Yeni bir sürüm ({version}) hazır. Güncelleme öncesinde kaydedilmemiş çalışmalar otomatik kaydedilecek.",
         "UpdatePromptCountdown": "{seconds} sn sonra otomatik güncellenecek…",
         "Update now": "Şimdi güncelle",
@@ -1142,9 +1155,20 @@ class ToolApp(tk.Tk):
             if key not in pricing_settings:
                 pricing_settings[key] = default_value
                 settings_updated = True
+        scanner_speech_settings = self.settings.setdefault("scanner_speech", {})
+        if "enabled" not in scanner_speech_settings:
+            scanner_speech_settings["enabled"] = False
+            settings_updated = True
+        if "speak_digits" not in scanner_speech_settings:
+            scanner_speech_settings["speak_digits"] = True
+            settings_updated = True
+        if "feedback_mode" not in scanner_speech_settings:
+            scanner_speech_settings["feedback_mode"] = "none"
+            settings_updated = True
         if settings_updated:
             save_settings(self.settings)
         self.rinven_import_settings = rinven_import_settings
+        self.scanner_speech_settings = scanner_speech_settings
         self.rinven_import_storage = RinvenImportStorage()
         self.rinven_import_rows = self.rinven_import_storage.load_rows()
         self.rinven_import_editor: Optional[ttk.Entry] = None
@@ -1152,6 +1176,18 @@ class ToolApp(tk.Tk):
         self._rinven_import_committing = False
         self.rinven_scanner_value = tk.StringVar()
         self.rinven_scanner_entry: Optional[ttk.Entry] = None
+        self.scanner_speak_enabled_var = tk.BooleanVar(
+            value=bool(self.scanner_speech_settings.get("enabled", False))
+        )
+        self.scanner_speak_digits_var = tk.BooleanVar(
+            value=bool(self.scanner_speech_settings.get("speak_digits", True))
+        )
+        self.scanner_speak_feedback_var = tk.StringVar(
+            value=self.scanner_speech_settings.get("feedback_mode", "none")
+        )
+        self.scanner_feedback_label_var = tk.StringVar()
+        self.scanner_speech_queue = SpeechQueue()
+        self._scanner_idle_after_id: Optional[str] = None
         self.generated_bulk_tags: List[Tuple[Dict[str, str], str]] = []
         self.language = self.settings.get("language", "en")
         if self.language not in translations:
@@ -4250,6 +4286,10 @@ class ToolApp(tk.Tk):
                 self._persist_view_preferences()
             except Exception:
                 pass
+            try:
+                self.scanner_speech_queue.stop()
+            except Exception:
+                pass
         finally:
             self.destroy()
 
@@ -4305,6 +4345,9 @@ class ToolApp(tk.Tk):
         self.scanner_input_entry.grid(row=0, column=1, columnspan=2, sticky="we", padx=6, pady=6)
         self.scanner_input_entry.bind("<Return>", self._on_scanner_input_submit)
         self.scanner_input_entry.bind("<KP_Enter>", self._on_scanner_input_submit)
+        self.scanner_input_entry.bind("<KeyRelease>", self._on_scanner_input_key_release)
+        self.scanner_input_entry.bind("<<Paste>>", self._on_scanner_input_key_release)
+        self.scanner_input_entry.bind("<<Cut>>", self._on_scanner_input_key_release)
 
         joined_label = ttk.Label(scanner_frame, text=self.tr("Joined Text:"))
         joined_label.grid(row=1, column=0, sticky="w", padx=6, pady=(6, 0))
@@ -4329,6 +4372,51 @@ class ToolApp(tk.Tk):
         )
         export_button.pack(side="left")
         self.register_widget(export_button, "Export to TXT")
+
+        speech_frame = ttk.Frame(scanner_frame, style="PanelBody.TFrame")
+        speech_frame.grid(row=4, column=0, columnspan=3, sticky="w", padx=6, pady=(0, 6))
+
+        speak_check = ttk.Checkbutton(
+            speech_frame,
+            text=self.tr("Speak scanned barcode"),
+            variable=self.scanner_speak_enabled_var,
+            command=self._update_scanner_speech_settings,
+        )
+        speak_check.pack(side="left")
+        self.register_widget(speak_check, "Speak scanned barcode")
+
+        speak_digits_check = ttk.Checkbutton(
+            speech_frame,
+            text=self.tr("Speak digits individually"),
+            variable=self.scanner_speak_digits_var,
+            command=self._update_scanner_speech_settings,
+        )
+        speak_digits_check.pack(side="left", padx=(12, 0))
+        self.register_widget(speak_digits_check, "Speak digits individually")
+
+        feedback_label = ttk.Label(speech_frame, text=self.tr("Scan speech feedback:"))
+        feedback_label.pack(side="left", padx=(12, 6))
+        self.register_widget(feedback_label, "Scan speech feedback:")
+
+        feedback_options = [
+            (self.tr("None"), "none"),
+            (self.tr("TTS (OK/Error)"), "tts"),
+            (self.tr("Beep"), "beep"),
+        ]
+        self._scanner_feedback_labels = {key: label for label, key in feedback_options}
+        self._scanner_feedback_values = {label: key for label, key in feedback_options}
+        self.scanner_feedback_label_var.set(
+            self._scanner_feedback_labels.get(self.scanner_speak_feedback_var.get(), self.tr("None"))
+        )
+        feedback_combo = ttk.Combobox(
+            speech_frame,
+            textvariable=self.scanner_feedback_label_var,
+            values=[label for label, _ in feedback_options],
+            state="readonly",
+            width=16,
+        )
+        feedback_combo.pack(side="left")
+        feedback_combo.bind("<<ComboboxSelected>>", self._on_scanner_feedback_change)
 
         dimension_heading = ttk.Label(
             parent,
@@ -6014,6 +6102,7 @@ class ToolApp(tk.Tk):
             variable.set(file_path)
 
     def _on_scanner_input_submit(self, event: Optional[tk.Event] = None) -> str:
+        self._cancel_scanner_idle_submit()
         text = self.scanner_input_var.get().strip()
         existing_text = self.scanner_text_area.get("1.0", tk.END).strip()
 
@@ -6023,6 +6112,7 @@ class ToolApp(tk.Tk):
             else:
                 self.scanner_text_area.insert(tk.END, text)
             self.scanner_text_area.see(tk.END)
+            self._enqueue_scanner_speech(text, success=True)
 
         self.scanner_input_var.set("")
         try:
@@ -6031,6 +6121,54 @@ class ToolApp(tk.Tk):
             pass
 
         return "break"
+
+    def _on_scanner_input_key_release(self, event: Optional[tk.Event] = None) -> None:
+        if event is not None and getattr(event, "keysym", "") in ("Return", "KP_Enter"):
+            return
+        self._schedule_scanner_idle_submit()
+
+    def _schedule_scanner_idle_submit(self) -> None:
+        self._cancel_scanner_idle_submit()
+        try:
+            self._scanner_idle_after_id = self.scanner_input_entry.after(250, self._on_scanner_idle_timeout)
+        except tk.TclError:
+            self._scanner_idle_after_id = None
+
+    def _cancel_scanner_idle_submit(self) -> None:
+        if not self._scanner_idle_after_id:
+            return
+        try:
+            self.scanner_input_entry.after_cancel(self._scanner_idle_after_id)
+        except tk.TclError:
+            pass
+        self._scanner_idle_after_id = None
+
+    def _on_scanner_idle_timeout(self) -> None:
+        self._scanner_idle_after_id = None
+        if self.scanner_input_var.get().strip():
+            self._on_scanner_input_submit()
+
+    def _on_scanner_feedback_change(self, _event: Optional[tk.Event] = None) -> None:
+        selected = self.scanner_feedback_label_var.get()
+        value = self._scanner_feedback_values.get(selected, "none")
+        self.scanner_speak_feedback_var.set(value)
+        self._update_scanner_speech_settings()
+
+    def _update_scanner_speech_settings(self) -> None:
+        self.scanner_speech_settings["enabled"] = bool(self.scanner_speak_enabled_var.get())
+        self.scanner_speech_settings["speak_digits"] = bool(self.scanner_speak_digits_var.get())
+        self.scanner_speech_settings["feedback_mode"] = self.scanner_speak_feedback_var.get()
+        save_settings(self.settings)
+
+    def _enqueue_scanner_speech(self, text: str, *, success: bool) -> None:
+        if not self.scanner_speak_enabled_var.get():
+            return
+        self.scanner_speech_queue.speak_barcode(
+            text,
+            speak_digits=bool(self.scanner_speak_digits_var.get()),
+            feedback_mode=self.scanner_speak_feedback_var.get(),
+            success=success,
+        )
 
     def _copy_scanner_text(self) -> None:
         text = self.scanner_text_area.get("1.0", tk.END).strip()
