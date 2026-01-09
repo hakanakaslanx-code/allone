@@ -19,27 +19,25 @@ Spaces in the query are converted to underscores.
 - On first run, Playwright and Chromium are installed automatically.
 - Toggle **Headless** off to watch the browser automation.
 
-## PyInstaller (Windows one-file)
+## Windows packaging (PyInstaller onedir + Inno Setup)
 
-When packaging, Playwright must be bundled with the app. Runtime installs using the
-exe are not supported.
+Playwright is bundled inside the build so end users do **not** need Python/pip.
+Chromium is downloaded on first run to `%APPDATA%\\AllOneTool\\pw-browsers`.
 
-**Option A (bundle Playwright + browsers):**
-
-1. Install Playwright + Chromium on the build machine:
-   `python -m pip install playwright`
-   `python -m playwright install chromium`
-2. Build with Playwright collected and the browser cache bundled as
-   `playwright-browsers`:
-
-   ```bash
-   pyinstaller --onefile --collect-all playwright --hidden-import=playwright.sync_api \
-     --add-data "%LOCALAPPDATA%\\ms-playwright;playwright-browsers" \
-     allone/main.py
-   ```
-
-**Option B (bundle Playwright only, install Chromium via system Python):**
+### Build steps (onedir)
 
 ```bash
-pyinstaller --onefile --collect-all playwright --hidden-import=playwright.sync_api allone/main.py
+python -m pip install -r allone/requirements.txt
+python -m pip install pyinstaller
+pyinstaller --noconfirm allone_onedir.spec
+```
+
+The onedir output is `dist/AllOne Tools/`.
+
+### Installer (Inno Setup)
+
+Use the provided `installer/AllOne.iss` (expects the onedir output above):
+
+```bash
+"C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe" installer\\AllOne.iss
 ```
