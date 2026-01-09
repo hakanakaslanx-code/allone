@@ -8,11 +8,9 @@ import threading
 import os
 import math
 import time
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
-import importlib.util
 
 import pandas as pd
 import requests
@@ -22,8 +20,8 @@ import numpy as np
 from PIL import Image, ImageTk, ImageDraw, ImageFilter, ImageOps, ImageChops
 from openpyxl import Workbook
 
-from settings_manager import load_settings, save_settings
-from rinven_import_manager import (
+from allone.settings_manager import load_settings, save_settings
+from allone.rinven_import_manager import (
     DEFAULT_PRICING,
     RINVEN_IMPORT_COLUMNS,
     RinvenImportStorage,
@@ -31,48 +29,18 @@ from rinven_import_manager import (
     make_empty_row,
     normalise_size,
 )
-from updater import (
+from allone.updater import (
     UpdateInfo,
     check_for_updates,
     cleanup_update_artifacts,
     consume_update_success_message,
     perform_update_installation,
 )
-from version import __version__
-from ui.maps_scraper_tab import GoogleMapsScraperTab
-from modules.setup.dependency_setup import run_setup
-
-
-# Ensure bundled modules (e.g., when frozen with PyInstaller) are discoverable
-_LOCAL_PATHS = [
-    Path(__file__).resolve().parent,
-    Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)),
-]
-for _path in _LOCAL_PATHS:
-    _path_str = str(_path)
-    if _path_str not in sys.path:
-        sys.path.insert(0, _path_str)
-
-try:
-import backend_logic as backend
-from speech_queue import SpeechQueue
-except ModuleNotFoundError as exc:  # pragma: no cover - defensive guard for packaged builds
-    _backend_path = Path(__file__).resolve().parent / "backend_logic.py"
-    if _backend_path.exists():
-        _spec = importlib.util.spec_from_file_location("backend_logic", _backend_path)
-        if _spec and _spec.loader:
-            backend = importlib.util.module_from_spec(_spec)
-            _spec.loader.exec_module(backend)
-            sys.modules.setdefault("backend_logic", backend)
-        else:
-            raise ModuleNotFoundError(
-                "The 'backend_logic' module could not be loaded from the local file."
-            ) from exc
-    else:
-        raise ModuleNotFoundError(
-            "The 'backend_logic' module could not be located. "
-            "Please reinstall or re-download the application files."
-        ) from exc
+from allone.version import __version__
+from allone.ui.maps_scraper_tab import GoogleMapsScraperTab
+from allone.modules.setup.dependency_setup import run_setup
+from allone import backend_logic as backend
+from allone.speech_queue import SpeechQueue
 
 translations = {
     "en": {
