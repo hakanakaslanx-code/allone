@@ -115,6 +115,7 @@ def _install_chromium(log: Callable[[str], None]) -> None:
 
 def ensure_playwright_ready(log: Callable[[str], None]) -> None:
     browsers_path = _persistent_browsers_path()
+    browsers_path.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(browsers_path))
     log(f"Playwright browsers path: {os.environ['PLAYWRIGHT_BROWSERS_PATH']}")
 
