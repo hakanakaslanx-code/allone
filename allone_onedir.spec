@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 
 from PyInstaller.utils.hooks import collect_all
 
-project_root = Path(__file__).resolve().parent
+project_root = Path(os.getcwd()).resolve()
 
 datas, binaries, hiddenimports = collect_all("playwright")
 hiddenimports += ["playwright.sync_api"]
