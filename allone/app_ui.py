@@ -1574,7 +1574,7 @@ class ToolApp(ttk.Window):
             else:
                 widget.grid_remove()
 
-    def _mark_advanced_card(self, widget: ttk.Widget) -> None:
+    def _mark_advanced_card(self, widget: tk.Widget) -> None:
         info = widget.grid_info().copy()
         info.pop("in", None)
         self.advanced_cards.append((widget, info))
