@@ -12,5 +12,6 @@ python-barcode
 numpy
 playwright
 zeroconf
+ttkbootstrap
 pywin32; platform_system == "Windows"
 pycups; platform_system != "Windows"

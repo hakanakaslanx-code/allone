@@ -24,12 +24,16 @@ Spaces in the query are converted to underscores.
 Playwright is bundled inside the build so end users do **not** need Python/pip.
 Chromium is downloaded on first run to `%APPDATA%\\AllOneTool\\pw-browsers`.
 
-### Build steps (onedir)
+### Build steps (Windows)
 
+The easiest way to build the executable is using the provided batch script:
+
+1.  Make sure you have requirements installed: `pip install -r allone/requirements.txt`
+2.  Run `build.bat`
+
+Alternatively, you can run PyInstaller manually:
 ```bash
-python -m pip install -r allone/requirements.txt
-python -m pip install pyinstaller
-pyinstaller --noconfirm allone_onedir.spec
+python -m PyInstaller --noconfirm allone_onedir.spec
 ```
 
 The onedir output is `dist/AllOne Tools/`.

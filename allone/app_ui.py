@@ -2,7 +2,10 @@
 
 import tkinter as tk
 import tkinter.font as tkfont
-from tkinter import ttk, filedialog, messagebox, simpledialog
+# from tkinter import ttk
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
+from tkinter import filedialog, messagebox, simpledialog
 from tkinter.scrolledtext import ScrolledText
 import threading
 import os
@@ -1112,11 +1115,11 @@ class RugWarpResult:
     polygon: List[Tuple[float, float]]
 
 
-class ToolApp(tk.Tk):
+class ToolApp(ttk.Window):
     """Main application window that builds the entire tkinter interface."""
 
     def __init__(self):
-        super().__init__()
+        super().__init__(themename="superhero")
 
         # --- Fix for Window Icon in Exe ---
         icon_path = get_resource_path("icon.ico")
@@ -1446,6 +1449,9 @@ class ToolApp(tk.Tk):
     def _apply_log_theme(self) -> None:
         if not hasattr(self, "log_area"):
             return
+        # ttkbootstrap handles dark modes better, simplifying manual colors
+        # We can still force specific colors but it's often better to respect theme
+        # For now, keeping it manual to ensure high contrast in the log area as requested
         self.log_area.config(
             state=tk.DISABLED,
             background="#0b1120",
@@ -2213,7 +2219,7 @@ class ToolApp(tk.Tk):
         self.view_toolbar_left = left
         self.view_toolbar_right = right
 
-        self.sidebar_toggle = ttk.Button(left, command=self._toggle_sidebar, style="TButton")
+        self.sidebar_toggle = ttk.Button(left, command=self._toggle_sidebar, bootstyle="primary")
         self.sidebar_toggle.pack(side="left")
 
         self.compact_var = tk.BooleanVar(value=self.compact_mode)
