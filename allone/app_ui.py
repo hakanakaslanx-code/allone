@@ -40,6 +40,7 @@ from allone.version import __version__
 from allone.ui.maps_scraper_tab import GoogleMapsScraperTab
 from allone.modules.setup.dependency_setup import run_setup
 from allone import backend_logic as backend
+from allone.backend_logic import get_resource_path
 from allone.speech_queue import SpeechQueue
 
 translations = {
@@ -1116,6 +1117,15 @@ class ToolApp(tk.Tk):
 
     def __init__(self):
         super().__init__()
+
+        # --- Fix for Window Icon in Exe ---
+        icon_path = get_resource_path("icon.ico")
+        if icon_path and os.path.exists(icon_path):
+            try:
+                self.iconbitmap(icon_path)
+            except Exception as e:
+                print(f"Warning: Could not set icon: {e}")
+        # ----------------------------------
 
         cleanup_update_artifacts()
         self._pending_update_metadata = consume_update_success_message() or {}

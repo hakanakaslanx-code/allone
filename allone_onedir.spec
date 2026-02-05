@@ -10,6 +10,9 @@ project_root = Path(__file__).resolve().parent
 datas, binaries, hiddenimports = collect_all("playwright")
 hiddenimports += ["playwright.sync_api"]
 
+# Add icon to datas
+datas += [('icon.ico', '.')]
+
 analysis = Analysis(
     [str(project_root / "allone" / "main.py")],
     pathex=[str(project_root)],
@@ -33,7 +36,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,
+    console=True, # Enabled for debugging
     icon=str(project_root / "icon.ico"),
 )
 
