@@ -1882,7 +1882,7 @@ class ToolApp(ttk.Window):
 
         self.configure(bg=base_bg)
 
-        style = ttk.Style(self)
+        style = self.style
         preferred_theme = "clam"
         try:
             style.theme_use(preferred_theme)
