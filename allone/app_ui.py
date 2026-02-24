@@ -1,4 +1,5 @@
 """Main tkinter user interface for the desktop utility application."""
+from __future__ import annotations
 
 import tkinter as tk
 import tkinter.font as tkfont
@@ -1574,7 +1575,7 @@ class ToolApp(ttk.Window):
             else:
                 widget.grid_remove()
 
-    def _mark_advanced_card(self, widget: tk.Widget) -> None:
+    def _mark_advanced_card(self, widget: tk.Misc) -> None:
         info = widget.grid_info().copy()
         info.pop("in", None)
         self.advanced_cards.append((widget, info))
@@ -2701,7 +2702,7 @@ class ToolApp(ttk.Window):
         self.view_in_room_large_rug_display_center: Optional[Tuple[float, float]] = None
         self._update_view_in_room_mask_buttons()
 
-    def _get_canvas_background(self, widget: tk.Widget) -> str:
+    def _get_canvas_background(self, widget: tk.Misc) -> str:
         try:
             return widget.cget("background")
         except tk.TclError:
