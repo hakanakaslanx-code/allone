@@ -1883,16 +1883,6 @@ class ToolApp(ttk.Window):
         self.configure(bg=base_bg)
 
         style = self.style
-        preferred_theme = "clam"
-        try:
-            style.theme_use(preferred_theme)
-        except tk.TclError:
-            preferred_theme = style.theme_use()
-
-        custom_theme = "allone-dark"
-        if custom_theme not in style.theme_names():
-            style.theme_create(custom_theme, parent=preferred_theme, settings={})
-        style.theme_use(custom_theme)
 
         style.configure("TFrame", background=base_bg)
         style.configure("Header.TFrame", background=base_bg)
