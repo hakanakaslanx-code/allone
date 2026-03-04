@@ -439,17 +439,35 @@ if /I "!PKG_EXT!"==".zip" (
 )
 copy /Y "!NEW_PAYLOAD!" "%TARGET_EXE%.new" >>"%LOG_FILE%" 2>&1
 if errorlevel 1 goto fail
+
+set "RETRY_COUNT=0"
+:retry_rename
 if exist "%TARGET_EXE%" (
     attrib -R "%TARGET_EXE%" >>"%LOG_FILE%" 2>&1
     del /F /Q "%TARGET_EXE%" >>"%LOG_FILE%" 2>&1
-    if exist "%TARGET_EXE%" (
+    if errorlevel 1 (
+        set /a RETRY_COUNT+=1
+        if !RETRY_COUNT! LEQ 5 (
+            >>"%LOG_FILE%" echo [%%date%% %%time%%] Retrying deletion (!RETRY_COUNT!)...
+            timeout /T 2 /NOBREAK >NUL
+            goto retry_rename
+        )
         >>"%LOG_FILE%" echo [%%date%% %%time%%] Failed to remove existing executable.
         goto fail
     )
 )
+
 attrib -R "%TARGET_EXE%.new" >>"%LOG_FILE%" 2>&1
 move /Y "%TARGET_EXE%.new" "%TARGET_EXE%" >>"%LOG_FILE%" 2>&1
-if errorlevel 1 goto fail
+if errorlevel 1 (
+    set /a RETRY_COUNT+=1
+    if !RETRY_COUNT! LEQ 10 (
+        >>"%LOG_FILE%" echo [%%date%% %%time%%] Retrying move (!RETRY_COUNT!)...
+        timeout /T 2 /NOBREAK >NUL
+        goto retry_rename
+    )
+    goto fail
+)
 if exist "%EXTRACT_DIR%" (
     robocopy "%EXTRACT_DIR%" "%~dp1" /E /NFL /NDL /NJH /NJS /NP >>"%LOG_FILE%" 2>&1
     set "ROBOCODE=!errorlevel!"
@@ -470,6 +488,7 @@ goto cleanup
 set "EXIT_CODE=1"
 :cleanup
 if exist "%PACKAGE%" del "%PACKAGE%" >>"%LOG_FILE%" 2>&1
+if exist "%TARGET_EXE%.new" del "%TARGET_EXE%.new" >>"%LOG_FILE%" 2>&1
 if exist "%WORKDIR%" rd /S /Q "%WORKDIR%" >>"%LOG_FILE%" 2>&1
 if exist "%LOCK_FILE%" del "%LOCK_FILE%" >>"%LOG_FILE%" 2>&1
 >>"%LOG_FILE%" echo [%%date%% %%time%%] Update script completed with exit code !EXIT_CODE!.
@@ -931,10 +950,17 @@ def consume_update_success_message() -> Optional[Dict[str, str]]:
 
 def cleanup_update_artifacts() -> None:
     paths = _paths()
-    for key in ("lock", "updater", "release_updater"):
+    keys_to_clean = ["lock", "updater", "release_updater", "log"]
+    for key in keys_to_clean:
         path = paths[key]
         if path.exists():
-            try:
+            with contextlib.suppress(OSError):
                 path.unlink()
-            except OSError:
-                pass
+
+    # Search for any stray .new files in the execution directory
+    base_dir = _install_root()
+    if base_dir.exists():
+        for item in base_dir.glob("*.new"):
+            if item.is_file():
+                with contextlib.suppress(OSError):
+                    item.unlink()
