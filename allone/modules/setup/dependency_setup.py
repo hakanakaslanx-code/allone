@@ -84,21 +84,31 @@ def run_setup(
             import playwright.__main__
             from allone.modules.maps_scraper.scraper import _LogWriter
 
+            log("Attempting direct playwright.main call with sys.argv override...")
             writer = _LogWriter(log)
-            # Temporarily redirect stdout/stderr to capture Playwright's output
+            # Temporarily redirect stdout/stderr and override sys.argv
             old_stdout = sys.stdout
             old_stderr = sys.stderr
+            old_argv = sys.argv
+            
             sys.stdout = writer
             sys.stderr = writer
+            # playwright.__main__.main() expects args from sys.argv[1:]
+            sys.argv = ["playwright", "install", "chromium"]
+            
             try:
-                playwright.__main__.main(["install", "chromium"])
-                return True
+                playwright.__main__.main()
+                # Restore original to check
+                sys.argv = old_argv
+                if playwright_chromium_installed():
+                    return True
             finally:
                 writer.flush()
                 sys.stdout = old_stdout
                 sys.stderr = old_stderr
+                sys.argv = old_argv
         except Exception as exc:
-            log(f"Direct Playwright installation failed: {exc}")
+            log(f"Direct Playwright installation attempt failed: {exc}")
             # Fallback to subprocess if direct call fails (e.g. module not found)
             try:
                 command = [sys.executable, "-m", "playwright", "install", "chromium"]
