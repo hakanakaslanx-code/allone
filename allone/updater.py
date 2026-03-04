@@ -433,9 +433,11 @@ mkdir "%EXTRACT_DIR%" >NUL 2>&1
 set "NEW_PAYLOAD=%PACKAGE%"
 for %%I in ("%PACKAGE%") do set "PKG_EXT=%%~xI"
 if /I "!PKG_EXT!"==".zip" (
-    powershell -NoProfile -NoLogo -Command "Expand-Archive -LiteralPath '%PACKAGE%' -DestinationPath '%EXTRACT_DIR%' -Force" >>"%LOG_FILE%" 2>&1
+    set "PS_PKG=%PACKAGE%"
+    set "PS_OUT=%EXTRACT_DIR%"
+    powershell -NoProfile -NoLogo -Command "Expand-Archive -LiteralPath $env:PS_PKG -DestinationPath $env:PS_OUT -Force" >>"%LOG_FILE%" 2>&1
     if errorlevel 1 goto fail
-    if exist "%EXTRACT_DIR%\%TARGET_NAME%" set "NEW_PAYLOAD=%EXTRACT_DIR%\%TARGET_NAME%"
+    if exist "%EXTRACT_DIR%\\%TARGET_NAME%" set "NEW_PAYLOAD=%EXTRACT_DIR%\\%TARGET_NAME%"
 )
 copy /Y "!NEW_PAYLOAD!" "%TARGET_EXE%.new" >>"%LOG_FILE%" 2>&1
 if errorlevel 1 goto fail
@@ -469,7 +471,7 @@ if errorlevel 1 (
     goto fail
 )
 if exist "%EXTRACT_DIR%" (
-    robocopy "%EXTRACT_DIR%" "%~dp1" /E /NFL /NDL /NJH /NJS /NP >>"%LOG_FILE%" 2>&1
+    robocopy "%EXTRACT_DIR%" "%~dp1" /E /R:5 /W:2 /NFL /NDL /NJH /NJS /NP >>"%LOG_FILE%" 2>&1
     set "ROBOCODE=!errorlevel!"
     if !ROBOCODE! GEQ 8 goto fail
 )
@@ -535,7 +537,9 @@ set "RELEASE_DIR=%RELEASES_DIR%\\%VERSION_STR%"
 set "NEW_PAYLOAD=%PACKAGE%"
 for %%I in ("%PACKAGE%") do set "PKG_EXT=%%~xI"
 if /I "!PKG_EXT!"==".zip" (
-    powershell -NoProfile -NoLogo -Command "Expand-Archive -LiteralPath '%PACKAGE%' -DestinationPath '%EXTRACT_DIR%' -Force" >>"%LOG_FILE%" 2>&1
+    set "PS_PKG=%PACKAGE%"
+    set "PS_OUT=%EXTRACT_DIR%"
+    powershell -NoProfile -NoLogo -Command "Expand-Archive -LiteralPath $env:PS_PKG -DestinationPath $env:PS_OUT -Force" >>"%LOG_FILE%" 2>&1
     if errorlevel 1 goto fail
     if exist "!EXTRACT_DIR!\\%TARGET_NAME%" set "NEW_PAYLOAD=!EXTRACT_DIR!\\%TARGET_NAME%"
 )
@@ -544,7 +548,7 @@ if exist "!RELEASE_DIR!" rd /S /Q "!RELEASE_DIR!"
 mkdir "!RELEASE_DIR!" >NUL 2>&1
 
 if /I "!PKG_EXT!"==".zip" (
-    robocopy "!EXTRACT_DIR!" "!RELEASE_DIR!" /E /NFL /NDL /NJH /NJS /NP >>"%LOG_FILE%" 2>&1
+    robocopy "!EXTRACT_DIR!" "!RELEASE_DIR!" /E /R:5 /W:2 /NFL /NDL /NJH /NJS /NP >>"%LOG_FILE%" 2>&1
     set "ROBOCODE=!errorlevel!"
     if !ROBOCODE! GEQ 8 goto fail
 ) else (

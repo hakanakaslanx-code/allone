@@ -2,8 +2,6 @@
 import subprocess
 import sys
 
-from allone.app_ui import ToolApp
-
 def install_and_check():
     """Checks for required libraries and installs them if they are missing."""
     required_packages = [
@@ -31,6 +29,9 @@ if __name__ == "__main__":
     # 'sys.frozen' özelliği sadece PyInstaller .exe'lerinde bulunur.
     if not getattr(sys, 'frozen', False):
         install_and_check()
+    
+    # Import deferred to avoid crashes if dependencies are missing during initial load
+    from allone.app_ui import ToolApp
     
     # Uygulama arayüzünü başlat.
     app = ToolApp()
