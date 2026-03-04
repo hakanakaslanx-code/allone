@@ -75,31 +75,68 @@ def run_setup(
         return process.wait() == 0
 
     def run_playwright_install(browsers_path: Path) -> bool:
+        log(f"Installing Playwright Chromium to: {browsers_path}")
         env = os.environ.copy()
         env["PLAYWRIGHT_BROWSERS_PATH"] = str(browsers_path)
-        command = [sys.executable, "-m", "playwright", "install", "chromium"]
-        log(f"Running: {' '.join(command)}")
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            env=env,
-        )
-        assert process.stdout is not None
-        for line in process.stdout:
-            if should_cancel():
-                process.terminate()
+        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(browsers_path)
+
+        try:
+            import playwright.__main__
+            from allone.modules.maps_scraper.scraper import _LogWriter
+
+            writer = _LogWriter(log)
+            # Temporarily redirect stdout/stderr to capture Playwright's output
+            old_stdout = sys.stdout
+            old_stderr = sys.stderr
+            sys.stdout = writer
+            sys.stderr = writer
+            try:
+                playwright.__main__.main(["install", "chromium"])
+                return True
+            finally:
+                writer.flush()
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
+        except Exception as exc:
+            log(f"Direct Playwright installation failed: {exc}")
+            # Fallback to subprocess if direct call fails (e.g. module not found)
+            try:
+                command = [sys.executable, "-m", "playwright", "install", "chromium"]
+                log(f"Attempting fallback: {' '.join(command)}")
+                process = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    env=env,
+                )
+                assert process.stdout is not None
+                for line in process.stdout:
+                    if should_cancel():
+                        process.terminate()
+                        return False
+                    log(line.rstrip())
+                return process.wait() == 0
+            except Exception as e:
+                log(f"Fallback installation failed: {e}")
                 return False
-            log(line.rstrip())
-        return process.wait() == 0
 
     def playwright_chromium_installed() -> bool:
         from playwright.sync_api import sync_playwright
 
-        with sync_playwright() as playwright:
-            executable = Path(playwright.chromium.executable_path)
-        return executable.exists()
+        # Force use of custom path for detection
+        env_browsers = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+        if env_browsers:
+            log(f"Detection using path: {env_browsers}")
+
+        try:
+            with sync_playwright() as playwright:
+                executable = Path(playwright.chromium.executable_path)
+                log(f"Playwright reports executable at: {executable}")
+            return executable.exists()
+        except Exception as exc:
+            log(f"Detection failed: {exc}")
+            return False
 
     set_progress(0)
     log("Starting dependency setup...")
