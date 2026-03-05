@@ -426,7 +426,6 @@ if "!TARGET_PID!"=="" goto continue_process
 tasklist /FI "PID eq !TARGET_PID!" /NH 2>NUL | find "!TARGET_PID!" >NUL
 if !ERRORLEVEL! EQU 0 (
     set /a WAIT_COUNT+=1
-    :: Every 5 seconds, log a heartbeat
     set /a HEARTBEAT=WAIT_COUNT %% 5
     if !HEARTBEAT! EQU 0 (
         >>"%LOG_FILE%" echo [%DATE% %TIME%] Still waiting for PID !TARGET_PID! to exit... (!WAIT_COUNT!s)
@@ -435,7 +434,9 @@ if !ERRORLEVEL! EQU 0 (
         timeout /T 1 /NOBREAK >NUL
         goto waitloop
     )
-    >>"%LOG_FILE%" echo [%DATE% %TIME%] Timeout waiting for PID !TARGET_PID!. Attempting to proceed anyway.
+    >>"%LOG_FILE%" echo [%DATE% %TIME%] Timeout reached. Attempting forced termination of PID !TARGET_PID!.
+    taskkill /F /PID !TARGET_PID! >>"%LOG_FILE%" 2>&1
+    timeout /T 2 /NOBREAK >NUL
 )
 
 :continue_process
