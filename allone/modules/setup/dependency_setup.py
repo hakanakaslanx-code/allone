@@ -169,6 +169,10 @@ def run_setup(
         "PIL": "Pillow (ImageTk)",
         "openpyxl": "openpyxl",
         "pandas": "pandas",
+        "pdf2docx": "pdf2docx",
+        "docx2pdf": "docx2pdf",
+        "fitz": "PyMuPDF (fitz)",
+        "PyPDF2": "PyPDF2",
     }
 
     missing_modules: List[str] = []

@@ -456,6 +456,25 @@ translations = {
         "Color Name": "Color Name",
         "Live Color Picker": "Live Color Picker",
         "Move mouse over the image to pick a color.": "Move mouse over the image to pick a color.",
+        "PDF Tools": "PDF Tools",
+        "Convert from PDF": "Convert from PDF",
+        "Convert to PDF": "Convert to PDF",
+        "Merge & Split": "Merge & Split",
+        "PDF to Word": "PDF to Word",
+        "PDF to Excel": "PDF to Excel",
+        "PDF to PNG": "PDF to PNG",
+        "PDF to JPEG": "PDF to JPEG",
+        "Word to PDF": "Word to PDF",
+        "Excel to PDF": "Excel to PDF",
+        "Image to PDF": "Image to PDF",
+        "Merge PDFs": "Merge PDFs",
+        "Split PDF": "Split PDF",
+        "Compress PDF": "Compress PDF",
+        "Select PDF File": "Select PDF File",
+        "Select Word File": "Select Word File",
+        "Select Excel File": "Select Excel File",
+        "Select Multiple PDFs": "Select Multiple PDFs",
+        "Convert Now": "Convert Now",
         "ABOUT_CONTENT": (
             "AllOne Tools - v{version}\n"
             "A unified desktop workspace for file, image, data, and labeling workflows.\n"
@@ -869,6 +888,25 @@ translations = {
         "Color Name": "Renk Adı",
         "Live Color Picker": "Canlı Renk Seçici",
         "Move mouse over the image to pick a color.": "Renk seçmek için fareyi görselin üzerinde gezdirin.",
+        "PDF Tools": "PDF Araçları",
+        "Convert from PDF": "PDF'den Dönüştür",
+        "Convert to PDF": "PDF'ye Dönüştür",
+        "Merge & Split": "Birleştir & Böl",
+        "PDF to Word": "PDF'den Word'e",
+        "PDF to Excel": "PDF'den Excel'e",
+        "PDF to PNG": "PDF'den PNG'ye",
+        "PDF to JPEG": "PDF'den JPEG'e",
+        "Word to PDF": "Word'den PDF'ye",
+        "Excel to PDF": "Excel'den PDF'ye",
+        "Image to PDF": "Görselden PDF'ye",
+        "Merge PDFs": "PDF'leri Birleştir",
+        "Split PDF": "PDF'yi Böl",
+        "Compress PDF": "PDF'yi Sıkıştır",
+        "Select PDF File": "PDF Dosyası Seç",
+        "Select Word File": "Word Dosyası Seç",
+        "Select Excel File": "Excel Dosyası Seç",
+        "Select Multiple PDFs": "Birden Fazla PDF Seç",
+        "Convert Now": "Şimdi Dönüştür",
         "Please select a valid folder.": "Lütfen geçerli bir klasör seçin.",
         "Please select a valid image folder.": "Lütfen geçerli bir görsel klasörü seçin.",
         "Resize values and quality must be valid numbers.": "Yeniden boyutlandırma değerleri ve kalite geçerli sayılar olmalıdır.",
@@ -1199,6 +1237,8 @@ class ToolApp(ttk.Window):
         self.scanner_feedback_label_var = tk.StringVar()
         self.scanner_speech_queue = SpeechQueue()
         self._scanner_idle_after_id: Optional[str] = None
+        self.pdf_source_path = tk.StringVar()
+        self.pdf_merge_list: List[str] = []
         self.generated_bulk_tags: List[Tuple[Dict[str, str], str]] = []
         self.language = self.settings.get("language", "en")
         if self.language not in translations:
@@ -1374,6 +1414,7 @@ class ToolApp(ttk.Window):
         for title in (
             "File & Image Tools",
             "Color Palette",
+            "PDF Tools",
             "View in Room",
             "Utility",
             "Google Maps Scraper",
@@ -1396,6 +1437,7 @@ class ToolApp(ttk.Window):
         self.rug_control_results: List[Tuple[str, bool]] = []
         self.create_file_image_panels(self.section_frames["File & Image Tools"])
         self.create_color_palette_tab(self.section_frames["Color Palette"])
+        self.create_pdf_tools_tab(self.section_frames["PDF Tools"])
         self.create_view_in_room_tab(self.section_frames["View in Room"])
         self.create_data_calc_panels(self.section_frames["Utility"])
         self.create_google_maps_scraper_tab(self.section_frames["Google Maps Scraper"])
@@ -2718,6 +2760,108 @@ class ToolApp(ttk.Window):
             self.color_palette_swatches.append((swatch, hex_lbl, rgb_lbl, name_lbl))
             
         self.log(self.tr("Color extraction complete."))
+
+    def create_pdf_tools_tab(self, parent: ttk.Frame) -> None:
+        """Create the PDF processing tools tab."""
+        parent.columnconfigure((0, 1, 2), weight=1)
+        
+        # 1. Convert FROM PDF
+        from_pdf_card = self.create_section_card(parent, "Convert from PDF")
+        from_pdf_card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        
+        f_body = from_pdf_card.body
+        self._add_pdf_tool_button(f_body, "PDF to Word", "blue", self._run_pdf_to_word)
+        self._add_pdf_tool_button(f_body, "PDF to PNG", "purple", lambda: self._run_pdf_to_images("PNG"))
+        self._add_pdf_tool_button(f_body, "PDF to JPEG", "orange", lambda: self._run_pdf_to_images("JPEG"))
+
+        # 2. Convert TO PDF
+        to_pdf_card = self.create_section_card(parent, "Convert to PDF")
+        to_pdf_card.grid(row=0, column=1, sticky="nsew", padx=8, pady=8)
+        
+        t_body = to_pdf_card.body
+        self._add_pdf_tool_button(t_body, "Word to PDF", "blue", self._run_word_to_pdf)
+        self._add_pdf_tool_button(t_body, "Excel to PDF", "green", self._run_excel_to_pdf)
+        self._add_pdf_tool_button(t_body, "Image to PDF", "purple", self._run_image_to_pdf)
+
+        # 3. Merge & Split
+        merge_split_card = self.create_section_card(parent, "Merge & Split")
+        merge_split_card.grid(row=0, column=2, sticky="nsew", padx=8, pady=8)
+        
+        m_body = merge_split_card.body
+        self._add_pdf_tool_button(m_body, "Merge PDFs", "red", self._run_merge_pdfs)
+        self._add_pdf_tool_button(m_body, "Split PDF", "orange", self._run_split_pdf)
+        self._add_pdf_tool_button(m_body, "Compress PDF", "red", self._run_compress_pdf)
+
+    def _add_pdf_tool_button(self, parent, text_key, color_hint, command):
+        """Helper to create a stylized tool button."""
+        # Mapping colors to ttkbootstrap styles or custom ones
+        style_map = {
+            "blue": "info.TButton",
+            "green": "success.TButton",
+            "purple": "secondary.TButton",
+            "orange": "warning.TButton",
+            "red": "danger.TButton"
+        }
+        btn_style = style_map.get(color_hint, "TButton")
+        
+        btn = ttk.Button(parent, text=self.tr(text_key), command=command, style=btn_style, width=20)
+        btn.pack(pady=5, padx=10, fill="x")
+        self.register_widget(btn, text_key)
+
+    def _run_pdf_to_word(self) -> None:
+        path = filedialog.askopenfilename(title=self.tr("Select PDF File"), filetypes=[("PDF Files", "*.pdf")])
+        if not path: return
+        threading.Thread(target=backend.pdf_to_word_task, args=(path, self.log, self._pdf_completion), daemon=True).start()
+
+    def _run_word_to_pdf(self) -> None:
+        path = filedialog.askopenfilename(title=self.tr("Select Word File"), filetypes=[("Word Files", "*.docx")])
+        if not path: return
+        threading.Thread(target=backend.word_to_pdf_task, args=(path, self.log, self._pdf_completion), daemon=True).start()
+
+    def _run_pdf_to_images(self, format: str) -> None:
+        path = filedialog.askopenfilename(title=self.tr("Select PDF File"), filetypes=[("PDF Files", "*.pdf")])
+        if not path: return
+        threading.Thread(target=backend.pdf_to_images_task, args=(path, format, self.log, self._pdf_completion), daemon=True).start()
+
+    def _run_merge_pdfs(self) -> None:
+        paths = filedialog.askopenfilenames(title=self.tr("Select Multiple PDFs"), filetypes=[("PDF Files", "*.pdf")])
+        if not paths: return
+        threading.Thread(target=backend.merge_pdfs_task, args=(list(paths), self.log, self._pdf_completion), daemon=True).start()
+
+    def _run_split_pdf(self) -> None:
+        path = filedialog.askopenfilename(title=self.tr("Select PDF File"), filetypes=[("PDF Files", "*.pdf")])
+        if not path: return
+        threading.Thread(target=backend.split_pdf_task, args=(path, self.log, self._pdf_completion), daemon=True).start()
+
+    def _run_excel_to_pdf(self) -> None:
+        self.log("Excel to PDF is not yet implemented.")
+        messagebox.showinfo("Wait", "This feature is coming soon!")
+
+    def _run_image_to_pdf(self) -> None:
+        paths = filedialog.askopenfilenames(title=self.tr("Select Image Files"), filetypes=[("Image Files", "*.jpg *.jpeg *.png *.webp")])
+        if not paths: return
+        
+        def task():
+            try:
+                self.log(f"Converting {len(paths)} images to PDF...")
+                images = [Image.open(p).convert("RGB") for p in paths]
+                output_path = os.path.join(os.path.dirname(paths[0]), "images_to_pdf.pdf")
+                images[0].save(output_path, save_all=True, append_images=images[1:])
+                self.after(0, lambda: self._pdf_completion("Success", f"Images converted to PDF:\n{output_path}"))
+            except Exception as e:
+                self.after(0, lambda: self._pdf_completion("Error", f"Failed to convert images to PDF: {e}"))
+                
+        threading.Thread(target=task, daemon=True).start()
+
+    def _run_compress_pdf(self) -> None:
+        self.log("PDF Compression is not yet implemented.")
+        messagebox.showinfo("Wait", "This feature is coming soon!")
+
+    def _pdf_completion(self, title: str, message: str) -> None:
+        if title == "Success":
+            messagebox.showinfo(self.tr("Success"), message)
+        else:
+            messagebox.showerror(self.tr("Error"), message)
 
     def create_view_in_room_tab(self, parent: ttk.Frame) -> None:
         """Create the View in Room preview tab."""

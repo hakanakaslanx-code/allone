@@ -35,6 +35,26 @@ except Exception as exc:  # pragma: no cover - handled at runtime for user feedb
     ImageWriter = None  # type: ignore[assignment]
     _BARCODE_IMPORT_ERROR = exc
 
+try:
+    from pdf2docx import Converter
+except ImportError:
+    Converter = None
+
+try:
+    from docx2pdf import convert as docx_to_pdf_lib
+except ImportError:
+    docx_to_pdf_lib = None
+
+try:
+    import fitz # PyMuPDF
+except ImportError:
+    fitz = None
+
+try:
+    import PyPDF2
+except ImportError:
+    PyPDF2 = None
+
 
 if hasattr(Image, "Resampling"):
     _RESAMPLE_NEAREST = Image.Resampling.NEAREST
@@ -482,6 +502,129 @@ def extract_colors_task(image_path: str, num_colors: int = 5) -> List[Tuple[str,
     except Exception as e:
         logging.error(f"Error extracting colors from {image_path}: {e}")
         return []
+
+def pdf_to_word_task(pdf_path: str, log_callback: Callable[[str], None], completion_callback: Callable[[str, str], None]) -> None:
+    """Converts a PDF file to a Word document (.docx)."""
+    if Converter is None:
+        completion_callback("Error", "pdf2docx library is not installed.")
+        return
+    
+    try:
+        pdf_path = clean_file_path(pdf_path)
+        docx_path = os.path.splitext(pdf_path)[0] + ".docx"
+        
+        log_callback(f"Converting PDF to Word: {os.path.basename(pdf_path)}...")
+        cv = Converter(pdf_path)
+        cv.convert(docx_path)
+        cv.close()
+        
+        log_callback(f"✅ Conversion successful: {docx_path}")
+        completion_callback("Success", f"PDF has been converted to Word:\n{docx_path}")
+    except Exception as e:
+        log_callback(f"❌ Conversion failed: {e}")
+        completion_callback("Error", f"Failed to convert PDF to Word: {e}")
+
+def word_to_pdf_task(word_path: str, log_callback: Callable[[str], None], completion_callback: Callable[[str, str], None]) -> None:
+    """Converts a Word document (.docx) to a PDF file."""
+    if docx_to_pdf_lib is None:
+        completion_callback("Error", "docx2pdf library is not installed.")
+        return
+    
+    try:
+        word_path = clean_file_path(word_path)
+        pdf_path = os.path.splitext(word_path)[0] + ".pdf"
+        
+        log_callback(f"Converting Word to PDF: {os.path.basename(word_path)}...")
+        docx_to_pdf_lib(word_path, pdf_path)
+        
+        log_callback(f"✅ Conversion successful: {pdf_path}")
+        completion_callback("Success", f"Word has been converted to PDF:\n{pdf_path}")
+    except Exception as e:
+        log_callback(f"❌ Conversion failed: {e}")
+        completion_callback("Error", f"Failed to convert Word to PDF: {e}")
+
+def pdf_to_images_task(pdf_path: str, format: str, log_callback: Callable[[str], None], completion_callback: Callable[[str, str], None]) -> None:
+    """Converts each page of a PDF to a separate image file."""
+    if fitz is None:
+        completion_callback("Error", "PyMuPDF (fitz) is not installed.")
+        return
+    
+    try:
+        pdf_path = clean_file_path(pdf_path)
+        output_dir = os.path.join(os.path.dirname(pdf_path), f"{os.path.splitext(os.path.basename(pdf_path))[0]}_images")
+        os.makedirs(output_dir, exist_ok=True)
+        
+        log_callback(f"Converting PDF pages to {format.upper()} images...")
+        doc = fitz.open(pdf_path)
+        for i, page in enumerate(doc):
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2)) # Zoom for better quality
+            img_path = os.path.join(output_dir, f"page_{i+1}.{format.lower()}")
+            pix.save(img_path)
+            if (i + 1) % 5 == 0:
+                log_callback(f"  ...processed {i+1} pages")
+        doc.close()
+        
+        log_callback(f"✅ Conversion complete. Images saved in: {output_dir}")
+        completion_callback("Success", f"PDF pages have been converted to images in:\n{output_dir}")
+    except Exception as e:
+        log_callback(f"❌ Conversion failed: {e}")
+        completion_callback("Error", f"Failed to convert PDF to images: {e}")
+
+def merge_pdfs_task(pdf_paths: List[str], log_callback: Callable[[str], None], completion_callback: Callable[[str, str], None]) -> None:
+    """Merges multiple PDF files into a single PDF."""
+    if PyPDF2 is None:
+        completion_callback("Error", "PyPDF2 is not installed.")
+        return
+    
+    try:
+        if not pdf_paths:
+            completion_callback("Error", "No PDF files selected for merging.")
+            return
+            
+        output_path = os.path.join(os.path.dirname(pdf_paths[0]), "merged_document.pdf")
+        merger = PyPDF2.PdfMerger()
+        
+        log_callback(f"Merging {len(pdf_paths)} PDF files...")
+        for path in pdf_paths:
+            log_callback(f"  Adding: {os.path.basename(path)}")
+            merger.append(path)
+            
+        merger.write(output_path)
+        merger.close()
+        
+        log_callback(f"✅ Merging successful: {output_path}")
+        completion_callback("Success", f"PDFs merged successfully:\n{output_path}")
+    except Exception as e:
+        log_callback(f"❌ Merging failed: {e}")
+        completion_callback("Error", f"Failed to merge PDFs: {e}")
+
+def split_pdf_task(pdf_path: str, log_callback: Callable[[str], None], completion_callback: Callable[[str, str], None]) -> None:
+    """Splits a multi-page PDF into separate single-page PDF files."""
+    if PyPDF2 is None:
+        completion_callback("Error", "PyPDF2 is not installed.")
+        return
+    
+    try:
+        pdf_path = clean_file_path(pdf_path)
+        output_dir = os.path.join(os.path.dirname(pdf_path), f"{os.path.splitext(os.path.basename(pdf_path))[0]}_split")
+        os.makedirs(output_dir, exist_ok=True)
+        
+        log_callback(f"Splitting PDF into individual pages...")
+        reader = PyPDF2.PdfReader(pdf_path)
+        for i, page in enumerate(reader.pages):
+            writer = PyPDF2.PdfWriter()
+            writer.add_page(page)
+            output_path = os.path.join(output_dir, f"page_{i+1}.pdf")
+            with open(output_path, "wb") as f:
+                writer.write(f)
+            if (i+1) % 10 == 0:
+                log_callback(f"  ...split {i+1} pages")
+        
+        log_callback(f"✅ Split complete. PDFs saved in: {output_dir}")
+        completion_callback("Success", f"PDF has been split into individual pages in:\n{output_dir}")
+    except Exception as e:
+        log_callback(f"❌ Splitting failed: {e}")
+        completion_callback("Error", f"Failed to split PDF: {e}")
 
 def resize_images_task(src_folder, mode, value, quality, log_callback, completion_callback):
     """Resizes all images in a folder by width or percentage."""
