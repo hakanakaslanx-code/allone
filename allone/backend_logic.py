@@ -370,6 +370,57 @@ def convert_heic_task(folder, log_callback, completion_callback):
         log_callback(f"An error occurred: {e}")
         completion_callback("Error", f"An error occurred: {e}")
 
+def extract_colors_task(image_path: str, num_colors: int = 5) -> List[Tuple[str, str]]:
+    """Extract dominant colors from an image using quantization, returning a list of (hex, rgb_str)."""
+    try:
+        path = clean_file_path(image_path)
+        if not os.path.exists(path):
+            logging.error(f"Image not found: {path}")
+            return []
+        
+        with Image.open(path) as img:
+            # Ensure RGB mode for color extraction
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            
+            # Sub-sample image to speed up processing without losing color context
+            img.thumbnail((250, 250))
+            
+            # Reduce image to a small palette of representative colors
+            # We use a slightly larger N for quantization to pick better representative colors
+            try:
+                # Pillow's quantize method creates a palette based on color popularity/coverage
+                quantized = img.quantize(colors=max(num_colors, 16), method=Image.Quantize.MAXCOVERAGE)
+                palette_img = quantized.convert("RGB")
+                
+                # count how often each color appears in the quantized version
+                all_colors = palette_img.getcolors(max(num_colors, 256))
+                if not all_colors:
+                    return []
+                
+                # Sort by pixel count (descending)
+                all_colors.sort(key=lambda x: x[0], reverse=True)
+                
+                results = []
+                # Avoid near-white or near-black if requested, but generally just take the top ones
+                for count, rgb in all_colors[:num_colors]:
+                    r, g, b = rgb
+                    hex_val = f"#{r:02x}{g:02x}{b:02x}"
+                    rgb_str = f"({r}, {g}, {b})"
+                    results.append((hex_val, rgb_str))
+                return results
+            except Exception as q_err:
+                logging.error(f"Quantization failed: {q_err}")
+                # Fallback to simple getcolors if quantization fails
+                colors = img.getcolors(img.width * img.height)
+                if not colors: return []
+                colors.sort(key=lambda x: x[0], reverse=True)
+                return [(f"#{c[1][0]:02x}{c[1][1]:02x}{c[1][2]:02x}", str(c[1])) for c in colors[:num_colors]]
+                
+    except Exception as e:
+        logging.error(f"Error extracting colors from {image_path}: {e}")
+        return []
+
 def resize_images_task(src_folder, mode, value, quality, log_callback, completion_callback):
     """Resizes all images in a folder by width or percentage."""
     tgt_folder = os.path.join(src_folder, "resized")

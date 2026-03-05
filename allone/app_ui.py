@@ -446,6 +446,13 @@ translations = {
         "Copy Address": "Copy Address",
         "Donation address copied to clipboard.": "Donation address copied to clipboard.",
         "Close": "Close",
+        "Color Palette": "Color Palette",
+        "Dominant Color Extractor": "Dominant Color Extractor",
+        "Select Image:": "Select Image:",
+        "Extract Colors": "Extract Colors",
+        "Top 5 Dominant Colors": "Top 5 Dominant Colors",
+        "Hex Code": "Hex Code",
+        "RGB Value": "RGB Value",
         "ABOUT_CONTENT": (
             "AllOne Tools - v{version}\n"
             "A unified desktop workspace for file, image, data, and labeling workflows.\n"
@@ -849,6 +856,13 @@ translations = {
         "Copy Address": "Adresi Kopyala",
         "Donation address copied to clipboard.": "Bağış adresi panoya kopyalandı.",
         "Close": "Kapat",
+        "Color Palette": "Renk Paleti",
+        "Dominant Color Extractor": "Baskın Renk Çıkarıcı",
+        "Select Image:": "Görsel Seç:",
+        "Extract Colors": "Renkleri Çıkar",
+        "Top 5 Dominant Colors": "En Baskın 5 Renk",
+        "Hex Code": "Hex Kodu",
+        "RGB Value": "RGB Değeri",
         "Please select a valid folder.": "Lütfen geçerli bir klasör seçin.",
         "Please select a valid image folder.": "Lütfen geçerli bir görsel klasörü seçin.",
         "Resize values and quality must be valid numbers.": "Yeniden boyutlandırma değerleri ve kalite geçerli sayılar olmalıdır.",
@@ -1220,6 +1234,9 @@ class ToolApp(ttk.Window):
         self.view_in_room_rug_angle: float = 0.0
         self.view_in_room_rug_center: Optional[Tuple[float, float]] = None
         self.view_in_room_display_scale: float = 1.0
+        self.color_palette_image_path = tk.StringVar()
+        self.color_palette_results: List[Tuple[str, str]] = []
+        self.color_palette_swatches: List[Tuple[ttk.Label, ttk.Label, ttk.Label]] = []
         self.view_in_room_canvas_room_photo: Optional[ImageTk.PhotoImage] = None
         self.view_in_room_canvas_rug_photo: Optional[ImageTk.PhotoImage] = None
         self.view_in_room_canvas_room_item = None
@@ -1345,6 +1362,7 @@ class ToolApp(ttk.Window):
         self.section_frames = {}
         for title in (
             "File & Image Tools",
+            "Color Palette",
             "View in Room",
             "Utility",
             "Google Maps Scraper",
@@ -1366,6 +1384,7 @@ class ToolApp(ttk.Window):
 
         self.rug_control_results: List[Tuple[str, bool]] = []
         self.create_file_image_panels(self.section_frames["File & Image Tools"])
+        self.create_color_palette_tab(self.section_frames["Color Palette"])
         self.create_view_in_room_tab(self.section_frames["View in Room"])
         self.create_data_calc_panels(self.section_frames["Utility"])
         self.create_google_maps_scraper_tab(self.section_frames["Google Maps Scraper"])
@@ -2471,6 +2490,106 @@ class ToolApp(ttk.Window):
         self.register_widget(resize_button, "Resize & Compress")
 
         self._update_resize_inputs()
+
+    def create_color_palette_tab(self, parent: ttk.Frame) -> None:
+        """Create the dominant color extraction tab."""
+        parent.columnconfigure(0, weight=1)
+        
+        card = self.create_section_card(parent, "Dominant Color Extractor")
+        card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        
+        frame = card.body
+        frame.columnconfigure(1, weight=1)
+        
+        # File selection
+        sel_label = ttk.Label(frame, text=self.tr("Select Image:"))
+        sel_label.grid(row=0, column=0, sticky="w", padx=6, pady=10)
+        self.register_widget(sel_label, "Select Image:")
+        
+        ttk.Entry(frame, textvariable=self.color_palette_image_path, state="readonly").grid(row=0, column=1, sticky="we", padx=6, pady=10)
+        
+        browse_btn = ttk.Button(frame, text=self.tr("Browse..."), command=self._select_color_palette_file)
+        browse_btn.grid(row=0, column=2, sticky="e", padx=6, pady=10)
+        self.register_widget(browse_btn, "Browse...")
+        
+        extract_btn = ttk.Button(frame, text=self.tr("Extract Colors"), command=self._run_color_extraction, style="Accent.TButton")
+        extract_btn.grid(row=1, column=0, columnspan=3, pady=10)
+        self.register_widget(extract_btn, "Extract Colors")
+        
+        # Results area
+        results_card = self.create_section_card(parent, "Top 5 Dominant Colors")
+        results_card.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
+        
+        self.color_palette_container = results_card.body
+        self.color_palette_container.columnconfigure((0, 1, 2), weight=1)
+        
+        # Header for results
+        h1 = ttk.Label(self.color_palette_container, text=self.tr("Color"), font=self._font("Inter", 10, "bold"))
+        h1.grid(row=0, column=0, padx=5, pady=5)
+        self.register_widget(h1, "Color")
+        
+        h2 = ttk.Label(self.color_palette_container, text=self.tr("Hex Code"), font=self._font("Inter", 10, "bold"))
+        h2.grid(row=0, column=1, padx=5, pady=5)
+        self.register_widget(h2, "Hex Code")
+        
+        h3 = ttk.Label(self.color_palette_container, text=self.tr("RGB Value"), font=self._font("Inter", 10, "bold"))
+        h3.grid(row=0, column=2, padx=5, pady=5)
+        self.register_widget(h3, "RGB Value")
+
+    def _select_color_palette_file(self) -> None:
+        path = filedialog.askopenfilename(
+            title=self.tr("Select Image:"),
+            filetypes=[(self.tr("Image Files"), "*.jpg *.jpeg *.png *.webp *.heic"), (self.tr("All Files"), "*.*")]
+        )
+        if path:
+            self.color_palette_image_path.set(path)
+
+    def _run_color_extraction(self) -> None:
+        path = self.color_palette_image_path.get()
+        if not path:
+            messagebox.showwarning(self.tr("Warning"), self.tr("Please select a file."))
+            return
+            
+        self.log(f"{self.tr('Extracting Colors')} from {os.path.basename(path)}...")
+        
+        # Run extraction in background to avoid freezing UI
+        def worker():
+            results = backend.extract_colors_task(path, num_colors=5)
+            self.after(0, lambda: self._update_color_palette_ui(results))
+            
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _update_color_palette_ui(self, results: List[Tuple[str, str]]) -> None:
+        # Clear old swatches
+        for swatch, hex_lbl, rgb_lbl in self.color_palette_swatches:
+            swatch.destroy()
+            hex_lbl.destroy()
+            rgb_lbl.destroy()
+        self.color_palette_swatches.clear()
+        
+        if not results:
+            self.log(self.tr("Error: Failed to extract colors."))
+            return
+            
+        for i, (hex_code, rgb_val) in enumerate(results):
+            # i+1 because row 0 is header
+            row = i + 1
+            
+            # Swatch (using a label with background)
+            swatch = ttk.Label(self.color_palette_container, text="      ", background=hex_code, relief="flat", padding=10)
+            swatch.grid(row=row, column=0, padx=5, pady=5)
+            
+            # Hex string (clickable to copy?)
+            hex_lbl = ttk.Label(self.color_palette_container, text=hex_code, font=self._font("Cascadia Code", 10))
+            hex_lbl.grid(row=row, column=1, padx=5, pady=5)
+            
+            # RGB string
+            rgb_lbl = ttk.Label(self.color_palette_container, text=rgb_val, font=self._font("Cascadia Code", 10))
+            rgb_lbl.grid(row=row, column=2, padx=5, pady=5)
+            
+            self.color_palette_swatches.append((swatch, hex_lbl, rgb_lbl))
+            
+        self.log(self.tr("Color extraction complete."))
 
     def create_view_in_room_tab(self, parent: ttk.Frame) -> None:
         """Create the View in Room preview tab."""
