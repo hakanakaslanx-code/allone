@@ -9,7 +9,7 @@ import traceback
 import platform
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont, ImageOps
