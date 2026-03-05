@@ -2505,6 +2505,9 @@ class ToolApp(ttk.Window):
     def create_color_palette_tab(self, parent: ttk.Frame) -> None:
         """Create the dominant color extraction tab."""
         parent.columnconfigure(0, weight=1)
+        parent.columnconfigure(1, weight=3)
+        parent.rowconfigure(0, weight=1)
+        parent.rowconfigure(1, weight=1)
         
         card = self.create_section_card(parent, "Dominant Color Extractor")
         card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
@@ -2578,7 +2581,7 @@ class ToolApp(ttk.Window):
         self.register_widget(msg, "Move mouse over the image to pick a color.")
 
         # Canvas for image
-        self.color_palette_canvas = tk.Canvas(iframe, bg="#1a1a1a", highlightthickness=1, highlightbackground="#333")
+        self.color_palette_canvas = tk.Canvas(iframe, bg="#1a1a1a", highlightthickness=1, highlightbackground="#333", height=600)
         self.color_palette_canvas.pack(fill="both", expand=True, padx=10, pady=10)
         self.color_palette_canvas.bind("<Motion>", self._on_color_palette_hover)
 
@@ -2648,8 +2651,8 @@ class ToolApp(ttk.Window):
             
             # Create a preview that fits the canvas roughly
             # winfo_width/height might be 1 if not rendered yet, so use a default or min
-            cw = max(400, self.color_palette_canvas.winfo_width())
-            ch = max(400, self.color_palette_canvas.winfo_height())
+            cw = max(800, self.color_palette_canvas.winfo_width())
+            ch = max(600, self.color_palette_canvas.winfo_height())
             
             preview = self.color_palette_original_image.copy()
             preview.thumbnail((cw - 20, ch - 20))
