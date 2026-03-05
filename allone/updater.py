@@ -419,14 +419,19 @@ set "VERSION_STR=%~9"
 
 >>"%LOG_FILE%" echo [%DATE% %TIME%] Update script started. Target: !TARGET_EXE! (PID: !TARGET_PID!)
 
-:: 1. Wait for the application to exit (up to 30 seconds)
+:: 1. Wait for the application to exit (up to 40 seconds)
 set "WAIT_COUNT=0"
 :waitloop
 if "!TARGET_PID!"=="" goto continue_process
 tasklist /FI "PID eq !TARGET_PID!" /NH 2>NUL | find "!TARGET_PID!" >NUL
 if !ERRORLEVEL! EQU 0 (
     set /a WAIT_COUNT+=1
-    if !WAIT_COUNT! LEQ 30 (
+    :: Every 5 seconds, log a heartbeat
+    set /a HEARTBEAT=WAIT_COUNT %% 5
+    if !HEARTBEAT! EQU 0 (
+        >>"%LOG_FILE%" echo [%DATE% %TIME%] Still waiting for PID !TARGET_PID! to exit... (!WAIT_COUNT!s)
+    )
+    if !WAIT_COUNT! LEQ 40 (
         timeout /T 1 /NOBREAK >NUL
         goto waitloop
     )
