@@ -173,6 +173,7 @@ def run_setup(
         "docx2pdf": "docx2pdf",
         "fitz": "PyMuPDF (fitz)",
         "PyPDF2": "PyPDF2",
+        "win32com": "pywin32",
     }
 
     missing_modules: List[str] = []

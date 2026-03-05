@@ -497,6 +497,10 @@ translations = {
             "Rinven Tools:\n"
             "  • Build Rinven import sheets with editable tables and pricing multipliers.\n"
             "  • Design Rinven tags with live preview, single/bulk export, and optional barcodes.\n"
+            "PDF Tools:\n"
+            "  • Convert PDFs to Word, PNG, JPEG.\n"
+            "  • Convert Word, Excel, Images to PDF.\n"
+            "  • Merge, Split, and Compress PDFs.\n"
             "---------------------------------\n"
             "Created by Hakan Akaslan"
         ),
@@ -608,7 +612,7 @@ translations = {
         "Mapping could not be saved: {error}": "Mapping kaydedilemedi: {error}",
         "Mapping saved as {filename}.": "Mapping {filename} olarak kaydedildi.",
         "Mapping could not be loaded: {error}": "Mapping yüklenemedi: {error}",
-        "Mapping {filename} loaded.": "Mapping {filename} yüklendi.",
+        "Mapping {filename} yüklendi.": "Mapping {filename} yüklendi.",
         "Width × Length": "Genişlik × Uzunluk",
         "Copy Files": "Dosyaları Kopyala",
         "Move Files": "Dosyaları Taşı",
@@ -935,7 +939,7 @@ translations = {
             "Dosya & Görsel Araçları:\n"
             "  • Excel/CSV/TXT listesine göre görselleri kaynak ve hedef klasörler arasında kopyala/taşı.\n"
             "  • HEIC/WEBP dosyalarını toplu halde JPG'ye çevir.\n"
-            "  • Görselleri genişliğe veya yüzdeye göre yeniden boyutlandırıp sıkıştır.\n"
+            "  • Görselleri genişliğe veya yüzdeye göre toplu biçimde yeniden boyutlandırıp sıkıştır.\n"
             "  • Harici görsel bağlantı CSV dosyasını Excel/CSV sayfalarıyla eşleştirip URL sütunları ekle.\n"
             "Odayı Gör:\n"
             "  • Halıları oda fotoğraflarına yerleştir, sürükle/ölçekle/döndür, perspektifi düzenle ve önizleme dışa aktar.\n"
@@ -950,6 +954,10 @@ translations = {
             "Rinven Araçları:\n"
             "  • Düzenlenebilir tablolar ve fiyat çarpanlarıyla Rinven içe aktarma sayfaları oluştur.\n"
             "  • Canlı önizlemeli, tekli/toplu çıktılı ve barkod seçeneği olan Rinven etiketleri tasarla.\n"
+            "PDF Araçları:\n"
+            "  • PDF'leri Word, PNG, JPEG'e dönüştür.\n"
+            "  • Word, Excel, Görselleri PDF'e dönüştür.\n"
+            "  • PDF'leri Birleştir, Böl ve Sıkıştır.\n"
             "Paylaşılan Etiket Yazıcısı:\n"
             "  • Yerel/uzak yazıcıları keşfet ve paylaşılan yazdırma servisiyle iş gönder.\n"
             "---------------------------------\n"
@@ -1026,6 +1034,8 @@ PANEL_INFO = {
         "Rinven Tag": "Design branded Rinven tags with collection details and optional barcode.",
         "Rinven Import Sheet Generator": "Manage Rinven import rows in a grid with bulk paste, automatic sizing, pricing, and Excel export.",
         "Help & About": "Review update status, helpful links and support information for the app.",
+        "PDF Tools": "Convert, merge, split, and compress PDF documents.",
+        "Color Palette": "Extract dominant colors from images or pick live colors.",
     },
     "tr": {
         "1. Copy/Move Files by List": "Numara listesindeki kayıtlara göre dosyaları hızlıca kopyalayın veya taşıyın.",
@@ -1044,6 +1054,8 @@ PANEL_INFO = {
         "Rinven Tag": "Koleksiyon bilgileri ve isteğe bağlı barkod içeren Rinven etiketleri tasarlar.",
         "Rinven Import Sheet Generator": "Rinven ana ithalat tablosu satırlarını tablo düzenleyicide yönetir; toplu yapıştırma, otomatik boyut/fiyat ve Excel dışa aktarma sunar.",
         "Help & About": "Uygulama sürümünü, rehberleri ve destek bağlantılarını tek yerde gösterir.",
+        "PDF Tools": "PDF belgelerini dönüştürün, birleştirin, bölün ve sıkıştırın.",
+        "Color Palette": "Görsellerden baskın renkleri çıkarın veya canlı renkleri seçin.",
     },
 }
 
@@ -1416,8 +1428,8 @@ class ToolApp(ttk.Window):
             "Color Palette",
             "PDF Tools",
             "View in Room",
-            "Utility",
             "Google Maps Scraper",
+            "Utility",
             "Column Match & Report",
             "Code Generators",
             "Rinven Import Sheet Generator",
@@ -2834,24 +2846,14 @@ class ToolApp(ttk.Window):
         threading.Thread(target=backend.split_pdf_task, args=(path, self.log, self._pdf_completion), daemon=True).start()
 
     def _run_excel_to_pdf(self) -> None:
-        self.log("Excel to PDF is not yet implemented.")
-        messagebox.showinfo("Wait", "This feature is coming soon!")
+        path = filedialog.askopenfilename(title=self.tr("Select Excel File"), filetypes=[("Excel Files", "*.xlsx *.xls")])
+        if not path: return
+        threading.Thread(target=backend.excel_to_pdf_task, args=(path, self.log, self._pdf_completion), daemon=True).start()
 
     def _run_image_to_pdf(self) -> None:
         paths = filedialog.askopenfilenames(title=self.tr("Select Image Files"), filetypes=[("Image Files", "*.jpg *.jpeg *.png *.webp")])
         if not paths: return
-        
-        def task():
-            try:
-                self.log(f"Converting {len(paths)} images to PDF...")
-                images = [Image.open(p).convert("RGB") for p in paths]
-                output_path = os.path.join(os.path.dirname(paths[0]), "images_to_pdf.pdf")
-                images[0].save(output_path, save_all=True, append_images=images[1:])
-                self.after(0, lambda: self._pdf_completion("Success", f"Images converted to PDF:\n{output_path}"))
-            except Exception as e:
-                self.after(0, lambda: self._pdf_completion("Error", f"Failed to convert images to PDF: {e}"))
-                
-        threading.Thread(target=task, daemon=True).start()
+        threading.Thread(target=backend.image_to_pdf_task, args=(list(paths), self.log, self._pdf_completion), daemon=True).start()
 
     def _run_compress_pdf(self) -> None:
         self.log("PDF Compression is not yet implemented.")

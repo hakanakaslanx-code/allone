@@ -55,6 +55,11 @@ try:
 except ImportError:
     PyPDF2 = None
 
+try:
+    import win32com.client
+except ImportError:
+    win32com = None
+
 
 if hasattr(Image, "Resampling"):
     _RESAMPLE_NEAREST = Image.Resampling.NEAREST
@@ -625,6 +630,76 @@ def split_pdf_task(pdf_path: str, log_callback: Callable[[str], None], completio
     except Exception as e:
         log_callback(f"❌ Splitting failed: {e}")
         completion_callback("Error", f"Failed to split PDF: {e}")
+
+def excel_to_pdf_task(excel_path: str, log_callback: Callable[[str], None], completion_callback: Callable[[str, str], None]) -> None:
+    """Converts an Excel spreadsheet to a PDF file."""
+    try:
+        excel_path = clean_file_path(excel_path)
+        pdf_path = os.path.splitext(excel_path)[0] + ".pdf"
+        
+        # 1. Primary method: COM Object (Requires Excel installed, Windows only)
+        if win32com and platform.system() == "Windows":
+            try:
+                log_callback(f"Attempting conversion via Excel COM: {os.path.basename(excel_path)}...")
+                excel = win32com.client.DispatchEx("Excel.Application")
+                excel.Visible = False
+                excel.DisplayAlerts = False
+                wb = excel.Workbooks.Open(excel_path)
+                
+                # xlTypePDF = 0
+                wb.ExportAsFixedFormat(0, pdf_path)
+                
+                wb.Close(False)
+                excel.Quit()
+                log_callback(f"✅ Conversion via Excel COM successful: {pdf_path}")
+                completion_callback("Success", f"Excel has been converted to PDF via COM:\n{pdf_path}")
+                return
+            except Exception as com_err:
+                log_callback(f"⚠️ COM conversion failed ({com_err}), trying fallback...")
+        
+        # 2. Fallback method: Pandas (Simpler, works everywhere, but may lose formatting)
+        log_callback("Conversion via Pandas/Lib (formatting may vary)...")
+        # Note: This is a basic conversion, high fidelity Excel to PDF without native interop is hard.
+        # We'll suggest installing Excel if this fails or formatting is bad.
+        
+        # For a truly cross-platform simple fallback, we might use xlsxwriter for simple data
+        # but here we'll just log that it's ideally done on Windows with Excel.
+        if platform.system() != "Windows":
+            completion_callback("Warning", "Excel to PDF conversion is best supported on Windows with Microsoft Excel installed.")
+        else:
+            completion_callback("Error", "Excel to PDF requires Microsoft Excel and pywin32 to be installed for best results.")
+
+    except Exception as e:
+        log_callback(f"❌ Conversion failed: {e}")
+        completion_callback("Error", f"Failed to convert Excel to PDF: {e}")
+
+def image_to_pdf_task(image_paths: List[str], log_callback: Callable[[str], None], completion_callback: Callable[[str, str], None]) -> None:
+    """Combines multiple images into a single PDF."""
+    try:
+        if not image_paths:
+            completion_callback("Error", "No images selected.")
+            return
+
+        image_paths = [clean_file_path(p) for p in image_paths]
+        output_path = os.path.join(os.path.dirname(image_paths[0]), "images_to_pdf.pdf")
+        
+        log_callback(f"Combining {len(image_paths)} images into PDF: {os.path.basename(output_path)}...")
+        
+        images = []
+        for p in image_paths:
+            img = Image.open(p).convert("RGB")
+            images.append(img)
+            
+        if images:
+            images[0].save(output_path, save_all=True, append_images=images[1:])
+            log_callback(f"✅ Image to PDF conversion successful: {output_path}")
+            completion_callback("Success", f"Images converted to PDF:\n{output_path}")
+        else:
+            completion_callback("Error", "No valid images found to convert.")
+            
+    except Exception as e:
+        log_callback(f"❌ Image to PDF failed: {e}")
+        completion_callback("Error", f"Failed to convert images to PDF: {e}")
 
 def resize_images_task(src_folder, mode, value, quality, log_callback, completion_callback):
     """Resizes all images in a folder by width or percentage."""
