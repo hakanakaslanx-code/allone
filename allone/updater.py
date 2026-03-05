@@ -417,19 +417,30 @@ set "SUCCESS_FILE=%~7"
 set "LOCK_FILE=%~8"
 set "VERSION_STR=%~9"
 
->>"%LOG_FILE%" echo [%%date%% %%time%%] Update script started. Waiting for PID !TARGET_PID!.
+>>"%LOG_FILE%" echo [%DATE% %TIME%] Update script started. Target: !TARGET_EXE! (PID: !TARGET_PID!)
+
+:: 1. Wait for the application to exit (up to 30 seconds)
+set "WAIT_COUNT=0"
 :waitloop
-if "!TARGET_PID!"=="" goto continue
-for /f "tokens=1" %%p in ('tasklist /FI "PID eq !TARGET_PID!" ^| find " !TARGET_PID! "') do (
-    timeout /T 1 /NOBREAK >NUL
-    goto waitloop
+if "!TARGET_PID!"=="" goto continue_process
+tasklist /FI "PID eq !TARGET_PID!" /NH 2>NUL | find "!TARGET_PID!" >NUL
+if !ERRORLEVEL! EQU 0 (
+    set /a WAIT_COUNT+=1
+    if !WAIT_COUNT! LEQ 30 (
+        timeout /T 1 /NOBREAK >NUL
+        goto waitloop
+    )
+    >>"%LOG_FILE%" echo [%DATE% %TIME%] Timeout waiting for PID !TARGET_PID!. Attempting to proceed anyway.
 )
-:continue
->>"%LOG_FILE%" echo [%%date%% %%time%%] Process exited. Preparing workspace.
+
+:continue_process
+>>"%LOG_FILE%" echo [%DATE% %TIME%] Preparing workspace.
 if exist "%WORKDIR%" rd /S /Q "%WORKDIR%"
 mkdir "%WORKDIR%" >NUL 2>&1
-set "EXTRACT_DIR=%WORKDIR%\extracted"
+set "EXTRACT_DIR=%WORKDIR%\\extracted"
 mkdir "%EXTRACT_DIR%" >NUL 2>&1
+
+:: 2. Extract or Copy payload
 set "NEW_PAYLOAD=%PACKAGE%"
 for %%I in ("%PACKAGE%") do set "PKG_EXT=%%~xI"
 if /I "!PKG_EXT!"==".zip" (
@@ -439,48 +450,52 @@ if /I "!PKG_EXT!"==".zip" (
     if errorlevel 1 goto fail
     if exist "%EXTRACT_DIR%\\%TARGET_NAME%" set "NEW_PAYLOAD=%EXTRACT_DIR%\\%TARGET_NAME%"
 )
+
 copy /Y "!NEW_PAYLOAD!" "%TARGET_EXE%.new" >>"%LOG_FILE%" 2>&1
 if errorlevel 1 goto fail
 
+:: 3. Replace the executable (with rename fallback)
 set "RETRY_COUNT=0"
-:retry_rename
+:retry_replace
 if exist "%TARGET_EXE%" (
     attrib -R "%TARGET_EXE%" >>"%LOG_FILE%" 2>&1
+    :: Try direct delete first
     del /F /Q "%TARGET_EXE%" >>"%LOG_FILE%" 2>&1
     if errorlevel 1 (
-        set /a RETRY_COUNT+=1
-        if !RETRY_COUNT! LEQ 5 (
-            >>"%LOG_FILE%" echo [%%date%% %%time%%] Retrying deletion (!RETRY_COUNT!)...
-            timeout /T 2 /NOBREAK >NUL
-            goto retry_rename
+        :: If delete fails, try renaming the old file (Windows allows renaming running files)
+        set "OLD_EXE=%TARGET_EXE%.old"
+        if exist "!OLD_EXE!" del /F /Q "!OLD_EXE!" >NUL 2>&1
+        ren "%TARGET_EXE%" "%TARGET_NAME%.old" >>"%LOG_FILE%" 2>&1
+        if errorlevel 1 (
+            set /a RETRY_COUNT+=1
+            if !RETRY_COUNT! LEQ 10 (
+                >>"%LOG_FILE%" echo [%DATE% %TIME%] File locked, retrying (!RETRY_COUNT!)...
+                timeout /T 2 /NOBREAK >NUL
+                goto retry_replace
+            )
+            >>"%LOG_FILE%" echo [%DATE% %TIME%] Failed to replace existing executable.
+            goto fail
         )
-        >>"%LOG_FILE%" echo [%%date%% %%time%%] Failed to remove existing executable.
-        goto fail
     )
 )
 
-attrib -R "%TARGET_EXE%.new" >>"%LOG_FILE%" 2>&1
 move /Y "%TARGET_EXE%.new" "%TARGET_EXE%" >>"%LOG_FILE%" 2>&1
-if errorlevel 1 (
-    set /a RETRY_COUNT+=1
-    if !RETRY_COUNT! LEQ 10 (
-        >>"%LOG_FILE%" echo [%%date%% %%time%%] Retrying move (!RETRY_COUNT!)...
-        timeout /T 2 /NOBREAK >NUL
-        goto retry_rename
-    )
-    goto fail
-)
+if errorlevel 1 goto fail
+
+:: 4. Sync other files if extracting from ZIP
 if exist "%EXTRACT_DIR%" (
-    robocopy "%EXTRACT_DIR%" "%~dp1" /E /R:5 /W:2 /NFL /NDL /NJH /NJS /NP >>"%LOG_FILE%" 2>&1
+    robocopy "%EXTRACT_DIR%" "%~dp1." /E /R:5 /W:2 /NFL /NDL /NJH /NJS /NP /XF "%TARGET_NAME%" >>"%LOG_FILE%" 2>&1
     set "ROBOCODE=!errorlevel!"
     if !ROBOCODE! GEQ 8 goto fail
 )
+
+:: 5. Success and Cleanup
 start "" "%TARGET_EXE%" >>"%LOG_FILE%" 2>&1
 if exist "%SUCCESS_FILE%" del "%SUCCESS_FILE%"
 (
     echo {
     echo   "version": "!VERSION_STR!",
-    echo   "timestamp": "%%date%% %%time%%"
+    echo   "timestamp": "%DATE% %TIME%"
     echo }
 ) >"%SUCCESS_FILE%"
 set "EXIT_CODE=0"
@@ -488,12 +503,14 @@ goto cleanup
 
 :fail
 set "EXIT_CODE=1"
+>>"%LOG_FILE%" echo [%DATE% %TIME%] Update failed.
+
 :cleanup
 if exist "%PACKAGE%" del "%PACKAGE%" >>"%LOG_FILE%" 2>&1
-if exist "%TARGET_EXE%.new" del "%TARGET_EXE%.new" >>"%LOG_FILE%" 2>&1
+if exist "%TARGET_EXE%.new" del /F /Q "%TARGET_EXE%.new" >>"%LOG_FILE%" 2>&1
 if exist "%WORKDIR%" rd /S /Q "%WORKDIR%" >>"%LOG_FILE%" 2>&1
 if exist "%LOCK_FILE%" del "%LOCK_FILE%" >>"%LOG_FILE%" 2>&1
->>"%LOG_FILE%" echo [%%date%% %%time%%] Update script completed with exit code !EXIT_CODE!.
+>>"%LOG_FILE%" echo [%DATE% %TIME%] Update script completed with exit code !EXIT_CODE!.
 exit /B !EXIT_CODE!
 """
     script_path.write_text(content, encoding="utf-8")
@@ -514,26 +531,35 @@ set "SUCCESS_FILE=%~7"
 set "LOCK_FILE=%~8"
 set "VERSION_STR=%~9"
 
->>"%LOG_FILE%" echo [%%date%% %%time%%] Release update script started. Waiting for PID !TARGET_PID!.
+>>"%LOG_FILE%" echo [%DATE% %TIME%] Release update script started. Target: !TARGET_EXE! (PID: !TARGET_PID!)
+
+:: 1. Wait for process
+set "WAIT_COUNT=0"
 :waitloop
-if "!TARGET_PID!"=="" goto continue
-for /f "tokens=1" %%p in ('tasklist /FI "PID eq !TARGET_PID!" ^| find " !TARGET_PID! "') do (
-    timeout /T 1 /NOBREAK >NUL
-    goto waitloop
+if "!TARGET_PID!"=="" goto continue_process
+tasklist /FI "PID eq !TARGET_PID!" /NH 2>NUL | find "!TARGET_PID!" >NUL
+if !ERRORLEVEL! EQU 0 (
+    set /a WAIT_COUNT+=1
+    if !WAIT_COUNT! LEQ 30 (
+        timeout /T 1 /NOBREAK >NUL
+        goto waitloop
+    )
 )
-:continue
->>"%LOG_FILE%" echo [%%date%% %%time%%] Process exited. Preparing release workspace.
+
+:continue_process
+>>"%LOG_FILE%" echo [%DATE% %TIME%] Preparing release workspace.
 if exist "%WORKDIR%" rd /S /Q "%WORKDIR%"
 mkdir "%WORKDIR%" >NUL 2>&1
-set "EXTRACT_DIR=%WORKDIR%\extracted"
+set "EXTRACT_DIR=%WORKDIR%\\extracted"
 mkdir "%EXTRACT_DIR%" >NUL 2>&1
 
 set "TARGET_DIR=%~dp1"
-for %%I in ("%TARGET_DIR%..\\") do set "RELEASES_DIR=%%~fI"
-for %%I in ("%RELEASES_DIR%..\\") do set "BASE_DIR=%%~fI"
-set "CURRENT_FILE=%BASE_DIR%\\current.json"
-set "RELEASE_DIR=%RELEASES_DIR%\\%VERSION_STR%"
+for %%I in ("!TARGET_DIR!..\\") do set "RELEASES_DIR=%%~fI"
+for %%I in ("!RELEASES_DIR!..\\") do set "BASE_DIR=%%~fI"
+set "CURRENT_FILE=!BASE_DIR!\\current.json"
+set "RELEASE_DIR=!RELEASES_DIR!\\%VERSION_STR%"
 
+:: 2. Extract
 set "NEW_PAYLOAD=%PACKAGE%"
 for %%I in ("%PACKAGE%") do set "PKG_EXT=%%~xI"
 if /I "!PKG_EXT!"==".zip" (
@@ -557,16 +583,11 @@ if /I "!PKG_EXT!"==".zip" (
 )
 
 set "CURRENT_EXE=!RELEASE_DIR!\\%TARGET_NAME%"
-if not exist "!CURRENT_EXE!" (
-    >>"%LOG_FILE%" echo [%%date%% %%time%%] Expected executable not found: !CURRENT_EXE!.
-    goto fail
-)
-
 (
     echo {
     echo   "version": "!VERSION_STR!",
     echo   "path": "!CURRENT_EXE!",
-    echo   "timestamp": "%%date%% %%time%%"
+    echo   "timestamp": "%DATE% %TIME%"
     echo }
 ) >"!CURRENT_FILE!"
 
@@ -575,7 +596,7 @@ if exist "%SUCCESS_FILE%" del "%SUCCESS_FILE%"
 (
     echo {
     echo   "version": "!VERSION_STR!",
-    echo   "timestamp": "%%date%% %%time%%"
+    echo   "timestamp": "%DATE% %TIME%"
     echo }
 ) >"%SUCCESS_FILE%"
 set "EXIT_CODE=0"
@@ -583,11 +604,13 @@ goto cleanup
 
 :fail
 set "EXIT_CODE=1"
+>>"%LOG_FILE%" echo [%DATE% %TIME%] Release update failed.
+
 :cleanup
 if exist "%PACKAGE%" del "%PACKAGE%" >>"%LOG_FILE%" 2>&1
 if exist "%WORKDIR%" rd /S /Q "%WORKDIR%" >>"%LOG_FILE%" 2>&1
 if exist "%LOCK_FILE%" del "%LOCK_FILE%" >>"%LOG_FILE%" 2>&1
->>"%LOG_FILE%" echo [%%date%% %%time%%] Release update script completed with exit code !EXIT_CODE!.
+>>"%LOG_FILE%" echo [%DATE% %TIME%] Release update script completed with exit code !EXIT_CODE!.
 exit /B !EXIT_CODE!
 """
     script_path.write_text(content, encoding="utf-8")
