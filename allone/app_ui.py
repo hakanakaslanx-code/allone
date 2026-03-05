@@ -453,6 +453,9 @@ translations = {
         "Top 5 Dominant Colors": "Top 5 Dominant Colors",
         "Hex Code": "Hex Code",
         "RGB Value": "RGB Value",
+        "Color Name": "Color Name",
+        "Live Color Picker": "Live Color Picker",
+        "Move mouse over the image to pick a color.": "Move mouse over the image to pick a color.",
         "ABOUT_CONTENT": (
             "AllOne Tools - v{version}\n"
             "A unified desktop workspace for file, image, data, and labeling workflows.\n"
@@ -863,6 +866,9 @@ translations = {
         "Top 5 Dominant Colors": "En Baskın 5 Renk",
         "Hex Code": "Hex Kodu",
         "RGB Value": "RGB Değeri",
+        "Color Name": "Renk Adı",
+        "Live Color Picker": "Canlı Renk Seçici",
+        "Move mouse over the image to pick a color.": "Renk seçmek için fareyi görselin üzerinde gezdirin.",
         "Please select a valid folder.": "Lütfen geçerli bir klasör seçin.",
         "Please select a valid image folder.": "Lütfen geçerli bir görsel klasörü seçin.",
         "Resize values and quality must be valid numbers.": "Yeniden boyutlandırma değerleri ve kalite geçerli sayılar olmalıdır.",
@@ -1235,8 +1241,13 @@ class ToolApp(ttk.Window):
         self.view_in_room_rug_center: Optional[Tuple[float, float]] = None
         self.view_in_room_display_scale: float = 1.0
         self.color_palette_image_path = tk.StringVar()
-        self.color_palette_results: List[Tuple[str, str]] = []
-        self.color_palette_swatches: List[Tuple[ttk.Label, ttk.Label, ttk.Label]] = []
+        self.color_palette_results: List[Tuple[str, str, str]] = []
+        self.color_palette_swatches: List[Tuple[ttk.Label, ttk.Label, ttk.Label, ttk.Label]] = []
+        self.color_palette_preview_photo: Optional[ImageTk.PhotoImage] = None
+        self.color_palette_original_image: Optional[Image.Image] = None
+        self.color_palette_current_hex = tk.StringVar(value="#FFFFFF")
+        self.color_palette_current_rgb = tk.StringVar(value="(255, 255, 255)")
+        self.color_palette_current_name = tk.StringVar(value="White")
         self.view_in_room_canvas_room_photo: Optional[ImageTk.PhotoImage] = None
         self.view_in_room_canvas_rug_photo: Optional[ImageTk.PhotoImage] = None
         self.view_in_room_canvas_room_item = None
@@ -2535,6 +2546,88 @@ class ToolApp(ttk.Window):
         h3 = ttk.Label(self.color_palette_container, text=self.tr("RGB Value"), font=self._font("Inter", 10, "bold"))
         h3.grid(row=0, column=2, padx=5, pady=5)
         self.register_widget(h3, "RGB Value")
+        
+        h4 = ttk.Label(self.color_palette_container, text=self.tr("Color Name"), font=self._font("Inter", 10, "bold"))
+        h4.grid(row=0, column=3, padx=5, pady=5)
+        self.register_widget(h4, "Color Name")
+
+        # Live Eye-dropper Area
+        interactive_card = self.create_section_card(parent, "Live Color Picker")
+        interactive_card.grid(row=0, column=1, rowspan=2, sticky="nsew", padx=8, pady=8)
+        
+        iframe = interactive_card.body
+        iframe.columnconfigure(0, weight=1)
+        
+        # Current color display
+        picker_info = ttk.Frame(iframe)
+        picker_info.pack(fill="x", padx=10, pady=5)
+        
+        self.color_palette_current_swatch = ttk.Label(picker_info, text="           ", background="white", relief="flat", padding=20)
+        self.color_palette_current_swatch.pack(side="left", padx=10)
+        
+        info_sub = ttk.Frame(picker_info)
+        info_sub.pack(side="left", fill="both", expand=True)
+        
+        ttk.Label(info_sub, textvariable=self.color_palette_current_name, font=self._font("Inter", 12, "bold")).pack(anchor="w")
+        ttk.Label(info_sub, textvariable=self.color_palette_current_hex, font=self._font("Cascadia Code", 10)).pack(anchor="w")
+        ttk.Label(info_sub, textvariable=self.color_palette_current_rgb, font=self._font("Cascadia Code", 10)).pack(anchor="w")
+
+        # Instruction
+        msg = ttk.Label(iframe, text=self.tr("Move mouse over the image to pick a color."), font=self._font("Inter", 9, "italic"))
+        msg.pack(pady=5)
+        self.register_widget(msg, "Move mouse over the image to pick a color.")
+
+        # Canvas for image
+        self.color_palette_canvas = tk.Canvas(iframe, bg="#1a1a1a", highlightthickness=1, highlightbackground="#333")
+        self.color_palette_canvas.pack(fill="both", expand=True, padx=10, pady=10)
+        self.color_palette_canvas.bind("<Motion>", self._on_color_palette_hover)
+
+    def _on_color_palette_hover(self, event: tk.Event) -> None:
+        if self.color_palette_original_image is None or self.color_palette_preview_photo is None:
+            return
+            
+        # Get canvas dimensions and image placement
+        cw = self.color_palette_canvas.winfo_width()
+        ch = self.color_palette_canvas.winfo_height()
+        iw = self.color_palette_preview_photo.width()
+        ih = self.color_palette_preview_photo.height()
+        
+        # Center coordinates
+        offset_x = (cw - iw) / 2
+        offset_y = (ch - ih) / 2
+        
+        # Relative mouse coordinates on the shown image
+        rx = event.x - offset_x
+        ry = event.y - offset_y
+        
+        if 0 <= rx < iw and 0 <= ry < ih:
+            # Map back to original image coordinates
+            orig_w, orig_h = self.color_palette_original_image.size
+            scale_x = orig_w / iw
+            scale_y = orig_h / ih
+            
+            orig_x = int(rx * scale_x)
+            orig_y = int(ry * scale_y)
+            
+            try:
+                # bounds check
+                if 0 <= orig_x < orig_w and 0 <= orig_y < orig_h:
+                    pixel = self.color_palette_original_image.getpixel((orig_x, orig_y))
+                    if isinstance(pixel, int): # Grayscale
+                        r = g = b = pixel
+                    else:
+                        r, g, b = pixel[:3]
+                        
+                    hex_code = f"#{r:02x}{g:02x}{b:02x}"
+                    rgb_val = f"({r}, {g}, {b})"
+                    name = backend.get_color_name((r, g, b))
+                    
+                    self.color_palette_current_hex.set(hex_code)
+                    self.color_palette_current_rgb.set(rgb_val)
+                    self.color_palette_current_name.set(name)
+                    self.color_palette_current_swatch.configure(background=hex_code)
+            except Exception:
+                pass
 
     def _select_color_palette_file(self) -> None:
         path = filedialog.askopenfilename(
@@ -2543,6 +2636,29 @@ class ToolApp(ttk.Window):
         )
         if path:
             self.color_palette_image_path.set(path)
+            self._display_color_palette_image(path)
+
+    def _display_color_palette_image(self, path: str) -> None:
+        try:
+            full_path = backend.clean_file_path(path)
+            if not os.path.exists(full_path):
+                return
+                
+            self.color_palette_original_image = Image.open(full_path).convert("RGB")
+            
+            # Create a preview that fits the canvas roughly
+            # winfo_width/height might be 1 if not rendered yet, so use a default or min
+            cw = max(400, self.color_palette_canvas.winfo_width())
+            ch = max(400, self.color_palette_canvas.winfo_height())
+            
+            preview = self.color_palette_original_image.copy()
+            preview.thumbnail((cw - 20, ch - 20))
+            
+            self.color_palette_preview_photo = ImageTk.PhotoImage(preview)
+            self.color_palette_canvas.delete("all")
+            self.color_palette_canvas.create_image(cw/2, ch/2, image=self.color_palette_preview_photo, anchor="center")
+        except Exception as e:
+            self.log(f"Error displaying preview: {e}")
 
     def _run_color_extraction(self) -> None:
         path = self.color_palette_image_path.get()
@@ -2552,6 +2668,10 @@ class ToolApp(ttk.Window):
             
         self.log(f"{self.tr('Extracting Colors')} from {os.path.basename(path)}...")
         
+        # Refresh preview if somehow lost
+        if self.color_palette_original_image is None:
+            self._display_color_palette_image(path)
+
         # Run extraction in background to avoid freezing UI
         def worker():
             results = backend.extract_colors_task(path, num_colors=5)
@@ -2559,27 +2679,28 @@ class ToolApp(ttk.Window):
             
         threading.Thread(target=worker, daemon=True).start()
 
-    def _update_color_palette_ui(self, results: List[Tuple[str, str]]) -> None:
+    def _update_color_palette_ui(self, results: List[Tuple[str, str, str]]) -> None:
         # Clear old swatches
-        for swatch, hex_lbl, rgb_lbl in self.color_palette_swatches:
+        for swatch, hex_lbl, rgb_lbl, name_lbl in self.color_palette_swatches:
             swatch.destroy()
             hex_lbl.destroy()
             rgb_lbl.destroy()
+            name_lbl.destroy()
         self.color_palette_swatches.clear()
         
         if not results:
             self.log(self.tr("Error: Failed to extract colors."))
             return
             
-        for i, (hex_code, rgb_val) in enumerate(results):
+        for i, (hex_code, rgb_val, name) in enumerate(results):
             # i+1 because row 0 is header
             row = i + 1
             
-            # Swatch (using a label with background)
+            # Swatch
             swatch = ttk.Label(self.color_palette_container, text="      ", background=hex_code, relief="flat", padding=10)
             swatch.grid(row=row, column=0, padx=5, pady=5)
             
-            # Hex string (clickable to copy?)
+            # Hex string 
             hex_lbl = ttk.Label(self.color_palette_container, text=hex_code, font=self._font("Cascadia Code", 10))
             hex_lbl.grid(row=row, column=1, padx=5, pady=5)
             
@@ -2587,7 +2708,11 @@ class ToolApp(ttk.Window):
             rgb_lbl = ttk.Label(self.color_palette_container, text=rgb_val, font=self._font("Cascadia Code", 10))
             rgb_lbl.grid(row=row, column=2, padx=5, pady=5)
             
-            self.color_palette_swatches.append((swatch, hex_lbl, rgb_lbl))
+            # Name
+            name_lbl = ttk.Label(self.color_palette_container, text=name, font=self._font("Inter", 10))
+            name_lbl.grid(row=row, column=3, padx=5, pady=5)
+            
+            self.color_palette_swatches.append((swatch, hex_lbl, rgb_lbl, name_lbl))
             
         self.log(self.tr("Color extraction complete."))
 

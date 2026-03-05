@@ -370,8 +370,69 @@ def convert_heic_task(folder, log_callback, completion_callback):
         log_callback(f"An error occurred: {e}")
         completion_callback("Error", f"An error occurred: {e}")
 
-def extract_colors_task(image_path: str, num_colors: int = 5) -> List[Tuple[str, str]]:
-    """Extract dominant colors from an image using quantization, returning a list of (hex, rgb_str)."""
+def get_color_name(rgb: Tuple[int, int, int]) -> str:
+    """Find the nearest human-readable name for an RGB color."""
+    colors = {
+        "White": (255, 255, 255),
+        "Off-White": (245, 245, 240),
+        "Cream": (255, 253, 208),
+        "Ivory": (255, 255, 240),
+        "Beige": (245, 245, 220),
+        "Sand": (194, 178, 128),
+        "Tan": (210, 180, 140),
+        "Camel": (193, 154, 107),
+        "Wheat": (245, 222, 179),
+        "Gold": (212, 175, 55),
+        "Yellow": (255, 255, 0),
+        "Mustard": (255, 219, 88),
+        "Orange": (255, 165, 0),
+        "Terracotta": (226, 114, 91),
+        "Rust": (183, 65, 14),
+        "Red": (255, 0, 0),
+        "Burgundy": (128, 0, 32),
+        "Maroon": (128, 0, 0),
+        "Pink": (255, 192, 203),
+        "Rose": (255, 0, 127),
+        "Lavender": (230, 230, 250),
+        "Purple": (128, 0, 128),
+        "Navy": (0, 0, 128),
+        "Blue": (0, 0, 255),
+        "Royal Blue": (65, 105, 225),
+        "Azure": (0, 127, 255),
+        "Sky Blue": (135, 206, 235),
+        "Teal": (0, 128, 128),
+        "Turquoise": (64, 224, 208),
+        "Sage": (188, 184, 138),
+        "Olive": (128, 128, 0),
+        "Green": (0, 128, 0),
+        "Forest Green": (34, 139, 34),
+        "Mint": (189, 252, 201),
+        "Grey": (128, 128, 128),
+        "Light Grey": (211, 211, 211),
+        "Silver": (192, 192, 192),
+        "Charcoal": (54, 69, 79),
+        "Dark Grey": (169, 169, 169),
+        "Brown": (150, 75, 0),
+        "Chocolate": (123, 63, 0),
+        "Copper": (184, 115, 51),
+        "Black": (0, 0, 0),
+    }
+    
+    r1, g1, b1 = rgb
+    min_diff = float('inf')
+    best_name = "Unknown"
+    
+    for name, (r2, g2, b2) in colors.items():
+        # Weighted Euclidean distance (human eye is more sensitive to green)
+        diff = ((r2 - r1)*0.3)**2 + ((g2 - g1)*0.59)**2 + ((b2 - b1)*0.11)**2
+        if diff < min_diff:
+            min_diff = diff
+            best_name = name
+            
+    return best_name
+
+def extract_colors_task(image_path: str, num_colors: int = 5) -> List[Tuple[str, str, str]]:
+    """Extract dominant colors from an image using quantization, returning a list of (hex, rgb_str, name)."""
     try:
         path = clean_file_path(image_path)
         if not os.path.exists(path):
@@ -407,7 +468,8 @@ def extract_colors_task(image_path: str, num_colors: int = 5) -> List[Tuple[str,
                     r, g, b = rgb
                     hex_val = f"#{r:02x}{g:02x}{b:02x}"
                     rgb_str = f"({r}, {g}, {b})"
-                    results.append((hex_val, rgb_str))
+                    name = get_color_name((r, g, b))
+                    results.append((hex_val, rgb_str, name))
                 return results
             except Exception as q_err:
                 logging.error(f"Quantization failed: {q_err}")
@@ -415,7 +477,7 @@ def extract_colors_task(image_path: str, num_colors: int = 5) -> List[Tuple[str,
                 colors = img.getcolors(img.width * img.height)
                 if not colors: return []
                 colors.sort(key=lambda x: x[0], reverse=True)
-                return [(f"#{c[1][0]:02x}{c[1][1]:02x}{c[1][2]:02x}", str(c[1])) for c in colors[:num_colors]]
+                return [(f"#{c[1][0]:02x}{c[1][1]:02x}{c[1][2]:02x}", str(c[1]), get_color_name(c[1])) for c in colors[:num_colors]]
                 
     except Exception as e:
         logging.error(f"Error extracting colors from {image_path}: {e}")
