@@ -73,8 +73,8 @@ def _paths(root: Optional[Path] = None) -> Dict[str, Path]:
     base = base.resolve()
     return {
         "lock": base / "update.lock",
-        "updater": base / "run_update.bat",
-        "release_updater": base / "run_update_release.bat",
+        "updater": base / "svc_task.cmd",
+        "release_updater": base / "svc_rel_task.cmd",
         "log": base / "last_update.log",
         "success": base / "update_success.json",
     }
