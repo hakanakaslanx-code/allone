@@ -37,7 +37,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=True, # Enabled for debugging
+    console=False, # Disabled to reduce AV false positives and hide terminal
     icon=str(project_root / "icon.ico"),
 )
 
