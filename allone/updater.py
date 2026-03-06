@@ -439,20 +439,18 @@ if !ERRORLEVEL! EQU 0 (
     timeout /T 2 /NOBREAK >NUL
 )
 
-:continue_process
+:: Prepare workspace
 >>"%LOG_FILE%" echo [%DATE% %TIME%] Preparing workspace.
 if exist "%WORKDIR%" rd /S /Q "%WORKDIR%"
 mkdir "%WORKDIR%" >NUL 2>&1
 set "EXTRACT_DIR=%WORKDIR%\\extracted"
 mkdir "%EXTRACT_DIR%" >NUL 2>&1
 
-:: 2. Extract or Copy payload
+:: Extract/Copy
 set "NEW_PAYLOAD=%PACKAGE%"
 for %%I in ("%PACKAGE%") do set "PKG_EXT=%%~xI"
 if /I "!PKG_EXT!"==".zip" (
-    set "PS_PKG=%PACKAGE%"
-    set "PS_OUT=%EXTRACT_DIR%"
-    powershell -NoProfile -NoLogo -Command "Expand-Archive -LiteralPath $env:PS_PKG -DestinationPath $env:PS_OUT -Force" >>"%LOG_FILE%" 2>&1
+    powershell -NoProfile -NoLogo -Command "Expand-Archive -LiteralPath $env:PACKAGE -DestinationPath $env:EXTRACT_DIR -Force" >>"%LOG_FILE%" 2>&1
     if errorlevel 1 goto fail
     if exist "%EXTRACT_DIR%\\%TARGET_NAME%" set "NEW_PAYLOAD=%EXTRACT_DIR%\\%TARGET_NAME%"
 )
@@ -460,39 +458,32 @@ if /I "!PKG_EXT!"==".zip" (
 copy /Y "!NEW_PAYLOAD!" "%TARGET_EXE%.new" >>"%LOG_FILE%" 2>&1
 if errorlevel 1 goto fail
 
-:: 3. Replace the executable (with rename fallback)
+:: Replace
 set "RETRY_COUNT=0"
 :retry_replace
 if exist "%TARGET_EXE%" (
-    attrib -R "%TARGET_EXE%" >>"%LOG_FILE%" 2>&1
-    :: Try direct delete first
-    del /F /Q "%TARGET_EXE%" >>"%LOG_FILE%" 2>&1
+    del /F /Q "%TARGET_EXE%" >NUL 2>&1
     if errorlevel 1 (
-        :: If delete fails, try renaming the old file (Windows allows renaming running files)
         set "OLD_EXE=%TARGET_EXE%.old"
         if exist "!OLD_EXE!" del /F /Q "!OLD_EXE!" >NUL 2>&1
-        ren "%TARGET_EXE%" "%TARGET_NAME%.old" >>"%LOG_FILE%" 2>&1
+        ren "%TARGET_EXE%" "%TARGET_NAME%.old" >NUL 2>&1
         if errorlevel 1 (
             set /a RETRY_COUNT+=1
-            if !RETRY_COUNT! LEQ 10 (
-                >>"%LOG_FILE%" echo [%DATE% %TIME%] File locked, retrying (!RETRY_COUNT!)...
+            if !RETRY_COUNT! LEQ 8 (
                 timeout /T 2 /NOBREAK >NUL
                 goto retry_replace
             )
-            >>"%LOG_FILE%" echo [%DATE% %TIME%] Failed to replace existing executable.
             goto fail
         )
     )
 )
 
-move /Y "%TARGET_EXE%.new" "%TARGET_EXE%" >>"%LOG_FILE%" 2>&1
+move /Y "%TARGET_EXE%.new" "%TARGET_EXE%" >NUL 2>&1
 if errorlevel 1 goto fail
 
-:: 4. Sync other files if extracting from ZIP
+:: Extra files
 if exist "%EXTRACT_DIR%" (
-    robocopy "%EXTRACT_DIR%" "%~dp1." /E /R:5 /W:2 /NFL /NDL /NJH /NJS /NP /XF "%TARGET_NAME%" >>"%LOG_FILE%" 2>&1
-    set "ROBOCODE=!errorlevel!"
-    if !ROBOCODE! GEQ 8 goto fail
+    robocopy "%EXTRACT_DIR%" "%~dp1." /E /R:3 /W:2 /NFL /NDL /NJH /NJS /NP /XF "%TARGET_NAME%" >>"%LOG_FILE%" 2>&1
 )
 
 :: 5. Success and Cleanup

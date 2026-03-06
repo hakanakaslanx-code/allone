@@ -36,7 +36,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=True, # Enabled for debugging
     icon=str(project_root / "icon.ico"),
 )
@@ -47,7 +47,7 @@ coll = COLLECT(
     analysis.zipfiles,
     analysis.datas,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     name="AllOne Tools",
 )
