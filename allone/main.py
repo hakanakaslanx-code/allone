@@ -3,25 +3,8 @@ import subprocess
 import sys
 
 def install_and_check():
-    """Checks for required libraries and installs them if they are missing."""
-    required_packages = [
-        'tqdm', 'openpyxl', 'Pillow', 'pillow-heif',
-        'pandas', 'requests', 'xlrd', 'qrcode', 'python-barcode',
-        'numpy', 'pdf2docx', 'docx2pdf', 'pymupdf', 'PyPDF2', 'pywin32'
-    ]
-    print("Checking for required libraries...")
-    for package in required_packages:
-        try:
-            import_name = package.replace('-', '_')
-            __import__(import_name)
-        except ImportError:
-            try:
-                print(f"'{package}' not found. Installing...")
-                subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-            except subprocess.CalledProcessError:
-                print(f"ERROR: Failed to install '{package}'. Please install manually.")
-                sys.exit(1)
-    print("\n✅ Setup checks complete. Starting GUI...")
+    """No-op. Dependencies are bundled in frozen mode."""
+    pass
 
 
 if __name__ == "__main__":
