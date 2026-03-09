@@ -1480,17 +1480,7 @@ class ToolApp(ttk.Window):
         self._dependency_setup_in_progress = False
         self._dependency_setup_cancel = threading.Event()
 
-        self.run_in_thread(
-            check_for_updates,
-            self,
-            self.log,
-            __version__,
-            silent=True,
-            status_callback=self._on_update_status_changed,
-        )
-
         self.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.after(1200, self._show_pending_update_notice)
 
     def _parse_zoom_level(self, value: str) -> float:
         mapping = {"80%": 0.8, "100%": 1.0, "120%": 1.2}
@@ -6349,35 +6339,7 @@ class ToolApp(ttk.Window):
         top_frame = ttk.Frame(frame, style="PanelBody.TFrame")
         top_frame.pack(fill="x", padx=0, pady=5)
 
-        update_button = ttk.Button(
-            top_frame,
-            text=self.tr("Check for Updates"),
-            command=lambda: self.run_in_thread(
-                check_for_updates,
-                self,
-                self.log,
-                __version__,
-                silent=False,
-                status_callback=self._on_update_status_changed,
-            ),
-        )
-        update_button.pack(side="left")
-        self.register_widget(update_button, "Check for Updates")
-
-        auto_update_toggle = ttk.Checkbutton(
-            top_frame,
-            text=self.tr("Auto-update on startup"),
-            variable=self.auto_update_var,
-            command=self._on_toggle_auto_update,
-        )
-        auto_update_toggle.pack(side="left", padx=(12, 0))
-        self.register_widget(auto_update_toggle, "Auto-update on startup")
-
-        self.update_status_label = ttk.Label(
-            top_frame,
-            textvariable=self.update_status_var,
-        )
-        self.update_status_label.pack(side="left", padx=(12, 0))
+        content = self.tr("ABOUT_CONTENT").format(version=__version__)
 
         donation_button = ttk.Button(
             top_frame,
