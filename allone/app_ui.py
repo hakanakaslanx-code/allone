@@ -1194,8 +1194,8 @@ class ToolApp(ttk.Window):
                 print(f"Warning: Could not set icon: {e}")
         # ----------------------------------
 
-        cleanup_update_artifacts()
-        self._pending_update_metadata = consume_update_success_message() or {}
+        self._pending_update_metadata = {}
+
 
         self.settings = load_settings()
         self.settings.setdefault("rinven_history", {})
