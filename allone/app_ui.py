@@ -33,13 +33,6 @@ from allone.rinven_import_manager import (
     make_empty_row,
     normalise_size,
 )
-from allone.updater import (
-    UpdateInfo,
-    check_for_updates,
-    cleanup_update_artifacts,
-    consume_update_success_message,
-    perform_update_installation,
-)
 from allone.version import __version__
 from allone.ui.maps_scraper_tab import GoogleMapsScraperTab
 from allone.modules.setup.dependency_setup import run_setup
@@ -1795,66 +1788,6 @@ class ToolApp(ttk.Window):
                 except Exception:
                     pass
 
-    def _start_update_flow(self, update_info: UpdateInfo) -> None:
-        if self._update_in_progress:
-            return
-        self._update_in_progress = True
-        self.log(self.tr("Preparing update…"))
-        self._set_update_status("preparing", version=update_info.version)
-        self.prepare_for_update()
-        self.run_in_thread(self._execute_update_install, update_info)
-
-    def _execute_update_install(self, update_info: UpdateInfo) -> None:
-        try:
-            self._on_update_status_changed("auto_installing", {"version": update_info.version})
-            perform_update_installation(self, update_info, self.log)
-        except Exception as exc:
-            self.after(0, lambda: self._handle_update_failure(exc))
-            return
-        self.after(0, self._exit_for_update)
-
-    def _handle_update_failure(self, error: Exception) -> None:
-        self._update_in_progress = False
-        self._shutdown_event.clear()
-        cleanup_update_artifacts()
-        message = self.tr("Update failed, try again later.")
-        self._set_update_status("error", error=str(error))
-        self.log(message)
-        messagebox.showerror(self.tr("Update"), f"{message}\n\n{error}")
-
-    def _exit_for_update(self) -> None:
-        self.log(self.tr("Update in progress…"))
-        self.after(200, self.on_close)
-
-    def prepare_for_update(self) -> None:
-        if self._shutdown_event.is_set():
-            return
-        self._shutdown_event.set()
-        try:
-            self._persist_view_preferences()
-        except Exception:
-            pass
-        try:
-            self.update_settings["auto_update_on_startup"] = bool(self.auto_update_var.get())
-            save_settings(self.settings)
-        except Exception:
-            pass
-        self._join_background_threads()
-        self.log(self.tr("Unsaved work saved automatically before update."))
-
-    def _join_background_threads(self, timeout: float = 5.0) -> None:
-        deadline = time.time() + timeout
-        while True:
-            with self._thread_lock:
-                threads = [thread for thread in self._background_threads if thread.is_alive()]
-            if not threads or time.time() >= deadline:
-                break
-            for thread in threads:
-                remaining = deadline - time.time()
-                if remaining <= 0:
-                    break
-                thread.join(timeout=min(0.5, max(0.1, remaining)))
-
     def show_toast(self, message: str, duration: int = 4000) -> None:
         if not message:
             return
@@ -1885,24 +1818,6 @@ class ToolApp(ttk.Window):
         toast.geometry(f"+{int(x)}+{int(y)}")
         toast.deiconify()
         toast.after(duration, toast.destroy)
-
-    def _show_pending_update_notice(self) -> None:
-        data = getattr(self, "_pending_update_metadata", {}) or {}
-        if not data:
-            cleanup_update_artifacts()
-            return
-
-        version = data.get("version")
-        if version:
-            message = self.tr("Updated to v{version}").format(version=version)
-            self._set_update_status("up_to_date", version=version)
-        else:
-            message = self.tr("Update in progress…")
-            self._set_update_status("preparing", version=__version__)
-        self.log(message)
-        self.show_toast(message)
-        self._pending_update_metadata = {}
-        cleanup_update_artifacts()
 
     def task_completion_popup(self, status: str, message: str) -> None:
         """Display a completion dialog from background tasks on the main thread."""
