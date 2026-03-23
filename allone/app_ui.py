@@ -259,6 +259,7 @@ translations = {
         "Content:": "Content:",
         "Type:": "Type:",
         "Rug #:": "Rug #:",
+        "Area:": "Area:",
         "Include Barcode": "Include Barcode",
         "Price:": "Price:",
         "SKU:": "SKU:",
@@ -716,6 +717,7 @@ translations = {
         "Content:": "İçerik:",
         "Type:": "Tür:",
         "Rug #:": "Halı No:",
+        "Area:": "Alan:",
         "Include Barcode": "Barkodu Dahil Et",
         "Price:": "Fiyat:",
         "SKU:": "SKU:",
@@ -5925,6 +5927,7 @@ class ToolApp(ttk.Window):
         self.rinven_style = tk.StringVar()
         self.rinven_content = tk.StringVar()
         self.rinven_type = tk.StringVar()
+        self.rinven_area = tk.StringVar()
         self.rinven_rug_no = tk.StringVar()
         self.rinven_sku = tk.StringVar()
         self.rinven_barcode_var = tk.StringVar()
@@ -5963,6 +5966,7 @@ class ToolApp(ttk.Window):
             ("design", "Design:", self.rinven_design),
             ("color", "Color:", self.rinven_color),
             ("size", "Size:", self.rinven_size),
+            ("area", "Area:", self.rinven_area),
             ("origin", "Origin:", self.rinven_origin),
             ("style", "Style:", self.rinven_style),
             ("content", "Content:", self.rinven_content),
@@ -6779,6 +6783,7 @@ class ToolApp(ttk.Window):
             "style": self._normalize_rinven_value(self.rinven_style.get()),
             "content": self._normalize_rinven_value(self.rinven_content.get()),
             "type": self._normalize_rinven_value(self.rinven_type.get()),
+            "area": self._normalize_rinven_value(self.rinven_area.get()),
             "sku": self._normalize_rinven_value(self.rinven_sku.get()),
             "rug_no": self._normalize_rinven_value(self.rinven_rug_no.get()),
             "font_size": self.rinven_font_size.get(),
@@ -7202,6 +7207,7 @@ class ToolApp(ttk.Window):
             "Design",
             "Color",
             "Size",
+            "Area",
             "Origin",
             "Style",
             "Content",
@@ -7219,6 +7225,7 @@ class ToolApp(ttk.Window):
                 "ABC-123",
                 "Red/Blue",
                 "5' x 8'",
+                "40 sqft",
                 "Turkey",
                 "Traditional",
                 "Wool",
@@ -7234,6 +7241,7 @@ class ToolApp(ttk.Window):
                 "ML-98",
                 "Gray",
                 "6' x 9'",
+                "54 sqft",
                 "India",
                 "Modern",
                 "Wool & Viscose",
