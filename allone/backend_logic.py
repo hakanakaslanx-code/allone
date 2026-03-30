@@ -1761,13 +1761,16 @@ def generate_bulk_rinven_tags(
     default_font_size = _coerce_font_size(font_size_value)
 
     total_rows = len(dataframe)
+    pad_width = len(str(total_rows))
     generated = 0
     skipped = 0
     failures = 0
     generated_files: List[Tuple[Dict[str, str], str]] = []
     slug_counts: Dict[str, int] = {}
+    row_counter = 0
 
     for index, row in dataframe.iterrows():
+        row_counter += 1
         details = {
             "collection": _pick_first_value(row, column_lookup, ["collection", "vcollection", "collection name"]),
             "design": _pick_first_value(row, column_lookup, ["design", "rugno", "rug no", "rug #"]),
@@ -1838,7 +1841,8 @@ def generate_bulk_rinven_tags(
                 f"Duplicate filename slug '{slug}' on row {index + 1}; saving as '{new_slug}'."
             )
             slug = new_slug
-        output_file = output_path / f"rinven_tag_{slug}.png"
+        row_prefix = str(row_counter).zfill(pad_width)
+        output_file = output_path / f"rinven_tag_{row_prefix}_{slug}.png"
 
         try:
             canvas.save(output_file)
