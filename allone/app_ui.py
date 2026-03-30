@@ -263,6 +263,9 @@ translations = {
         "Include Barcode": "Include Barcode",
         "Price:": "Price:",
         "SKU:": "SKU:",
+        "File Naming Order:": "File Naming Order:",
+        "Excel Row Order (1, 2, 3...)": "Excel Row Order (1, 2, 3...)",
+        "Column Value (Rug#, SKU...)": "Column Value (Rug#, SKU...)",
         "Bulk Tag Generation": "Bulk Tag Generation",
         "Output Format:": "Output Format:",
         "Tag Data Excel File:": "Tag Data Excel File:",
@@ -721,6 +724,9 @@ translations = {
         "Include Barcode": "Barkodu Dahil Et",
         "Price:": "Fiyat:",
         "SKU:": "SKU:",
+        "File Naming Order:": "Dosya Sıralama:",
+        "Excel Row Order (1, 2, 3...)": "Excel Satır Sırası (1, 2, 3...)",
+        "Column Value (Rug#, SKU...)": "Sütun Değeri (Halı#, SKU...)",
         "Bulk Tag Generation": "Excel'den Toplu Etiket Üretimi",
         "Output Format:": "Çıktı Formatı:",
         "Tag Data Excel File:": "Etiket Verisi Excel Dosyası:",
@@ -5942,6 +5948,7 @@ class ToolApp(ttk.Window):
         self.rinven_bulk_output = tk.StringVar()
         self.rinven_bulk_include_barcode = tk.BooleanVar(value=True)
         self.rinven_bulk_output_format = tk.StringVar(value="png")
+        self.rinven_bulk_sort_mode = tk.StringVar(value="row_order")
 
         self.rinven_field_widgets = {}
 
@@ -6217,6 +6224,32 @@ class ToolApp(ttk.Window):
         )
         bulk_barcode_check.grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(4, 4))
         self.register_widget(bulk_barcode_check, "Include Barcode from Excel")
+        row += 1
+
+        sort_mode_label = ttk.Label(frame, text=self.tr("File Naming Order:"))
+        sort_mode_label.grid(row=row, column=0, sticky="ne", padx=6, pady=4)
+        self.register_widget(sort_mode_label, "File Naming Order:")
+
+        sort_mode_frame = ttk.Frame(frame)
+        sort_mode_frame.grid(row=row, column=1, columnspan=2, sticky="w", padx=6, pady=4)
+
+        row_order_radio = ttk.Radiobutton(
+            sort_mode_frame,
+            text=self.tr("Excel Row Order (1, 2, 3...)"),
+            variable=self.rinven_bulk_sort_mode,
+            value="row_order",
+        )
+        row_order_radio.pack(anchor="w")
+        self.register_widget(row_order_radio, "Excel Row Order (1, 2, 3...)")
+
+        column_value_radio = ttk.Radiobutton(
+            sort_mode_frame,
+            text=self.tr("Column Value (Rug#, SKU...)"),
+            variable=self.rinven_bulk_sort_mode,
+            value="column_value",
+        )
+        column_value_radio.pack(anchor="w")
+        self.register_widget(column_value_radio, "Column Value (Rug#, SKU...)")
         row += 1
 
         bulk_generate_button = ttk.Button(
@@ -7345,6 +7378,8 @@ class ToolApp(ttk.Window):
         except Exception:
             pass
 
+        sort_mode = self.rinven_bulk_sort_mode.get()
+
         thread = threading.Thread(
             target=self._bulk_generate_thread,
             args=(
@@ -7355,6 +7390,7 @@ class ToolApp(ttk.Window):
                 font_size_value,
                 output_format,
                 label_size_in,
+                sort_mode,
             ),
             daemon=True,
         )
@@ -7369,6 +7405,7 @@ class ToolApp(ttk.Window):
         font_size_value: Optional[str],
         output_format: str,
         label_size_in: Optional[Tuple[float, float]],
+        sort_mode: str = "row_order",
     ) -> None:
         try:
             generated_files, summary_message, status = backend.generate_bulk_rinven_tags(
@@ -7380,6 +7417,7 @@ class ToolApp(ttk.Window):
                 output_format,
                 label_size_in,
                 log_callback=self.log,
+                sort_mode=sort_mode,
             )
         except Exception as exc:  # pragma: no cover - defensive UI layer
             def on_error() -> None:

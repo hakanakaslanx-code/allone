@@ -1698,6 +1698,7 @@ def generate_bulk_rinven_tags(
     output_format: str,
     label_size_in: Optional[Tuple[float, float]],
     log_callback=None,
+    sort_mode: str = "row_order",
 ) -> Tuple[List[Tuple[Dict[str, str], str]], str, str]:
     """Generate Rinven tags in bulk and return the created files with their details.
 
@@ -1841,8 +1842,11 @@ def generate_bulk_rinven_tags(
                 f"Duplicate filename slug '{slug}' on row {index + 1}; saving as '{new_slug}'."
             )
             slug = new_slug
-        row_prefix = str(row_counter).zfill(pad_width)
-        output_file = output_path / f"rinven_tag_{row_prefix}_{slug}.png"
+        if sort_mode == "row_order":
+            row_prefix = str(row_counter).zfill(pad_width)
+            output_file = output_path / f"rinven_tag_{row_prefix}_{slug}.png"
+        else:
+            output_file = output_path / f"rinven_tag_{slug}.png"
 
         try:
             canvas.save(output_file)
