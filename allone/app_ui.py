@@ -39,6 +39,8 @@ from allone.modules.setup.dependency_setup import run_setup
 from allone import backend_logic as backend
 from allone.backend_logic import get_resource_path
 from allone.speech_queue import SpeechQueue
+from allone import updater
+import webbrowser
 
 translations = {
     "en": {
@@ -1482,6 +1484,49 @@ class ToolApp(ttk.Window):
         self._dependency_setup_cancel = threading.Event()
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
+        
+        # Safe Update Sync - Background check on startup
+        self.after(2000, self.begin_safe_update_check)
+
+    def begin_safe_update_check(self) -> None:
+        """Start the background check for updates."""
+        if not self.auto_update_var.get():
+            return
+            
+        self._set_update_status("checking")
+        self.run_in_thread(self._perform_safe_update_check)
+
+    def _perform_safe_update_check(self) -> None:
+        """Query GitHub for updates (safe check only)."""
+        try:
+            update_info = updater.check_for_updates()
+            def update_ui() -> None:
+                if update_info:
+                    version = update_info.get("version")
+                    self._set_update_status("update_available", version=version)
+                    self._pending_update_metadata = update_info
+                    self.log(self.tr("Update Available").format(version=version))
+                    
+                    # Add a visual indicator in the title if possible, or just log it
+                    self.title(f"AllOne Tools v{__version__} - {self.tr('Update Available')}: v{version}")
+                else:
+                    self._set_update_status("up_to_date")
+            
+            self.after(0, update_ui)
+        except Exception as e:
+            def report_error() -> None:
+                self._set_update_status("error", error=str(e))
+            self.after(0, report_error)
+
+    def open_latest_release(self) -> None:
+        """Open the latest release page in the default web browser."""
+        url = self._pending_update_metadata.get("url")
+        if not url:
+            # Fallback to the main repo releases page
+            url = f"https://github.com/{updater.OWNER}/{updater.REPO}/releases"
+        
+        webbrowser.open(url)
+        self.log(f"Opening update page: {url}")
 
     def _parse_zoom_level(self, value: str) -> float:
         mapping = {"80%": 0.8, "100%": 1.0, "120%": 1.2}
@@ -6365,6 +6410,53 @@ class ToolApp(ttk.Window):
         self.setup_log_area.configure(state=tk.DISABLED)
         self.setup_log_area.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=6, pady=(0, 6))
         setup_body.rowconfigure(2, weight=1)
+
+        # --- Application Update Section ---
+        update_card = ttk.Labelframe(
+            frame,
+            text=self.tr("Update"),
+            style="Card.TLabelframe",
+        )
+        update_card.pack(fill="x", padx=0, pady=(4, 8))
+        self.register_widget(update_card, "Update")
+
+        update_body = ttk.Frame(update_card, style="PanelBody.TFrame")
+        update_body.pack(fill="both", expand=True, padx=6, pady=6)
+
+        self.update_check_button = ttk.Button(
+            update_body,
+            text=self.tr("Check for Updates"),
+            command=self.begin_safe_update_check,
+        )
+        self.update_check_button.pack(side="left", padx=(0, 10))
+        self.register_widget(self.update_check_button, "Check for Updates")
+
+        self.update_status_label = ttk.Label(
+            update_body,
+            textvariable=self.update_status_var,
+            style="Secondary.TLabel",
+        )
+        self.update_status_label.pack(side="left", fill="x", expand=True)
+
+        self.update_now_button = ttk.Button(
+            update_body,
+            text=self.tr("Update now"),
+            command=self.open_latest_release,
+            style="Accent.TButton",
+        )
+        # We only show this button when an update is actually available.
+        # It's managed by the update status refresh logic or we can just pack/unpack it.
+        
+        # Adding a trace to the update status to show/hide the "Update now" button
+        def on_status_change(*_):
+            state = getattr(self, "_update_status_state", "idle")
+            if state == "update_available":
+                self.update_now_button.pack(side="right")
+            else:
+                self.update_now_button.pack_forget()
+
+        self.update_status_var.trace_add("write", on_status_change)
+        on_status_change() # Initial check
 
         self.help_text_area = ScrolledText(
             frame,
