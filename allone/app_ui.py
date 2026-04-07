@@ -146,6 +146,17 @@ translations = {
         "Some required cells are empty. See below for details.": "Some required cells are empty. See below for details.",
         "Missing fields: {fields}": "Missing fields: {fields}",
         "All required fields look filled.": "All required fields look filled.",
+        "Inventory Macro": "Inventory Macro",
+        "Macro Settings": "Macro Settings",
+        "Excel Column Name:": "Excel Column Name:",
+        "Start Delay (seconds):": "Start Delay (seconds):",
+        "Entry Delay (seconds):": "Entry Delay (seconds):",
+        "Start Macro": "Start Macro",
+        "Macro already running.": "Macro already running.",
+        "Give focus to the target input field!": "Give focus to the target input field!",
+        "Macro starting in {n}s...": "Macro starting in {n}s...",
+        "Macro finished successfully.": "Macro finished successfully.",
+        "Macro failed or aborted.": "Macro failed or aborted.",
         "JSON": "JSON",
         "Mapping could not be saved: {error}": "Mapping could not be saved: {error}",
         "Mapping saved as {filename}.": "Mapping saved as {filename}.",
@@ -1039,6 +1050,7 @@ PANEL_INFO = {
         "Help & About": "Review update status, helpful links and support information for the app.",
         "PDF Tools": "Convert, merge, split, and compress PDF documents.",
         "Color Palette": "Extract dominant colors from images or pick live colors.",
+        "Inventory Macro": "Automatically type values from an Excel column into another application (e.g., inventory systems).",
     },
     "tr": {
         "1. Copy/Move Files by List": "Numara listesindeki kayıtlara göre dosyaları hızlıca kopyalayın veya taşıyın.",
@@ -1059,6 +1071,7 @@ PANEL_INFO = {
         "Help & About": "Uygulama sürümünü, rehberleri ve destek bağlantılarını tek yerde gösterir.",
         "PDF Tools": "PDF belgelerini dönüştürün, birleştirin, bölün ve sıkıştırın.",
         "Color Palette": "Görsellerden baskın renkleri çıkarın veya canlı renkleri seçin.",
+        "Inventory Macro": "Excel sütunundaki değerleri otomatik olarak başka bir uygulamaya (ör. envanter sistemleri) yazar.",
     },
 }
 
@@ -1351,6 +1364,12 @@ class ToolApp(ttk.Window):
             except tk.TclError:
                 continue
 
+        self.inventory_macro_excel_path = tk.StringVar()
+        self.inventory_macro_column_name = tk.StringVar(value="Rug #")
+        self.inventory_macro_start_delay = tk.IntVar(value=5)
+        self.inventory_macro_entry_delay = tk.DoubleVar(value=1.0)
+        self.inventory_macro_running = False
+
         self.update_idletasks()
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
@@ -1437,6 +1456,7 @@ class ToolApp(ttk.Window):
             "Code Generators",
             "Rinven Import Sheet Generator",
             "Rinven Tag",
+            "Inventory Macro",
             "Help & About",
         ):
             tab = ScrollableTab(self.section_notebook)
@@ -1460,6 +1480,7 @@ class ToolApp(ttk.Window):
         self.create_code_gen_panels(self.section_frames["Code Generators"])
         self.create_rinven_import_panel(self.section_frames["Rinven Import Sheet Generator"])
         self.create_rinven_tag_panel(self.section_frames["Rinven Tag"])
+        self.create_inventory_macro_tab(self.section_frames["Inventory Macro"])
         self.create_about_panel(self.section_frames["Help & About"])
 
         self.log_area = ScrolledText(self.content_frame, height=8)
@@ -6326,6 +6347,112 @@ class ToolApp(ttk.Window):
         self.rinven_font_size.trace_add("write", self._queue_rinven_preview_update)
 
         self._queue_rinven_preview_update()
+
+    def create_inventory_macro_tab(self, parent: ttk.Frame):
+        parent.columnconfigure(0, weight=1)
+        card = self.create_section_card(parent, "Inventory Macro")
+        card.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        frame = card.body
+
+        # Instruction label
+        instr = ttk.Label(
+            frame,
+            text=self.tr("Automatically type values from an Excel column into another application (e.g., inventory systems)."),
+            wraplength=600,
+            style="Secondary.TLabel"
+        )
+        instr.pack(fill="x", padx=6, pady=(0, 10))
+
+        settings_group = ttk.Labelframe(frame, text=self.tr("Macro Settings"), padding=10)
+        settings_group.pack(fill="x", padx=6, pady=5)
+        settings_group.columnconfigure(1, weight=1)
+
+        # File selection
+        ttk.Label(settings_group, text=self.tr("Tag Data Excel File:")).grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        file_entry = ttk.Entry(settings_group, textvariable=self.inventory_macro_excel_path)
+        file_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=5)
+        ttk.Button(settings_group, text=self.tr("Browse"), command=self._browse_inventory_macro_excel).grid(row=0, column=2, padx=5, pady=5)
+
+        # Column name
+        ttk.Label(settings_group, text=self.tr("Excel Column Name:")).grid(row=1, column=0, sticky="w", padx=5, pady=5)
+        ttk.Entry(settings_group, textvariable=self.inventory_macro_column_name).grid(row=1, column=1, columnspan=2, sticky="ew", padx=5, pady=5)
+
+        # Start delay
+        ttk.Label(settings_group, text=self.tr("Start Delay (seconds):")).grid(row=2, column=0, sticky="w", padx=5, pady=5)
+        ttk.Spinbox(settings_group, from_=1, to=30, textvariable=self.inventory_macro_start_delay).grid(row=2, column=1, columnspan=2, sticky="ew", padx=5, pady=5)
+
+        # Entry delay
+        ttk.Label(settings_group, text=self.tr("Entry Delay (seconds):")).grid(row=3, column=0, sticky="w", padx=5, pady=5)
+        ttk.Spinbox(settings_group, from_=0.1, to=10.0, increment=0.1, textvariable=self.inventory_macro_entry_delay).grid(row=3, column=1, columnspan=2, sticky="ew", padx=5, pady=5)
+
+        # Start Button
+        self.inventory_macro_button = ttk.Button(
+            frame,
+            text=self.tr("Start Macro"),
+            style="Accent.TButton",
+            command=self.start_inventory_macro
+        )
+        self.inventory_macro_button.pack(pady=20)
+        self.register_widget(self.inventory_macro_button, "Start Macro")
+
+    def _browse_inventory_macro_excel(self) -> None:
+        path = filedialog.askopenfilename(
+            filetypes=[(self.tr("Excel Files"), "*.xlsx *.xls"), (self.tr("All Files"), "*.*")]
+        )
+        if path:
+            self.inventory_macro_excel_path.set(path)
+
+    def start_inventory_macro(self) -> None:
+        if self.inventory_macro_running:
+            messagebox.showwarning(self.tr("Warning"), self.tr("Macro already running."))
+            return
+
+        excel_path = self.inventory_macro_excel_path.get().strip()
+        column_name = self.inventory_macro_column_name.get().strip()
+
+        if not excel_path or not os.path.exists(excel_path):
+            messagebox.showerror(self.tr("Error"), self.tr("Please choose an Excel file first."))
+            return
+
+        if not column_name:
+            messagebox.showerror(self.tr("Error"), self.tr("Excel Column Name:"))
+            return
+
+        start_delay = self.inventory_macro_start_delay.get()
+        entry_delay = self.inventory_macro_entry_delay.get()
+
+        self.inventory_macro_running = True
+        self.inventory_macro_button.config(state="disabled")
+        
+        thread = threading.Thread(
+            target=self._inventory_macro_thread,
+            args=(excel_path, column_name, start_delay, entry_delay),
+            daemon=True
+        )
+        thread.start()
+
+    def _inventory_macro_thread(self, excel_path: str, column_name: str, start_delay: int, entry_delay: float) -> None:
+        try:
+            success, message = backend.run_inventory_macro(
+                excel_path=excel_path,
+                column_name=column_name,
+                start_delay=start_delay,
+                entry_delay=entry_delay,
+                log_callback=self.log
+            )
+            
+            if success:
+                self.after(0, lambda: messagebox.showinfo(self.tr("Success"), self.tr("Macro finished successfully.")))
+            else:
+                self.after(0, lambda: messagebox.showerror(self.tr("Error"), message))
+        
+        except Exception as e:
+            self.after(0, lambda: messagebox.showerror(self.tr("Error"), f"Macro error: {e}"))
+        
+        finally:
+            self.inventory_macro_running = False
+            self.after(0, lambda: self.inventory_macro_button.config(state="normal"))
+
 
     def create_about_panel(self, parent: ttk.Frame):
         parent.columnconfigure(0, weight=1)

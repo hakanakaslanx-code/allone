@@ -15,6 +15,9 @@ import pandas as pd
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import pillow_heif
 import qrcode
+import time
+import pyautogui
+pyautogui.FAILSAFE = True  # Move mouse to top-left corner to stop
 
 try:
     import win32print  # type: ignore
@@ -2102,3 +2105,59 @@ def add_image_links_task(input_path, links_path, key_col, log_callback, completi
     except Exception as e:
         log_callback(f"An error occurred: {e}")
         completion_callback("Error", f"An error occurred: {e}")
+
+
+def run_inventory_macro(
+    excel_path: str,
+    column_name: str,
+    start_delay: int = 5,
+    entry_delay: float = 1.0,
+    log_callback: Optional[Callable[[str], None]] = None,
+) -> Tuple[bool, str]:
+    """Automates typing of values from an Excel column into another application.
+    
+    1. Waits for start_delay seconds (to let user focus the target window).
+    2. Reads the Excel file.
+    3. Types each value from the column and presses Enter.
+    4. Waits for entry_delay between items.
+    """
+    _log = log_callback or (lambda msg: None)
+
+    try:
+        # Load Excel
+        _log(f"Loading Excel file: {os.path.basename(excel_path)}...")
+        df = pd.read_excel(excel_path)
+        
+        # Check column
+        if column_name not in df.columns:
+            return False, f"Column '{column_name}' not found in Excel file."
+            
+        items = df[column_name].dropna().astype(str).tolist()
+        if not items:
+            return False, "No data found in the selected column."
+            
+        _log(f"Found {len(items)} items to process.")
+        _log(f"Get ready! Starting in {start_delay} seconds. Switch to your inventory application NOW and click the input field.")
+
+        # Delay for user to focus target window
+        for i in range(start_delay, 0, -1):
+            _log(f"Starting in {i}...")
+            time.sleep(1)
+
+        _log("Macro started - DO NOT MOVE MOUSE (except to abort at top-left)!")
+        
+        for idx, item in enumerate(items):
+            # Simulate typing + Enter
+            pyautogui.write(item)
+            pyautogui.press('enter')
+            
+            # Wait for system to process
+            time.sleep(entry_delay)
+
+        _log("Macro completed successfully.")
+        return True, f"Successfully entered {len(items)} items."
+
+    except Exception as exc:
+        err_msg = f"Macro failed: {str(exc)}"
+        _log(err_msg)
+        return False, err_msg
