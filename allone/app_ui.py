@@ -1531,6 +1531,9 @@ class ToolApp(ttk.Window):
         # Safe Update Sync - Background check on startup
         self.after(2000, self.begin_safe_update_check)
 
+        # Donation Popup - Show 5 seconds after startup
+        self.after(5000, self.show_donation_popup)
+
     def begin_safe_update_check(self) -> None:
         """Start the background check for updates."""
         if not self.auto_update_var.get():
