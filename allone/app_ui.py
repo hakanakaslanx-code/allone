@@ -1570,7 +1570,7 @@ class ToolApp(ttk.Window):
         try:
             exe_path = sys.executable
             target_dir = os.path.dirname(exe_path)
-            new_exe_path = os.path.join(target_dir, f"AllOne Tools_v{version}.exe")
+            new_exe_path = os.path.join(target_dir, f"update_v{version}.exe")
             update_bat_path = os.path.join(target_dir, "apply_update.bat")
 
             # Ignore if already downloaded
@@ -1582,7 +1582,7 @@ class ToolApp(ttk.Window):
             
             base_exe_name = os.path.basename(exe_path)
             
-            # Create a simple batch file to quickly rename and restart if launched
+            # Create a simple batch file to quickly extract the zip and restart
             bat_script = f"""@echo off
 timeout /t 2 /nobreak >nul
 del "{base_exe_name}"

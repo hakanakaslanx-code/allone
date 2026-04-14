@@ -14,7 +14,8 @@ if %errorlevel% neq 0 (
 
 echo.
 echo Building executable with PyInstaller...
-python -m PyInstaller --noconfirm allone_onedir.spec
+echo Building executable with PyInstaller...
+python -m PyInstaller --noconfirm allone.spec
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Build failed! Check the error log above.
@@ -26,6 +27,6 @@ echo.
 echo ===========================================
 echo       Build Complete Successfully!
 echo ===========================================
-echo Output: dist\AllOne Tools\AllOne Tools.exe
+echo Output: dist\AllOne Tools.exe
 echo.
 pause
