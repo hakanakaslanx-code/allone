@@ -10,6 +10,9 @@ from tkinter import filedialog, messagebox, simpledialog
 from tkinter.scrolledtext import ScrolledText
 import threading
 import os
+import sys
+import subprocess
+import urllib.request
 import math
 import time
 from dataclasses import dataclass
@@ -157,6 +160,10 @@ translations = {
         "Macro starting in {n}s...": "Macro starting in {n}s...",
         "Macro finished successfully.": "Macro finished successfully.",
         "Macro failed or aborted.": "Macro failed or aborted.",
+        "How to Use": "How to Use",
+        "Keep your inventory application open on the side.": "Keep your inventory application open on the side.",
+        "Select the Excel file and choose the correct column.": "Select the Excel file and choose the correct column.",
+        "Quickly click inside the input field of your target application before the countdown ends.": "Quickly click inside the input field of your target application before the countdown ends.",
         "JSON": "JSON",
         "Mapping could not be saved: {error}": "Mapping could not be saved: {error}",
         "Mapping saved as {filename}.": "Mapping saved as {filename}.",
@@ -977,6 +984,21 @@ translations = {
             "---------------------------------\n"
             "Geliştirici: Hakan Akaslan"
         ),
+        "Inventory Macro": "Envanter Makrosu",
+        "Macro Settings": "Makro Ayarları",
+        "Excel Column Name:": "Excel Sütun Adı:",
+        "Start Delay (seconds):": "Başlangıç Gecikmesi (saniye):",
+        "Entry Delay (seconds):": "Giriş Gecikmesi (saniye):",
+        "Start Macro": "Makroyu Başlat",
+        "Macro already running.": "Makro zaten çalışıyor.",
+        "Give focus to the target input field!": "Hedef giriş alanına tıklayın!",
+        "Macro starting in {n}s...": "Makro {n} saniye içinde başlıyor...",
+        "Macro finished successfully.": "Makro başarıyla tamamlandı.",
+        "Macro failed or aborted.": "Makro başarısız oldu veya durduruldu.",
+        "How to Use": "Nasıl Kullanılır?",
+        "Keep your inventory application open on the side.": "Hedef envanter uygulamanızı yan tarafta açık tutun.",
+        "Select the Excel file and choose the correct column.": "Excel dosyasını seçin ve doğru sütunu belirleyin.",
+        "Quickly click inside the input field of your target application before the countdown ends.": "Geri sayım bitmeden hedef uygulamanızdaki giriş alanına (kutucuğa) tıklayın.",
     },
 }
 
@@ -1526,10 +1548,15 @@ class ToolApp(ttk.Window):
                     version = update_info.get("version")
                     self._set_update_status("update_available", version=version)
                     self._pending_update_metadata = update_info
-                    self.log(self.tr("Update Available").format(version=version))
                     
-                    # Add a visual indicator in the title if possible, or just log it
+                    # Add a visual indicator in the title
                     self.title(f"AllOne Tools v{__version__} - {self.tr('Update Available')}: v{version}")
+                    
+                    if getattr(sys, 'frozen', False) and update_info.get("download_url"):
+                        self.log(self.tr("Update Available").format(version=version) + " - Downloading in background...")
+                        self.run_in_thread(lambda: self._bg_download_and_stage_update(update_info["download_url"], version))
+                    else:
+                        self.log(self.tr("Update Available").format(version=version))
                 else:
                     self._set_update_status("up_to_date")
             
@@ -1538,6 +1565,39 @@ class ToolApp(ttk.Window):
             def report_error() -> None:
                 self._set_update_status("error", error=str(e))
             self.after(0, report_error)
+
+    def _bg_download_and_stage_update(self, download_url: str, version: str) -> None:
+        try:
+            exe_path = sys.executable
+            target_dir = os.path.dirname(exe_path)
+            new_exe_path = os.path.join(target_dir, f"AllOne Tools_v{version}.exe")
+            update_bat_path = os.path.join(target_dir, "apply_update.bat")
+
+            # Ignore if already downloaded
+            if os.path.exists(new_exe_path):
+                return
+
+            # Silent background download
+            urllib.request.urlretrieve(download_url, new_exe_path)
+            
+            base_exe_name = os.path.basename(exe_path)
+            
+            # Create a simple batch file to quickly rename and restart if launched
+            bat_script = f"""@echo off
+timeout /t 2 /nobreak >nul
+del "{base_exe_name}"
+ren "{os.path.basename(new_exe_path)}" "{base_exe_name}"
+start "" "{base_exe_name}"
+del "%~f0"
+"""
+            with open(update_bat_path, "w", encoding="utf-8") as f:
+                f.write(bat_script)
+                
+            self.after(0, lambda: self.log(f"Update v{version} downloaded. It will be installed automatically on next exit."))
+            self._staged_update_bat = update_bat_path
+
+        except Exception as e:
+            self.after(0, lambda: self.log(f"Background update download failed: {e}"))
 
     def open_latest_release(self) -> None:
         """Open the latest release page in the default web browser."""
@@ -4668,6 +4728,16 @@ class ToolApp(ttk.Window):
                 self.scanner_speech_queue.stop()
             except Exception:
                 pass
+            
+            # Auto-update application replacement on exit
+            if hasattr(self, "_staged_update_bat") and self._staged_update_bat and os.path.exists(self._staged_update_bat):
+                try:
+                    subprocess.Popen(
+                        self._staged_update_bat,
+                        creationflags=subprocess.CREATE_NO_WINDOW | 0x00000008 # DETACHED_PROCESS
+                    )
+                except Exception as e:
+                    print(f"Failed to launch background update: {e}")
         finally:
             self.destroy()
 
@@ -6373,9 +6443,11 @@ class ToolApp(ttk.Window):
         file_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=5)
         ttk.Button(settings_group, text=self.tr("Browse"), command=self._browse_inventory_macro_excel).grid(row=0, column=2, padx=5, pady=5)
 
-        # Column name
+        # Column selection
         ttk.Label(settings_group, text=self.tr("Excel Column Name:")).grid(row=1, column=0, sticky="w", padx=5, pady=5)
-        ttk.Entry(settings_group, textvariable=self.inventory_macro_column_name).grid(row=1, column=1, columnspan=2, sticky="ew", padx=5, pady=5)
+        self.inventory_macro_column_combo = ttk.Combobox(settings_group, textvariable=self.inventory_macro_column_name, state="readonly")
+        self.inventory_macro_column_combo.grid(row=1, column=1, columnspan=2, sticky="ew", padx=5, pady=5)
+
 
         # Start delay
         ttk.Label(settings_group, text=self.tr("Start Delay (seconds):")).grid(row=2, column=0, sticky="w", padx=5, pady=5)
@@ -6395,12 +6467,34 @@ class ToolApp(ttk.Window):
         self.inventory_macro_button.pack(pady=20)
         self.register_widget(self.inventory_macro_button, "Start Macro")
 
+        # Instruction Guide Section
+        guide_group = ttk.Labelframe(frame, text=self.tr("How to Use"), padding=10)
+        guide_group.pack(fill="x", padx=6, pady=10)
+        
+        guide_text = (
+            "1. " + self.tr("Keep your inventory application open on the side.") + "\n" +
+            "2. " + self.tr("Select the Excel file and choose the correct column.") + "\n" +
+            "3. " + self.tr("Click 'Start Macro'.") + "\n" +
+            "4. " + self.tr("Quickly click inside the input field of your target application before the countdown ends.")
+        )
+        
+        guide_label = ttk.Label(guide_group, text=guide_text, wraplength=600, style="Secondary.TLabel", justify="left")
+        guide_label.pack(fill="x")
+
     def _browse_inventory_macro_excel(self) -> None:
         path = filedialog.askopenfilename(
             filetypes=[(self.tr("Excel Files"), "*.xlsx *.xls"), (self.tr("All Files"), "*.*")]
         )
         if path:
             self.inventory_macro_excel_path.set(path)
+            try:
+                df = pd.read_excel(path, nrows=0)
+                cols = df.columns.tolist()
+                self.inventory_macro_column_combo['values'] = cols
+                if cols:
+                    self.inventory_macro_column_name.set(cols[0])
+            except Exception as e:
+                messagebox.showerror(self.tr("Error"), f"Could not read Excel columns: {e}")
 
     def start_inventory_macro(self) -> None:
         if self.inventory_macro_running:

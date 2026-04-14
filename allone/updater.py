@@ -27,10 +27,17 @@ def check_for_updates(timeout: int = 5) -> Optional[Dict[str, Any]]:
             return None
             
         if _is_newer(remote_version, __version__):
+            download_url = None
+            for asset in data.get("assets", []):
+                if asset.get("name", "").endswith(".exe"):
+                    download_url = asset.get("browser_download_url")
+                    break
+
             return {
                 "version": remote_version,
                 "url": data.get("html_url"),
-                "notes": data.get("body", "")
+                "notes": data.get("body", ""),
+                "download_url": download_url
             }
     except Exception as e:
         logging.error(f"Failed to check for updates: {e}")
