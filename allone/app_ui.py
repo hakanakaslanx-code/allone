@@ -242,6 +242,9 @@ translations = {
         "Could not find a Rug No column in the selected file.": "Could not find a Rug No column in the selected file.",
         "Could not read the selected file: {error}": "Could not read the selected file: {error}",
         "Rug No control completed.": "Rug No control completed.",
+        "Export Report": "Export Report",
+        "Export Report Tooltip": "Export comparison results to an Excel file.",
+        "No results to export.": "No results to export.",
         "Unit Converter": "Unit Converter",
         "Centimeters (cm):": "Centimeters (cm):",
         "Inches (in):": "Inches (in):",
@@ -703,6 +706,9 @@ translations = {
         "Could not find a Rug No column in the selected file.": "Seçilen dosyada bir Halı No sütunu bulunamadı.",
         "Could not read the selected file: {error}": "Seçilen dosya okunamadı: {error}",
         "Rug No control completed.": "Rug No kontrolü tamamlandı.",
+        "Export Report": "Raporu Dışa Aktar",
+        "Export Report Tooltip": "Karşılaştırma sonuçlarını Excel dosyasına aktar.",
+        "No results to export.": "Dışa aktarılacak sonuç yok.",
         "Unit Converter": "Birim Dönüştürücü",
         "Centimeters (cm):": "Santimetre (cm):",
         "Inches (in):": "İnç (in):",
@@ -5054,9 +5060,18 @@ del "%~f0"
             text=self.tr("Compare IDs"),
             command=self.run_rug_no_control_check,
         )
-        check_button.grid(row=2, column=0, columnspan=5, sticky="w", padx=6, pady=(6, 0))
+        check_button.grid(row=2, column=0, sticky="w", padx=6, pady=(6, 0))
         self.register_widget(check_button, "Compare IDs")
         self.register_tooltip(check_button, "Compare IDs Tooltip")
+
+        export_button = ttk.Button(
+            input_frame,
+            text=self.tr("Export Report"),
+            command=self.export_rug_no_control_excel,
+        )
+        export_button.grid(row=2, column=1, sticky="w", padx=6, pady=(6, 0))
+        self.register_widget(export_button, "Export Report")
+        self.register_tooltip(export_button, "Export Report Tooltip")
 
         results_label = ttk.Label(parent, text=self.tr("Results:"), style="Secondary.TLabel")
         results_label.grid(row=1, column=0, sticky="w", padx=12)
@@ -5185,6 +5200,34 @@ del "%~f0"
             tree.insert("", "end", values=(original, status_text))
 
         return tree
+
+    def export_rug_no_control_excel(self) -> None:
+        results = getattr(self, "rug_control_results", [])
+        if not results:
+            messagebox.showinfo(self.tr("Information"), self.tr("No results to export."))
+            return
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel", "*.xlsx"), (self.tr("All Files"), "*.*")],
+            title=self.tr("Export Report"),
+        )
+        if not file_path:
+            return
+        try:
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Report"
+            sheet.append([self.tr("ID"), self.tr("Status")])
+            for original, found in results:
+                status_text = self.tr("RUG_NO_CONTROL_FOUND") if found else self.tr("RUG_NO_CONTROL_NOT_FOUND")
+                sheet.append([original, status_text])
+            workbook.save(file_path)
+        except Exception as exc:  # pylint: disable=broad-except
+            messagebox.showerror(self.tr("Error"), self.tr("Export failed: {error}").format(error=exc))
+            return
+        message = self.tr("Export completed: {path}").format(path=file_path)
+        self.log(message)
+        messagebox.showinfo(self.tr("Success"), message)
 
     def create_rinven_import_panel(self, parent: ttk.Frame):
         parent.columnconfigure(0, weight=1)
