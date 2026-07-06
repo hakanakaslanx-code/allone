@@ -1182,7 +1182,6 @@ def _prepare_rinven_fields(
         normalized_details[key] = _normalize_tag_value(value)
 
     field_order: List[Tuple[str, str]] = [
-        ("msrp", "MSRP"),
         ("design", "Design"),
         ("color", "Color"),
         ("size", "Size"),
@@ -1344,8 +1343,38 @@ def build_rinven_tag_image(
             price_h = bbox[3] - bbox[1]
             price_x = (width_px - price_w) // 2
             draw.text((price_x, current_y), price_text, fill=text_fill, font=price_font)
-            current_y += price_h + int(0.05 * DPI)
+            current_y += price_h + int(0.03 * DPI)
             price_drawn = True
+
+        # Draw MSRP as a smaller line directly beneath the Sale Price so the two
+        # prices read as a stacked block.
+        msrp_value = normalized_details.get("msrp", "")
+        msrp_drawn = False
+        if msrp_value:
+            msrp_line = f"MSRP: {msrp_value}"
+            msrp_font_size = (
+                max(int(round(price_font_size * 0.55)), 24)
+                if price_drawn
+                else int(0.12 * DPI)
+            )
+            min_msrp_font = max(int(0.07 * DPI), 18)
+            msrp_font, msrp_font_size = _fit_font(
+                draw,
+                msrp_line,
+                text_pref_fonts,
+                width_px - (padding * 2),
+                msrp_font_size,
+                min_msrp_font,
+            )
+            bbox = draw.textbbox((0, 0), msrp_line, font=msrp_font)
+            msrp_w = bbox[2] - bbox[0]
+            msrp_h = bbox[3] - bbox[1]
+            msrp_x = (width_px - msrp_w) // 2
+            draw.text((msrp_x, current_y), msrp_line, fill=text_fill, font=msrp_font)
+            current_y += msrp_h + int(0.05 * DPI)
+            msrp_drawn = True
+            if "msrp" not in included_keys:
+                included_keys.append("msrp")
 
         barcode_img: Optional[Image.Image] = None
         barcode_format_used: Optional[str] = None
@@ -1560,6 +1589,7 @@ def build_rinven_tag_image(
 
         has_content = bool(
             price_drawn
+            or msrp_drawn
             or collection_name
             or (barcode_img is not None)
             or any(value for _, value in field_entries)
@@ -1573,6 +1603,7 @@ def build_rinven_tag_image(
             "barcode_format": barcode_format_used,
             "has_content": has_content,
             "has_price": price_drawn,
+            "has_msrp": msrp_drawn,
         }
 
         return canvas, metadata
@@ -2016,10 +2047,10 @@ def _format_price_text(raw: str) -> str:
 
     amount = _format_currency_amount(text)
     if amount is None:
-        prefix_pattern = re.compile(r"^price[:\s\$]*", re.IGNORECASE)
-        return text if prefix_pattern.match(text) else f"Price {text}"
+        prefix_pattern = re.compile(r"^sale\s*price[:\s\$]*", re.IGNORECASE)
+        return text if prefix_pattern.match(text) else f"Sale Price {text}"
 
-    return f"Price {amount}"
+    return f"Sale Price {amount}"
 
 
 def _format_msrp_text(raw: str) -> str:
