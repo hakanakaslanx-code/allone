@@ -1353,11 +1353,11 @@ def build_rinven_tag_image(
         if msrp_value:
             msrp_line = f"MSRP: {msrp_value}"
             msrp_font_size = (
-                max(int(round(price_font_size * 0.55)), 24)
+                max(int(round(price_font_size * 0.7)), 30)
                 if price_drawn
-                else int(0.12 * DPI)
+                else int(0.14 * DPI)
             )
-            min_msrp_font = max(int(0.07 * DPI), 18)
+            min_msrp_font = max(int(0.09 * DPI), 24)
             msrp_font, msrp_font_size = _fit_font(
                 draw,
                 msrp_line,
