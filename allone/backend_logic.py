@@ -1315,6 +1315,17 @@ def build_rinven_tag_image(
             font_size_pt = 20
         base_font_px = max(int(round((font_size_pt / 72.0) * DPI)), 1)
         text_font_size = base_font_px
+
+        def _pt_to_px(value, default_px):
+            """Convert a point-size string to pixels, or return ``default_px``."""
+            try:
+                pt = int(str(value).strip())
+            except (TypeError, ValueError):
+                return default_px
+            if pt <= 0:
+                return default_px
+            return max(int(round((pt / 72.0) * DPI)), 1)
+
         text_pref_fonts = [
             "arial.ttf",
             "Helvetica.ttf",
@@ -1328,8 +1339,8 @@ def build_rinven_tag_image(
         price_drawn = False
         if price_text:
             price_pref_fonts = title_pref_fonts
-            price_font_size = int(0.18 * DPI)
-            min_price_font = max(int(0.1 * DPI), 30)
+            price_font_size = _pt_to_px(details.get("price_font_size"), int(0.18 * DPI))
+            min_price_font = min(price_font_size, max(int(0.1 * DPI), 30))
             price_font, price_font_size = _fit_font(
                 draw,
                 price_text,
@@ -1352,12 +1363,13 @@ def build_rinven_tag_image(
         msrp_drawn = False
         if msrp_value:
             msrp_line = f"MSRP: {msrp_value}"
-            msrp_font_size = (
+            default_msrp_px = (
                 max(int(round(price_font_size * 0.7)), 30)
                 if price_drawn
                 else int(0.14 * DPI)
             )
-            min_msrp_font = max(int(0.09 * DPI), 24)
+            msrp_font_size = _pt_to_px(details.get("msrp_font_size"), default_msrp_px)
+            min_msrp_font = min(msrp_font_size, max(int(0.09 * DPI), 24))
             msrp_font, msrp_font_size = _fit_font(
                 draw,
                 msrp_line,
@@ -1852,6 +1864,22 @@ def generate_bulk_rinven_tags(
         font_size = row_font_size or default_font_size
         if font_size:
             details["font_size"] = font_size
+
+        price_font_size = _coerce_font_size(
+            _pick_first_value(
+                row,
+                column_lookup,
+                ["sale price size", "sale price font size", "price size", "price font size", "sp size"],
+            )
+        )
+        if price_font_size:
+            details["price_font_size"] = price_font_size
+
+        msrp_font_size = _coerce_font_size(
+            _pick_first_value(row, column_lookup, ["msrp size", "msrp font size"])
+        )
+        if msrp_font_size:
+            details["msrp_font_size"] = msrp_font_size
 
         barcode_value = _pick_first_value(row, column_lookup, ["barcode", "upc", "sku", "rugno"])
         use_barcode = bool(include_barcode and barcode_value)

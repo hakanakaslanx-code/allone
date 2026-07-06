@@ -184,6 +184,8 @@ translations = {
         "Max Width:": "Max Width:",
         "Percentage (%):": "Percentage (%):",
         "Font Size (pt):": "Font Size (pt):",
+        "Sale Price Size (pt):": "Sale Price Size (pt):",
+        "MSRP Size (pt):": "MSRP Size (pt):",
         "JPEG Quality (1-95):": "JPEG Quality (1-95):",
         "Resize & Compress": "Resize & Compress",
         "Room Image:": "Room Image:",
@@ -650,6 +652,8 @@ translations = {
         "Max Width:": "Azami Genişlik:",
         "Percentage (%):": "Yüzde (%):",
         "Font Size (pt):": "Yazı Boyutu (pt):",
+        "Sale Price Size (pt):": "Satış Fiyatı Boyutu (pt):",
+        "MSRP Size (pt):": "MSRP Boyutu (pt):",
         "JPEG Quality (1-95):": "JPEG Kalitesi (1-95):",
         "Resize & Compress": "Yeniden Boyutlandır ve Sıkıştır",
         "Room Image:": "Room Image:",
@@ -6126,6 +6130,8 @@ del "%~f0"
         self.rinven_barcode_var = tk.StringVar()
         self.rinven_filename = tk.StringVar(value="rinven_tag.png")
         self.rinven_font_size = tk.StringVar(value="20")
+        self.rinven_price_font_size = tk.StringVar()
+        self.rinven_msrp_font_size = tk.StringVar()
         self.rinven_bulk_font_size = tk.StringVar(value="20")
         self.rinven_include_barcode = tk.BooleanVar(value=False)
         self.rinven_only_filled = tk.BooleanVar(value=True)
@@ -6192,6 +6198,24 @@ del "%~f0"
         font_size_entry = ttk.Entry(frame, textvariable=self.rinven_font_size)
         font_size_entry.grid(row=row, column=1, sticky="we", padx=6, pady=4)
         font_size_entry.bind("<KeyRelease>", lambda *_: self._queue_rinven_preview_update())
+        row += 1
+
+        price_size_label = ttk.Label(frame, text=self.tr("Sale Price Size (pt):"))
+        price_size_label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
+        self.register_widget(price_size_label, "Sale Price Size (pt):")
+
+        price_size_entry = ttk.Entry(frame, textvariable=self.rinven_price_font_size)
+        price_size_entry.grid(row=row, column=1, sticky="we", padx=6, pady=4)
+        price_size_entry.bind("<KeyRelease>", lambda *_: self._queue_rinven_preview_update())
+        row += 1
+
+        msrp_size_label = ttk.Label(frame, text=self.tr("MSRP Size (pt):"))
+        msrp_size_label.grid(row=row, column=0, sticky="e", padx=6, pady=4)
+        self.register_widget(msrp_size_label, "MSRP Size (pt):")
+
+        msrp_size_entry = ttk.Entry(frame, textvariable=self.rinven_msrp_font_size)
+        msrp_size_entry.grid(row=row, column=1, sticky="we", padx=6, pady=4)
+        msrp_size_entry.bind("<KeyRelease>", lambda *_: self._queue_rinven_preview_update())
         row += 1
 
         only_filled_check = ttk.Checkbutton(
@@ -7186,6 +7210,8 @@ del "%~f0"
             "sku": self._normalize_rinven_value(self.rinven_sku.get()),
             "rug_no": self._normalize_rinven_value(self.rinven_rug_no.get()),
             "font_size": self.rinven_font_size.get(),
+            "price_font_size": self.rinven_price_font_size.get(),
+            "msrp_font_size": self.rinven_msrp_font_size.get(),
         }
 
     def _queue_rinven_preview_update(self, *_args):
@@ -7617,6 +7643,8 @@ del "%~f0"
             "MSRP",
             "Barcode",
             "Font Size",
+            "Sale Price Size",
+            "MSRP Size",
         ]
 
         sample_rows = [
@@ -7636,6 +7664,8 @@ del "%~f0"
                 "1200",
                 "123456789012",
                 "20",
+                "16",
+                "11",
             ],
             [
                 "Modern Loft",
@@ -7653,6 +7683,8 @@ del "%~f0"
                 "2300",
                 "987654321098",
                 "20",
+                "16",
+                "11",
             ],
         ]
 
