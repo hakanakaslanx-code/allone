@@ -285,6 +285,8 @@ translations = {
         "Area:": "Area:",
         "Include Barcode": "Include Barcode",
         "Price:": "Price:",
+        "Sale Price:": "Sale Price:",
+        "MSRP:": "MSRP:",
         "SKU:": "SKU:",
         "File Naming Order:": "File Naming Order:",
         "Excel Row Order (1, 2, 3...)": "Excel Row Order (1, 2, 3...)",
@@ -749,6 +751,8 @@ translations = {
         "Area:": "Alan:",
         "Include Barcode": "Barkodu Dahil Et",
         "Price:": "Fiyat:",
+        "Sale Price:": "Satış Fiyatı:",
+        "MSRP:": "MSRP:",
         "SKU:": "SKU:",
         "File Naming Order:": "Dosya Sıralama:",
         "Excel Row Order (1, 2, 3...)": "Excel Satır Sırası (1, 2, 3...)",
@@ -6107,6 +6111,7 @@ del "%~f0"
         frame.columnconfigure(2, weight=1)
 
         self.rinven_price = tk.StringVar()
+        self.rinven_msrp = tk.StringVar()
         self.rinven_collection = tk.StringVar()
         self.rinven_design = tk.StringVar()
         self.rinven_color = tk.StringVar()
@@ -6150,7 +6155,8 @@ del "%~f0"
         row += 1
 
         fields = [
-            ("price", "Price:", self.rinven_price),
+            ("price", "Sale Price:", self.rinven_price),
+            ("msrp", "MSRP:", self.rinven_msrp),
             ("collection", "Collection Name:", self.rinven_collection),
             ("design", "Design:", self.rinven_design),
             ("color", "Color:", self.rinven_color),
@@ -7167,6 +7173,7 @@ del "%~f0"
     def _collect_rinven_details(self) -> Dict[str, str]:
         return {
             "price": self._normalize_rinven_value(self.rinven_price.get()),
+            "msrp": self._normalize_rinven_value(self.rinven_msrp.get()),
             "collection": self._normalize_rinven_value(self.rinven_collection.get()),
             "design": self._normalize_rinven_value(self.rinven_design.get()),
             "color": self._normalize_rinven_value(self.rinven_color.get()),

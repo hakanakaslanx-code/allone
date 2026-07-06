@@ -1182,6 +1182,7 @@ def _prepare_rinven_fields(
         normalized_details[key] = _normalize_tag_value(value)
 
     field_order: List[Tuple[str, str]] = [
+        ("msrp", "MSRP"),
         ("design", "Design"),
         ("color", "Color"),
         ("size", "Size"),
@@ -1217,6 +1218,12 @@ def build_rinven_tag_image(
     label_size_in: Optional[Tuple[float, float]] = None,
 ):
     """Render the Rinven tag image and return it with rendering metadata."""
+
+    # Pre-format MSRP so it renders as a small currency line within the field
+    # list (e.g. "MSRP : $1,200"). The Sale Price is drawn large separately.
+    if details.get("msrp"):
+        details = dict(details)
+        details["msrp"] = _format_msrp_text(details.get("msrp"))
 
     normalized_details, field_entries, included_keys = _prepare_rinven_fields(
         details, only_filled_fields
@@ -1798,8 +1805,15 @@ def generate_bulk_rinven_tags(
                 color_value = ground or border
         details["color"] = color_value
 
-        price_raw = _pick_first_value(row, column_lookup, ["price", "retail", "amount", "sp", "msrp"])
-        details["price"] = _format_price_text(price_raw)
+        # Sale Price is rendered large at the top of the tag; MSRP shows as a
+        # small line within the field list.
+        sale_price_raw = _pick_first_value(
+            row, column_lookup, ["sale price", "saleprice", "sale", "sp", "price", "amount"]
+        )
+        details["price"] = _format_price_text(sale_price_raw)
+        details["msrp"] = _pick_first_value(
+            row, column_lookup, ["msrp", "retail", "list price", "list", "map"]
+        )
 
         row_font_size = _coerce_font_size(
             _pick_first_value(row, column_lookup, ["font_size", "font size", "font size (pt)"])
@@ -1969,24 +1983,52 @@ def _pick_first_value(row, column_lookup, candidates: Iterable[str]) -> str:
     return ""
 
 
+_CURRENCY_PREFIX_PATTERN = re.compile(
+    r"^(price|msrp|sale\s*price|sale|sp|retail|list\s*price|list)[:\s\$]*",
+    re.IGNORECASE,
+)
+
+
+def _format_currency_amount(raw: str) -> Optional[str]:
+    """Return a ``$x.xx`` string for a numeric price, or ``None`` if unparseable."""
+
+    text = _normalize_tag_value(raw)
+    if not text:
+        return None
+
+    stripped = _CURRENCY_PREFIX_PATTERN.sub("", text)
+    cleaned = stripped.replace("$", "").replace(",", "")
+    try:
+        value = Decimal(cleaned).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except (InvalidOperation, ValueError):
+        return None
+
+    formatted_value = f"{value:,.2f}".rstrip("0").rstrip(".")
+    return f"${formatted_value}"
+
+
 def _format_price_text(raw: str) -> str:
-    """Normalise a raw price string into a ``Price $x.xx`` format when possible."""
+    """Normalise a raw sale price into a ``Price $x.xx`` format when possible."""
 
     text = _normalize_tag_value(raw)
     if not text:
         return ""
 
-    prefix_pattern = re.compile(r"^price[:\s\$]*", re.IGNORECASE)
-    stripped = prefix_pattern.sub("", text)
+    amount = _format_currency_amount(text)
+    if amount is None:
+        prefix_pattern = re.compile(r"^price[:\s\$]*", re.IGNORECASE)
+        return text if prefix_pattern.match(text) else f"Price {text}"
 
-    cleaned = stripped.replace("$", "").replace(",", "")
-    try:
-        value = Decimal(cleaned).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    except (InvalidOperation, ValueError):
-        return text if prefix_pattern.match(text) else f"Price {text}" if text else ""
+    return f"Price {amount}"
 
-    formatted_value = f"{value:,.2f}".rstrip("0").rstrip(".")
-    return f"Price ${formatted_value}"
+
+def _format_msrp_text(raw: str) -> str:
+    """Normalise a raw MSRP into a bare ``$x.xx`` currency string when possible."""
+
+    amount = _format_currency_amount(raw)
+    if amount is not None:
+        return amount
+    return _normalize_tag_value(raw)
 
 
 def _slugify_tag_filename(text: str, fallback: str) -> str:
